@@ -31,6 +31,7 @@ export default function (pi: ExtensionAPI) {
   let waitingForReply = false; // true when we've injected an iMessage and are waiting for the turn to end
   let latestCtx: ExtensionContext | null = null;
   let enabled = false;
+  let bridgeStatusText = "";
 
   fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true });
 
@@ -89,7 +90,6 @@ export default function (pi: ExtensionAPI) {
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
         res.on("end", () => {
           fs.writeFileSync(filepath, Buffer.concat(chunks));
-          log(`Downloaded attachment: ${filepath}`);
           resolve({ path: filepath, isAudio });
         });
         res.on("error", () => resolve(null));
@@ -98,11 +98,14 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ═══════════════════════════════════════
-  // Logging
+  // UI state
   // ═══════════════════════════════════════
 
-  function log(msg: string) {
-    console.log(`[iMessage] ${msg}`);
+  function setBridgeStatus(text?: string) {
+    const next = text || "";
+    if (next === bridgeStatusText) return;
+    bridgeStatusText = next;
+    latestCtx?.ui.setStatus("imessage", text);
   }
 
   // ═══════════════════════════════════════
@@ -115,9 +118,8 @@ export default function (pi: ExtensionAPI) {
         chatGuid: CHAT_GUID,
         message: text,
       });
-      log(`Sent reply (${text.length} chars)`);
     } catch (err: any) {
-      log(`Failed to send: ${err.message}`);
+      latestCtx?.ui.notify(`iMessage send failed: ${err.message}`, "warning");
     }
   }
 
@@ -138,8 +140,8 @@ export default function (pi: ExtensionAPI) {
       });
       const msgs = res?.data || [];
       return msgs.length > 0 ? msgs[0].dateCreated || 0 : 0;
-    } catch (err: any) {
-      log(`Error getting latest message time: ${err.message}`);
+    } catch {
+      setBridgeStatus("iMessage: disabled");
       return 0;
     }
   }
@@ -156,6 +158,7 @@ export default function (pi: ExtensionAPI) {
       });
 
       const messages = (res?.data || []).reverse();
+      setBridgeStatus("iMessage: active");
 
       for (const msg of messages) {
         const msgTime = msg.dateCreated || 0;
@@ -179,8 +182,8 @@ export default function (pi: ExtensionAPI) {
         // Process the message
         await processMessage(msg);
       }
-    } catch (err: any) {
-      log(`Poll error: ${err.message}`);
+    } catch {
+      setBridgeStatus("iMessage: polling error");
     }
   }
 
@@ -213,7 +216,7 @@ export default function (pi: ExtensionAPI) {
 
     if (!fullMessage.trim()) return;
 
-    log(`From Matt: ${fullMessage.substring(0, 100)}...`);
+    setBridgeStatus("iMessage: received message");
 
     // Send typing indicator
     await sendTypingIndicator();
@@ -314,21 +317,19 @@ export default function (pi: ExtensionAPI) {
       const res = await request("GET", "/api/v1/ping");
       if (res?.message === "pong") {
         enabled = true;
-        log("Connected to BlueBubbles");
-        ctx.ui.setStatus("imessage", "📱 iMessage bridge active");
+        setBridgeStatus("iMessage: active");
 
         // Start from current latest message
         lastMessageTime = await getLatestMessageTime();
-        log(`Starting poll from message time: ${lastMessageTime}`);
 
         // Start polling
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(pollMessages, BB_POLL_INTERVAL);
       } else {
-        log("BlueBubbles not responding — bridge disabled");
+        setBridgeStatus("iMessage: disabled");
       }
-    } catch (err: any) {
-      log(`BlueBubbles unreachable (${err.message}) — bridge disabled`);
+    } catch {
+      setBridgeStatus("iMessage: disabled");
     }
   });
 
@@ -338,7 +339,7 @@ export default function (pi: ExtensionAPI) {
       pollTimer = null;
     }
     enabled = false;
-    log("Bridge shut down");
+    setBridgeStatus(undefined);
   });
 
   // ═══════════════════════════════════════
