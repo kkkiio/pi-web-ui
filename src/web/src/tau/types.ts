@@ -11,6 +11,16 @@ export type ToolState =
   | 'output-available'
   | 'output-error';
 
+export type SubagentStatus =
+  | 'queued'
+  | 'running'
+  | 'background'
+  | 'completed'
+  | 'steered'
+  | 'aborted'
+  | 'stopped'
+  | 'error';
+
 export type PromptImage = {
   data: string;
   mimeType: string;
@@ -53,6 +63,7 @@ export type ChatItem =
 
 export type RpcEvent = {
   type: string;
+  payload?: unknown;
   message?: PiMessage;
   assistantMessageEvent?: {
     type: string;
@@ -81,10 +92,13 @@ export type RpcEvent = {
 
 export type PiMessage = {
   id?: string;
-  role: 'user' | 'assistant' | 'toolResult';
+  role: 'user' | 'assistant' | 'toolResult' | string;
   content?: string | PiContentBlock[];
+  customType?: string;
+  details?: unknown;
   usage?: Usage;
   toolCallId?: string;
+  toolName?: string;
   isError?: boolean;
 };
 
@@ -110,13 +124,49 @@ export type ModelInfo = {
 };
 
 export type MirrorSync = {
-  entries?: Array<{ type: string; message?: PiMessage }>;
+  entries?: SessionEntry[];
   model?: ModelInfo;
   thinkingLevel?: string;
   sessionName?: string;
   sessionFile?: string;
   isStreaming?: boolean;
   contextUsage?: { tokens?: number };
+};
+
+export type SessionEntry = {
+  type: string;
+  customType?: string;
+  message?: PiMessage;
+  details?: unknown;
+  data?: unknown;
+  value?: unknown;
+  payload?: unknown;
+  id?: string;
+  [key: string]: unknown;
+};
+
+export type SubagentTokens = {
+  input?: number;
+  output?: number;
+  total?: number;
+};
+
+export type SubagentViewState = {
+  id: string;
+  type?: string;
+  description?: string;
+  status: SubagentStatus;
+  finalResponse?: string;
+  resultPreview?: string;
+  error?: string;
+  toolUses?: number;
+  durationMs?: number;
+  tokens?: SubagentTokens;
+  outputFile?: string;
+  compactionCount?: number;
+  isBackground?: boolean;
+  source?: 'foreground' | 'background' | 'scheduled' | 'history' | 'event';
+  updatedAt: number;
 };
 
 export type ProjectGroup = {

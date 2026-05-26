@@ -370,6 +370,26 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
+  const subagentEventTypes = [
+    "subagents:ready",
+    "subagents:created",
+    "subagents:started",
+    "subagents:completed",
+    "subagents:failed",
+    "subagents:steered",
+    "subagents:compacted",
+    "subagents:scheduled",
+    "subagents:scheduler_ready",
+    "subagents:settings_loaded",
+    "subagents:settings_changed",
+  ] as const;
+
+  for (const eventType of subagentEventTypes) {
+    (pi as any).events?.on?.(eventType, (payload: any) => {
+      broadcast({ type: "event", event: { type: eventType, payload } });
+    });
+  }
+
   // Also capture context from session events
   // Auto-title: collect user messages and generate a title after a few turns
   let turnCount = 0;
