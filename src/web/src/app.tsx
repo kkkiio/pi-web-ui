@@ -7,14 +7,11 @@ import {
   CommandIcon,
   DownloadIcon,
   MenuIcon,
-  MoonIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   RefreshCwIcon,
   SearchIcon,
   Settings2Icon,
-  SparklesIcon,
-  SunIcon,
   TerminalIcon,
   XIcon,
 } from 'lucide-react';
@@ -55,6 +52,8 @@ import {
   PromptAttachmentPreview,
   SessionSidebar,
   SettingsPanel,
+  SubagentDetailSidebar,
+  WorkspaceStatusFloat,
 } from './components/tau';
 import {
   extractToolCalls,
@@ -72,6 +71,12 @@ import {
   shortModelName,
   toggleSetValue,
 } from './tau/format';
+import {
+  applySubagentEvent,
+  subagentList,
+  subagentsFromEntries,
+  type SubagentStateMap,
+} from './tau/subagents';
 import { isToolExpandable } from './tau/tool-summary';
 import type {
   AppView,
@@ -143,6 +148,8 @@ export function App() {
   const [authConfigured, setAuthConfigured] = useState(false);
   const [authEnabled, setAuthEnabled] = useState(false);
   const [dialog, setDialog] = useState<ExtensionDialog | null>(null);
+  const [subagents, setSubagents] = useState<SubagentStateMap>({});
+  const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
 
   const [lastUsage, setLastUsage] = useState<Usage | null>(null);
   const [contextWindowSize, setContextWindowSize] = useState(0);
@@ -270,7 +277,10 @@ export function App() {
   const applySync = useCallback(
     (sync: MirrorSync) => {
       const parsedItems = syncToItems(sync.entries ?? [], nextId);
+      const nextSubagents = subagentsFromEntries(sync.entries ?? []);
       setItems(parsedItems);
+      setSubagents(nextSubagents);
+      setSelectedSubagentId((current) => current && nextSubagents[current] ? current : null);
       setChatStatus(sync.isStreaming ? 'streaming' : 'ready');
       setConnection('connected');
       setSessionName(sync.sessionName || 'Tau');
@@ -289,6 +299,8 @@ export function App() {
 
   const handleEvent = useCallback(
     (event: RpcEvent) => {
+      setSubagents((current) => applySubagentEvent(current, event));
+
       switch (event.type) {
         case 'agent_start':
           setChatStatus('streaming');
@@ -322,8 +334,9 @@ export function App() {
         case 'message_start':
           if (event.message?.role === 'assistant') {
             const id = event.message.id || nextId('assistant');
+            const hasInitialToolCall = extractToolCalls(event.message.content).length > 0;
             streamingIdRef.current = id;
-            streamingHasToolCallRef.current = extractToolCalls(event.message.content).length > 0;
+            streamingHasToolCallRef.current = hasInitialToolCall;
             setItems((current) => [
               ...current,
               {
@@ -334,7 +347,7 @@ export function App() {
                 reasoning: extractThinking(event.message?.content),
                 streaming: true,
                 copyable: false,
-                presentation: 'activity',
+                presentation: hasInitialToolCall ? 'activity' : 'normal',
               },
             ]);
           } else if (event.message?.role === 'user') {
@@ -789,9 +802,13 @@ export function App() {
       try {
         const response = await fetch(`/api/sessions/${encodeURIComponent(dirName)}/${encodeURIComponent(file)}`);
         const data = await response.json();
-        setItems(syncToItems(data.entries || [], nextId));
+        const entries = data.entries || [];
+        const nextSubagents = subagentsFromEntries(entries);
+        setItems(syncToItems(entries, nextId));
+        setSubagents(nextSubagents);
+        setSelectedSubagentId((current) => current && nextSubagents[current] ? current : null);
         setSessionName(session.name || session.firstMessage || 'Session history');
-        setLastUsage(findLastUsage(data.entries || []));
+        setLastUsage(findLastUsage(entries));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load session');
       }
@@ -951,6 +968,8 @@ export function App() {
   const contextPercent =
     contextWindowSize > 0 ? Math.round((usedContextTokens / contextWindowSize) * 100) : 0;
   const shouldSuggestCompaction = contextPercent >= 80;
+  const subagentItems = useMemo(() => subagentList(subagents), [subagents]);
+  const selectedSubagent = selectedSubagentId ? subagents[selectedSubagentId] : null;
 
   const commandActions = [
     { label: 'Compact', desc: 'Compact context to save tokens', icon: ArchiveIcon, action: compactContext },
@@ -1051,6 +1070,18 @@ export function App() {
               />
             )}
           </div>
+
+          <div className="shrink-0 border-t p-2">
+            <Button
+              className="w-full justify-start gap-2"
+              onClick={openSettings}
+              type="button"
+              variant="ghost"
+            >
+              <Settings2Icon className="size-4" />
+              <span>Settings</span>
+            </Button>
+          </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -1111,21 +1142,6 @@ export function App() {
               <Button onClick={() => setCommandOpen(true)} size="icon-sm" type="button" variant="ghost">
                 <CommandIcon className="size-4" />
               </Button>
-              <Button
-                onClick={() =>
-                  setThemeMode((current) =>
-                    current === 'light' ? 'dark' : current === 'dark' ? 'system' : 'light'
-                  )
-                }
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                {themeMode === 'light' ? <SunIcon className="size-4" /> : themeMode === 'dark' ? <MoonIcon className="size-4" /> : <SparklesIcon className="size-4" />}
-              </Button>
-              <Button onClick={openSettings} size="icon-sm" type="button" variant="ghost">
-                <Settings2Icon className="size-4" />
-              </Button>
             </div>
           </header>
 
@@ -1166,6 +1182,12 @@ export function App() {
                 contextWindowSize={contextWindowSize}
                 lastUsage={lastUsage}
                 onClose={() => setContextOpen(false)}
+              />
+            )}
+            {!selectedSubagent && !contextOpen && (
+              <WorkspaceStatusFloat
+                onOpenSubagent={setSelectedSubagentId}
+                subagents={subagentItems}
               />
             )}
           </div>
@@ -1224,6 +1246,13 @@ export function App() {
             </div>
           </footer>
         </div>
+
+        {selectedSubagent && (
+          <SubagentDetailSidebar
+            agent={selectedSubagent}
+            onClose={() => setSelectedSubagentId(null)}
+          />
+        )}
 
         {modelOpen && (
           <ModelPicker

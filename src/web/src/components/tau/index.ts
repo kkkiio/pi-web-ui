@@ -9,3 +9,5 @@ export { ProjectLauncher } from './project-launcher';
 export { PromptAttachmentButton, PromptAttachmentPreview } from './prompt-attachments';
 export { SessionSidebar } from './session-sidebar';
 export { SettingsPanel } from './settings-panel';
+export { SubagentDetailSidebar } from './subagent-detail-sidebar';
+export { WorkspaceStatusFloat } from './workspace-status-float';
