@@ -48,7 +48,7 @@ type BrowserCommand = {
   modelId?: string;
   level?: "off" | "minimal" | "low" | "medium" | "high";
   name?: string;
-  customInstructions?: string;
+  entryId?: string;
   outputPath?: string;
   enabled?: boolean;
 };
@@ -399,6 +399,7 @@ export default function (pi: ExtensionAPI) {
 
   // Store latest context reference for use in command handlers
   let latestCtx: ExtensionContext | null = null;
+  let latestNavigateTree: ((targetId: string) => Promise<{ cancelled: boolean; editorText?: string }>) | null = null;
 
   // ═══════════════════════════════════════
   // Helper: send to one client
@@ -504,6 +505,9 @@ export default function (pi: ExtensionAPI) {
       const { exec } = require("node:child_process");
       exec(`open "${mirrorUrl}"`);
       ctx.ui.notify(`Opened ${mirrorUrl}`, "info");
+      // Capture navigateTree for use by WebSocket handler (ADR 0003)
+      latestNavigateTree = (targetId) => ctx.navigateTree(targetId);
+      broadcast({ type: "state", advancedFeatures: true });
     },
   });
 
@@ -570,6 +574,8 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     latestCtx = ctx;
+    latestNavigateTree = null;
+    broadcast({ type: "state", advancedFeatures: false });
     turnCount = 0;
     titleSet = false;
     userMessages = [];
@@ -677,7 +683,7 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   async function buildStateSnapshot(ctx: ExtensionContext) {
     // Get session entries for message history
-    const entries = ctx.sessionManager.getEntries();
+    const entries = ctx.sessionManager.getBranch();
 
     // Get model info
     const model = ctx.model;
@@ -1053,6 +1059,37 @@ export default function (pi: ExtensionAPI) {
             event: { type: "auth_changed", enabled: authEnabled },
           });
           sendTo(ws, success("set_auth", { enabled: authEnabled }));
+          break;
+        }
+
+        case "navigate_tree": {
+          if (!latestNavigateTree) {
+            sendTo(ws, error("navigate_tree", "Run /tau first to enable editing"));
+            break;
+          }
+          if (!latestCtx?.isIdle()) {
+            sendTo(ws, error("navigate_tree", "Agent is busy"));
+            break;
+          }
+          const entry = latestCtx.sessionManager.getEntry(command.entryId);
+          if (!entry) {
+            sendTo(ws, error("navigate_tree", "Entry not found"));
+            break;
+          }
+          if (!latestCtx.model) {
+            sendTo(ws, error("navigate_tree", "No model selected"));
+            break;
+          }
+          const result = await latestNavigateTree(entry.id);
+          if (result.cancelled) {
+            sendTo(ws, error("navigate_tree", "Navigation cancelled"));
+            break;
+          }
+          // Send success before snapshot so RPC promise resolves correctly
+          sendTo(ws, success("navigate_tree"));
+          // Broadcast updated state to all connected clients
+          const snapshot = await buildStateSnapshot(latestCtx);
+          broadcast(snapshot);
           break;
         }
 
@@ -1852,7 +1889,7 @@ export default function (pi: ExtensionAPI) {
       });
 
       // Send initial state
-      sendTo(ws, { type: "state", isStreaming: false, mode: "mirror" });
+      sendTo(ws, { type: "state", advancedFeatures: !!latestNavigateTree });
 
       // Immediately send state snapshot
       if (latestCtx) {
@@ -1960,6 +1997,7 @@ export default function (pi: ExtensionAPI) {
   // Cleanup on shutdown
   // ═══════════════════════════════════════
   pi.on("session_shutdown", async () => {
+    latestCtx = null;
     stopServer();
   });
 }
