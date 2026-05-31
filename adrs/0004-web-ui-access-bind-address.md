@@ -62,6 +62,11 @@ detection and display misleading.
 Both can also be set in `~/.pi/agent/settings.json` under `pi-web-ui.host` and
 `pi-web-ui.port`.
 
+Pi Web UI follows Pi's `PI_CODING_AGENT_DIR` override when locating
+`settings.json` and its default session history directory. If
+`PI_CODING_AGENT_SESSION_DIR` is set, Pi Web UI reads session history from that
+custom directory instead.
+
 ## Consequences
 
 - **More secure by default** — no accidental exposure to LAN or public networks.

@@ -137,7 +137,7 @@ export function UserMessageView({
               disabled={!onEdit}
               label="Edit message"
               onClick={startEditing}
-              tooltip={onEdit ? "Edit" : "Run /tau in terminal to enable editing"}
+              tooltip={onEdit ? "Edit" : "Run /webui in terminal to enable editing"}
             >
               <PencilIcon className="size-4" />
             </MessageAction>

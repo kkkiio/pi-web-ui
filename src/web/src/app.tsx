@@ -136,6 +136,7 @@ export function App() {
   const originalTitleRef = useRef(document.title);
 
   const resolvedTheme = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
+  const viewingHistory = viewedSessionFile !== null;
 
   const nextId = useCallback((prefix: string) => {
     itemCounterRef.current += 1;
@@ -614,7 +615,8 @@ export function App() {
 
   const sendPrompt = useCallback(
     async (command: PromptCommand) => {
-      if (viewedSessionFile && viewedSessionFile !== activeSessionFile) {
+      if (viewingHistory) {
+        setError("Viewing historical session. Return to the live session to send messages.");
         return;
       }
       setChatStatus("submitted");
@@ -634,15 +636,15 @@ export function App() {
         setError(err instanceof Error ? err.message : "Prompt failed");
       }
     },
-    [rpc, sendWs, viewedSessionFile, activeSessionFile],
+    [rpc, sendWs, viewingHistory],
   );
 
   useEffect(() => {
-    if (chatStatus !== "ready" || queuedMessages.length === 0) return;
+    if (chatStatus !== "ready" || queuedMessages.length === 0 || viewingHistory) return;
     const [next, ...rest] = queuedMessages;
     setQueuedMessages(rest);
     sendPrompt(next);
-  }, [chatStatus, queuedMessages, sendPrompt]);
+  }, [chatStatus, queuedMessages, sendPrompt, viewingHistory]);
 
   const handleEditSubmit = useCallback(
     async (entryId: string, newText: string) => {
@@ -727,6 +729,18 @@ export function App() {
   const selectSession = useCallback(
     async (session: SessionInfo) => {
       setError(null);
+
+      if (session.filePath === activeSessionFile) {
+        if (!sendWs({ type: "mirror_sync_request" })) {
+          setError("Cannot return to the live session while disconnected.");
+        }
+        return;
+      }
+
+      const previousViewedSessionFile = viewedSessionFile;
+      const previousViewedSessionTitle = viewedSessionTitle;
+      setViewedSessionFile(session.filePath);
+      setViewedSessionTitle(session.name || session.firstMessage || "Session history");
       setChatStatus("ready");
 
       const dirName = projects.find((p) => p.sessions.some((s) => s.filePath === session.filePath))?.dirName;
@@ -738,18 +752,25 @@ export function App() {
         const data = await response.json();
         const entries = data.entries || [];
         const nextSubagents = subagentsFromEntries(entries);
-        setViewedSessionFile(session.filePath);
-        setViewedSessionTitle(session.name || session.firstMessage || "Session history");
         setItems(syncToItems(entries, nextId));
         setSubagents(nextSubagents);
         setSelectedSubagentId((current) => (current && nextSubagents[current] ? current : null));
         setLastUsage(findLastUsage(entries));
       } catch (err) {
+        setViewedSessionFile(previousViewedSessionFile);
+        setViewedSessionTitle(previousViewedSessionTitle);
         setError(err instanceof Error ? err.message : "Failed to load session");
       }
     },
-    [nextId, projects],
+    [activeSessionFile, nextId, projects, sendWs, viewedSessionFile, viewedSessionTitle],
   );
+
+  const returnToLive = useCallback(() => {
+    setError(null);
+    if (!sendWs({ type: "mirror_sync_request" })) {
+      setError("Cannot return to the live session while disconnected.");
+    }
+  }, [sendWs]);
 
   const openSettings = useCallback(async () => {
     setSettingsOpen(true);
@@ -921,7 +942,7 @@ export function App() {
       <main className="flex h-full min-h-0 bg-background text-foreground">
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-40 flex flex-col border-r bg-background transition-all md:static md:z-auto relative overflow-hidden",
+            "fixed inset-y-0 left-0 z-40 flex flex-col overflow-hidden border-r bg-background transition-all md:static md:z-auto",
             sidebarOpen ? "w-80" : "w-12",
           )}
         >
@@ -1013,15 +1034,7 @@ export function App() {
             </div>
 
             {viewedSessionFile && viewedSessionFile !== activeSessionFile && (
-              <Button
-                onClick={() => {
-                  setViewedSessionFile(null);
-                  setViewedSessionTitle(null);
-                }}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
+              <Button onClick={returnToLive} size="sm" type="button" variant="ghost">
                 ← Live
               </Button>
             )}
@@ -1142,7 +1155,7 @@ export function App() {
             </div>
           )}
 
-          {!viewedSessionFile || viewedSessionFile === activeSessionFile ? (
+          {!viewingHistory ? (
             <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
               <div className="mx-auto w-full max-w-3xl">
                 <PromptInput
