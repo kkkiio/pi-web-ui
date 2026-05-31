@@ -3,6 +3,7 @@
 A web UI for [Pi](https://github.com/badlogic/pi-mono) coding agent. Runs as a Pi extension inside your existing Pi process — no separate server needed.
 
 > **Forked from [deflating/tau](https://github.com/deflating/tau).** Thanks to the original author for building the foundation.
+> Renamed to pi-web-ui with significant changes including single-session scope, removed auth, redesigned sidebar.
 
 ## What it does
 
@@ -100,7 +101,7 @@ graph LR
 ## Development
 
 ```bash
-git clone https://github.com/deflating/tau.git
+git clone https://github.com/kkkiio/pi-web-ui.git
 cd tau
 npm install
 npm run build:web
