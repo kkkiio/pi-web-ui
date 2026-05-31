@@ -1,7 +1,6 @@
 import {
   ArchiveIcon,
   BarChart3Icon,
-  BotIcon,
   BrainIcon,
   ChevronsUpDownIcon,
   CommandIcon,
@@ -41,7 +40,6 @@ import {
   ContextPopover,
   ExtensionDialogView,
   ModelPicker,
-  ProjectLauncher,
   PromptAttachmentButton,
   PromptAttachmentPreview,
   SessionSidebar,
@@ -49,7 +47,7 @@ import {
   SubagentDetailSidebar,
   UserMessageView,
   WorkspaceStatusFloat,
-} from "./components/tau";
+} from "./components/pi-web-ui";
 import {
   extractText,
   extractThinking,
@@ -58,30 +56,27 @@ import {
   formatToolOutput,
   processPromptFiles,
   syncToItems,
-} from "./tau/chat-conversion";
-import { copyText, formatTokens, isEditableTarget, shortModelName, toggleSetValue } from "./tau/format";
-import { applySubagentEvent, type SubagentStateMap, subagentList, subagentsFromEntries } from "./tau/subagents";
-import { isToolExpandable } from "./tau/tool-summary";
+} from "./core/chat-conversion";
+import { copyText, formatTokens, isEditableTarget, shortModelName } from "./core/format";
+import { applySubagentEvent, type SubagentStateMap, subagentList, subagentsFromEntries } from "./core/subagents";
+import { isToolExpandable } from "./core/tool-summary";
 import type {
-  AppView,
   ChatItem,
   ChatSubmitStatus,
   ConnectionState,
   ExtensionDialog,
-  LaunchProject,
   MirrorSync,
   ModelInfo,
   ProjectGroup,
   PromptCommand,
   RpcEvent,
-  RunningInstance,
   SearchResult,
   SessionInfo,
   SystemTone,
   ThemeMode,
   Usage,
-} from "./tau/types";
-import { wsUrl } from "./tau/ws";
+} from "./core/types";
+import { wsUrl } from "./core/ws";
 
 export function App() {
   const [items, setItems] = useState<ChatItem[]>([]);
@@ -90,35 +85,28 @@ export function App() {
   const [modelLabel, setModelLabel] = useState("model");
   const [currentModel, setCurrentModel] = useState<ModelInfo | null>(null);
   const [thinkingLevel, setThinkingLevel] = useState("off");
-  const [sessionName, setSessionName] = useState("Tau");
+  const [sessionName, setSessionName] = useState("Pi Web UI");
   const [error, setError] = useState<string | null>(null);
-  const [tailscaleUrl, setTailscaleUrl] = useState("");
   const [advancedFeatures, setAdvancedFeatures] = useState(false);
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(
-    () => (localStorage.getItem("tau-theme-mode") as ThemeMode | null) || "system",
+    () => (localStorage.getItem("pi-web-ui-theme-mode") as ThemeMode | null) || "system",
   );
   const [systemDark, setSystemDark] = useState(
     () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
 
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 900);
-  const [view, setView] = useState<AppView>("chat");
   const [projects, setProjects] = useState<ProjectGroup[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionQuery, setSessionQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   const [favourites, setFavourites] = useState<string[]>(
-    () => JSON.parse(localStorage.getItem("tau-favourites") || "[]") as string[],
+    () => JSON.parse(localStorage.getItem("pi-web-ui-favourites") || "[]") as string[],
   );
   const [activeSessionFile, setActiveSessionFile] = useState<string | null>(null);
-  const [liveSessionFile, setLiveSessionFile] = useState<string | null>(null);
-  const [viewingActiveSession, setViewingActiveSession] = useState(true);
-  const [liveInstances, setLiveInstances] = useState<RunningInstance[]>([]);
-
-  const [launcherProjects, setLauncherProjects] = useState<LaunchProject[]>([]);
-  const [launcherLoading, setLauncherLoading] = useState(false);
+  const [viewedSessionFile, setViewedSessionFile] = useState<string | null>(null);
+  const [viewedSessionTitle, setViewedSessionTitle] = useState<string | null>(null);
 
   const [queuedMessages, setQueuedMessages] = useState<PromptCommand[]>([]);
 
@@ -127,7 +115,7 @@ export function App() {
   const [modelSearch, setModelSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
-  const [showThinking, setShowThinking] = useState(() => localStorage.getItem("tau-show-thinking") !== "false");
+  const [showThinking, setShowThinking] = useState(() => localStorage.getItem("pi-web-ui-show-thinking") !== "false");
   const [autoCompaction, setAutoCompaction] = useState(true);
   const [authConfigured, setAuthConfigured] = useState(false);
   const [authEnabled, setAuthEnabled] = useState(false);
@@ -195,30 +183,6 @@ export function App() {
     }
   }, []);
 
-  const loadInstances = useCallback(async () => {
-    try {
-      const response = await fetch("/api/instances");
-      if (!response.ok) return;
-      const data = await response.json();
-      setLiveInstances(data.instances || []);
-    } catch {
-      // Best effort only.
-    }
-  }, []);
-
-  const loadProjects = useCallback(async () => {
-    setLauncherLoading(true);
-    try {
-      const response = await fetch("/api/projects");
-      const data = await response.json();
-      setLauncherProjects(data.projects || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load projects");
-    } finally {
-      setLauncherLoading(false);
-    }
-  }, []);
-
   const refreshState = useCallback(async () => {
     try {
       const [stateResult, modelsResult] = await Promise.allSettled([
@@ -235,20 +199,18 @@ export function App() {
         setCurrentModel(data.model || null);
         setModelLabel(shortModelName(data.model?.id || "model"));
         setThinkingLevel(data.thinkingLevel || "off");
-        setSessionName(data.sessionName || "Tau");
+        setSessionName(data.sessionName || "Pi Web UI");
         setAutoCompaction(Boolean(data.autoCompactionEnabled));
         if (data.model?.contextWindow) setContextWindowSize(data.model.contextWindow);
       }
     } catch (err) {
-      console.error("[Tau] get_state failed", err);
+      console.error("[pi-web-ui] get_state failed", err);
     }
   }, [rpc]);
 
   const fetchHealth = useCallback(async () => {
     try {
-      const response = await fetch("/api/health");
-      const data = await response.json();
-      setTailscaleUrl(data.tailscaleUrl || "");
+      await fetch("/api/health");
     } catch {
       // Health only decorates the status label.
     }
@@ -263,13 +225,13 @@ export function App() {
       setSelectedSubagentId((current) => (current && nextSubagents[current] ? current : null));
       setChatStatus(sync.isStreaming ? "streaming" : "ready");
       setConnection("connected");
-      setSessionName(sync.sessionName || "Tau");
+      setSessionName(sync.sessionName || "Pi Web UI");
       setCurrentModel(sync.model || null);
       setModelLabel(shortModelName(sync.model?.id || "model"));
       setThinkingLevel(sync.thinkingLevel || "off");
-      setLiveSessionFile(sync.sessionFile || null);
       setActiveSessionFile(sync.sessionFile || null);
-      setViewingActiveSession(true);
+      setViewedSessionFile(null);
+      setViewedSessionTitle(null);
       setLastUsage(findLastUsage(sync.entries ?? []));
       if (sync.model?.contextWindow) setContextWindowSize(sync.model.contextWindow);
       setError(null);
@@ -517,17 +479,17 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("tau-theme-mode", themeMode);
+    localStorage.setItem("pi-web-ui-theme-mode", themeMode);
     document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
     document.documentElement.style.colorScheme = resolvedTheme;
   }, [resolvedTheme, themeMode]);
 
   useEffect(() => {
-    localStorage.setItem("tau-show-thinking", String(showThinking));
+    localStorage.setItem("pi-web-ui-show-thinking", String(showThinking));
   }, [showThinking]);
 
   useEffect(() => {
-    localStorage.setItem("tau-favourites", JSON.stringify(favourites));
+    localStorage.setItem("pi-web-ui-favourites", JSON.stringify(favourites));
   }, [favourites]);
 
   useEffect(() => {
@@ -538,18 +500,9 @@ export function App() {
 
   useEffect(() => {
     loadSessions();
-    loadInstances();
     refreshState();
     fetchHealth();
-    const interval = window.setInterval(() => {
-      loadInstances();
-    }, 5000);
-    return () => window.clearInterval(interval);
-  }, [fetchHealth, loadInstances, loadSessions, refreshState]);
-
-  useEffect(() => {
-    if (view === "projects") loadProjects();
-  }, [loadProjects, view]);
+  }, [fetchHealth, loadSessions, refreshState]);
 
   useEffect(() => {
     if (sessionQuery.trim().length < 2) {
@@ -565,7 +518,7 @@ export function App() {
         const data = await response.json();
         setSearchResults(data.results || []);
       } catch (err) {
-        if (!controller.signal.aborted) console.error("[Tau] search failed", err);
+        if (!controller.signal.aborted) console.error("[pi-web-ui] search failed", err);
       }
     }, 300);
 
@@ -617,7 +570,7 @@ export function App() {
             handleEvent(data as unknown as RpcEvent);
           }
         } catch (err) {
-          console.error("[Tau] Failed to parse WebSocket message", err);
+          console.error("[pi-web-ui] Failed to parse WebSocket message", err);
         }
       };
 
@@ -661,11 +614,9 @@ export function App() {
 
   const sendPrompt = useCallback(
     async (command: PromptCommand) => {
-      if (!viewingActiveSession) {
-        setError("Viewing historical session. Switch back to the live session to send messages.");
+      if (viewedSessionFile && viewedSessionFile !== activeSessionFile) {
         return;
       }
-
       setChatStatus("submitted");
       setError(null);
 
@@ -683,15 +634,15 @@ export function App() {
         setError(err instanceof Error ? err.message : "Prompt failed");
       }
     },
-    [rpc, sendWs, viewingActiveSession],
+    [rpc, sendWs, viewedSessionFile, activeSessionFile],
   );
 
   useEffect(() => {
-    if (chatStatus !== "ready" || queuedMessages.length === 0 || !viewingActiveSession) return;
+    if (chatStatus !== "ready" || queuedMessages.length === 0) return;
     const [next, ...rest] = queuedMessages;
     setQueuedMessages(rest);
     sendPrompt(next);
-  }, [chatStatus, queuedMessages, sendPrompt, viewingActiveSession]);
+  }, [chatStatus, queuedMessages, sendPrompt]);
 
   const handleEditSubmit = useCallback(
     async (entryId: string, newText: string) => {
@@ -774,27 +725,11 @@ export function App() {
   );
 
   const selectSession = useCallback(
-    async (session: SessionInfo, project?: ProjectGroup) => {
-      setActiveSessionFile(session.filePath);
+    async (session: SessionInfo) => {
       setError(null);
-
-      const otherInstance = liveInstances.find(
-        (instance) => instance.sessionFile === session.filePath && instance.port !== Number(location.port || 3001),
-      );
-      if (otherInstance) {
-        window.location.href = `${location.protocol}//${location.hostname}:${otherInstance.port}${location.pathname}${location.search}${location.hash}`;
-        return;
-      }
-
-      if (session.filePath === liveSessionFile) {
-        setViewingActiveSession(true);
-        sendWs({ type: "mirror_sync_request" });
-        return;
-      }
-
-      setViewingActiveSession(false);
       setChatStatus("ready");
-      const dirName = project?.dirName;
+
+      const dirName = projects.find((p) => p.sessions.some((s) => s.filePath === session.filePath))?.dirName;
       const file = session.file;
       if (!dirName || !file) return;
 
@@ -803,38 +738,17 @@ export function App() {
         const data = await response.json();
         const entries = data.entries || [];
         const nextSubagents = subagentsFromEntries(entries);
+        setViewedSessionFile(session.filePath);
+        setViewedSessionTitle(session.name || session.firstMessage || "Session history");
         setItems(syncToItems(entries, nextId));
         setSubagents(nextSubagents);
         setSelectedSubagentId((current) => (current && nextSubagents[current] ? current : null));
-        setSessionName(session.name || session.firstMessage || "Session history");
         setLastUsage(findLastUsage(entries));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load session");
       }
     },
-    [liveInstances, liveSessionFile, nextId, sendWs],
-  );
-
-  const returnToLive = useCallback(() => {
-    setViewingActiveSession(true);
-    setActiveSessionFile(liveSessionFile);
-    sendWs({ type: "mirror_sync_request" });
-  }, [liveSessionFile, sendWs]);
-
-  const launchProject = useCallback(
-    async (projectPath: string) => {
-      try {
-        await fetch("/api/projects/launch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: projectPath }),
-        });
-        addSystemMessage(`Launching ${projectPath}`, "success");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to launch project");
-      }
-    },
-    [addSystemMessage],
+    [nextId, projects],
   );
 
   const openSettings = useCallback(async () => {
@@ -1005,81 +919,67 @@ export function App() {
   return (
     <TooltipProvider>
       <main className="flex h-full min-h-0 bg-background text-foreground">
-        {sidebarOpen && (
-          <button
-            aria-label="Close sidebar"
-            className="fixed inset-0 z-30 bg-background/80 backdrop-blur-sm md:hidden"
-            onClick={() => setSidebarOpen(false)}
-            type="button"
-          />
-        )}
-
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-40 flex w-80 flex-col border-r bg-background transition-transform md:static md:z-auto",
-            sidebarOpen ? "translate-x-0" : "-translate-x-full md:hidden",
+            "fixed inset-y-0 left-0 z-40 flex flex-col border-r bg-background transition-all md:static md:z-auto relative overflow-hidden",
+            sidebarOpen ? "w-80" : "w-12",
           )}
         >
-          <div className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
-            <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <BotIcon className="size-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-medium text-sm">Tau</div>
-              <div className="text-muted-foreground text-xs">Pi mirror</div>
-            </div>
-            <Button onClick={loadSessions} size="icon-sm" type="button" variant="ghost">
-              <RefreshCwIcon className="size-4" />
+          {/* Toggle — absolutely positioned so it never moves during width transition */}
+          <div className="absolute left-0 top-0 flex h-14 w-12 items-center justify-center">
+            <Button onClick={() => setSidebarOpen((open) => !open)} size="icon-sm" type="button" variant="ghost">
+              <MenuIcon className="size-4" />
             </Button>
           </div>
 
-          <div className="border-b p-3">
-            <div className="flex rounded-md bg-muted p-1">
-              <button
-                className={cn("flex-1 rounded-sm px-2 py-1 text-sm", view === "chat" && "bg-background shadow-xs")}
-                onClick={() => setView("chat")}
-                type="button"
-              >
-                Sessions
-              </button>
-              <button
-                className={cn("flex-1 rounded-sm px-2 py-1 text-sm", view === "projects" && "bg-background shadow-xs")}
-                onClick={() => setView("projects")}
-                type="button"
-              >
-                Projects
-              </button>
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col transition-opacity duration-200",
+              sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none",
+            )}
+          >
+            <div className={cn("flex h-14 shrink-0 items-center gap-2 border-b pl-12 pr-3")}>
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-sm">Pi Web UI</div>
+                <div className="text-muted-foreground text-xs">Browser interface for Pi</div>
+              </div>
+              <Button onClick={loadSessions} size="icon-sm" type="button" variant="ghost">
+                <RefreshCwIcon className="size-4" />
+              </Button>
             </div>
-            {view === "chat" && (
-              <div className="relative mt-3">
+
+            {/* Active session info */}
+            <div className="border-b p-3">
+              <div className="flex items-center gap-2">
+                <ConnectionDot state={connection} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{sessionName}</div>
+                  <div className="text-muted-foreground text-xs">{modelLabel}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* History */}
+            <div className="border-b px-3 py-2">
+              <div className="font-medium text-xs">History</div>
+              <div className="relative mt-2">
                 <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                 <Input
                   className="pl-8"
                   onChange={(event) => setSessionQuery(event.target.value)}
-                  placeholder="Search sessions..."
+                  placeholder="Search history..."
                   value={sessionQuery}
                 />
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {view === "chat" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
               <SessionSidebar
                 activeSessionFile={activeSessionFile}
-                collapsedProjects={collapsedProjects}
+                viewedSessionFile={viewedSessionFile}
                 favourites={favourites}
-                liveFiles={
-                  new Set(
-                    [liveSessionFile, ...liveInstances.map((instance) => instance.sessionFile)].filter(
-                      Boolean,
-                    ) as string[],
-                  )
-                }
                 loading={sessionsLoading}
-                onRename={renameActiveSession}
                 onSelect={selectSession}
-                onToggleCollapsed={(dirName) => setCollapsedProjects((current) => toggleSetValue(current, dirName))}
                 onToggleFavourite={(filePath) =>
                   setFavourites((current) =>
                     current.includes(filePath) ? current.filter((item) => item !== filePath) : [...current, filePath],
@@ -1089,46 +989,44 @@ export function App() {
                 query={sessionQuery}
                 searchResults={searchResults}
               />
-            ) : (
-              <ProjectLauncher loading={launcherLoading} onLaunch={launchProject} projects={launcherProjects} />
-            )}
-          </div>
+            </div>
 
-          <div className="shrink-0 border-t p-2">
-            <Button className="w-full justify-start gap-2" onClick={openSettings} type="button" variant="ghost">
-              <Settings2Icon className="size-4" />
-              <span>Settings</span>
-            </Button>
+            <div className="shrink-0 border-t p-2">
+              <Button className="w-full justify-start gap-2" onClick={openSettings} type="button" variant="ghost">
+                <Settings2Icon className="size-4" />
+                <span>Settings</span>
+              </Button>
+            </div>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <Button onClick={() => setSidebarOpen((open) => !open)} size="icon-sm" type="button" variant="ghost">
-                <MenuIcon className="size-4" />
-              </Button>
-              <div className="min-w-0">
-                <div className="truncate font-medium text-sm">{sessionName}</div>
-                <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                  <ConnectionDot state={connection} />
-                  <span>
-                    {connection}
-                    {tailscaleUrl ? " / TS" : ""}
-                  </span>
-                  <span>/</span>
-                  <span>{modelLabel}</span>
-                  {!viewingActiveSession && <span className="text-amber-600">history</span>}
-                </div>
+            <div className="min-w-0">
+              <div className="truncate font-medium text-sm">{viewedSessionTitle || sessionName}</div>
+              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                <ConnectionDot state={connection} />
+                <span>{connection}</span>
+                <span>/</span>
+                <span>{modelLabel}</span>
               </div>
             </div>
 
+            {viewedSessionFile && viewedSessionFile !== activeSessionFile && (
+              <Button
+                onClick={() => {
+                  setViewedSessionFile(null);
+                  setViewedSessionTitle(null);
+                }}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                ← Live
+              </Button>
+            )}
+
             <div className="flex items-center gap-1">
-              {!viewingActiveSession && (
-                <Button onClick={returnToLive} size="sm" type="button" variant="secondary">
-                  Live
-                </Button>
-              )}
               <Button onClick={openModelPicker} size="sm" type="button" variant="outline">
                 <ChevronsUpDownIcon className="size-4" />
                 <span className="hidden sm:inline">{modelLabel}</span>
@@ -1171,7 +1069,7 @@ export function App() {
                   <ConversationEmptyState
                     description="Connect to the running Pi session and send a message."
                     icon={<TerminalIcon className="size-7" />}
-                    title="Tau"
+                    title="Pi Web UI"
                   />
                 ) : (
                   items.map((item) =>
@@ -1244,35 +1142,39 @@ export function App() {
             </div>
           )}
 
-          <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
-            <div className="mx-auto w-full max-w-3xl">
-              <PromptInput
-                accept="image/*"
-                className={cn("rounded-xl border bg-card shadow-sm", !viewingActiveSession && "opacity-70")}
-                globalDrop={viewingActiveSession}
-                multiple
-                onSubmit={submitMessage}
-              >
-                <PromptAttachmentPreview />
-                <PromptInputBody>
-                  <PromptInputTextarea
-                    className="min-h-20 resize-none"
-                    disabled={!viewingActiveSession}
-                    placeholder={viewingActiveSession ? "Message Pi..." : "Viewing historical session"}
-                  />
-                </PromptInputBody>
-                <PromptInputFooter>
-                  <PromptInputTools>
-                    <PromptAttachmentButton disabled={!viewingActiveSession} />
-                    <div className="hidden items-center gap-1 px-2 text-muted-foreground text-xs sm:flex">
-                      Enter sends, Shift+Enter inserts a newline
-                    </div>
-                  </PromptInputTools>
-                  <PromptInputSubmit disabled={!viewingActiveSession} onStop={abort} status={chatStatus} />
-                </PromptInputFooter>
-              </PromptInput>
-            </div>
-          </footer>
+          {!viewedSessionFile || viewedSessionFile === activeSessionFile ? (
+            <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
+              <div className="mx-auto w-full max-w-3xl">
+                <PromptInput
+                  accept="image/*"
+                  className="rounded-xl border bg-card shadow-sm"
+                  globalDrop={true}
+                  multiple
+                  onSubmit={submitMessage}
+                >
+                  <PromptAttachmentPreview />
+                  <PromptInputBody>
+                    <PromptInputTextarea className="min-h-20 resize-none" placeholder="Message Pi..." />
+                  </PromptInputBody>
+                  <PromptInputFooter>
+                    <PromptInputTools>
+                      <PromptAttachmentButton />
+                      <div className="hidden items-center gap-1 px-2 text-muted-foreground text-xs sm:flex">
+                        Enter sends, Shift+Enter inserts a newline
+                      </div>
+                    </PromptInputTools>
+                    <PromptInputSubmit onStop={abort} status={chatStatus} />
+                  </PromptInputFooter>
+                </PromptInput>
+              </div>
+            </footer>
+          ) : (
+            <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
+              <div className="mx-auto w-full max-w-3xl text-center text-muted-foreground text-sm py-4">
+                Viewing history
+              </div>
+            </footer>
+          )}
         </div>
 
         {selectedSubagent && (
