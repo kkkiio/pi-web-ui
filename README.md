@@ -18,6 +18,14 @@ Pi Web UI connects to your running Pi session and gives you a browser interface.
 
 ## Install
 
+Install from GitHub:
+
+```bash
+pi install git:github.com/kkkiio/pi-web-ui
+```
+
+After the package is published to the npm registry, you can also use:
+
 ```bash
 pi install npm:pi-web-ui
 ```
