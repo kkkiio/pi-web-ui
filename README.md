@@ -9,6 +9,8 @@ A web UI for [Pi](https://github.com/badlogic/pi-mono) coding agent. Runs as a P
 
 Pi Web UI connects to your running Pi session and gives you a browser interface. Same session, same messages, same tools — just a different screen. Type in the terminal or the browser, both stay in sync.
 
+![Pi Web UI example](docs/images/pi-web-ui-example.png)
+
 - **Real-time streaming** — messages, tool calls, and thinking blocks
 - **React UI** — Vite, Tailwind, shadcn/ui, AI Elements
 - **Markdown rendering** — Streamdown for code blocks, math, Mermaid
@@ -59,6 +61,8 @@ Environment variables (set before starting Pi):
 | `PI_WEB_UI_HOST` | `127.0.0.1` | Bind address |
 | `PI_WEB_UI_DISABLED` | `0` | Set to `1` to disable |
 | `PI_WEB_UI_STATIC_DIR` | *(bundled)* | Override static files path |
+| `PI_CODING_AGENT_DIR` | `~/.pi/agent` | Override Pi config directory |
+| `PI_CODING_AGENT_SESSION_DIR` | *(derived)* | Override Pi session storage directory |
 
 Or in `~/.pi/agent/settings.json`:
 
@@ -70,6 +74,9 @@ Or in `~/.pi/agent/settings.json`:
   }
 }
 ```
+
+Pi Web UI follows Pi's `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR`
+overrides when reading settings and session history.
 
 ### Start / Stop
 
@@ -102,7 +109,7 @@ graph LR
 
 ```bash
 git clone https://github.com/kkkiio/pi-web-ui.git
-cd tau
+cd pi-web-ui
 npm install
 npm run build:web
 PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi

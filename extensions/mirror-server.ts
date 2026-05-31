@@ -139,7 +139,19 @@ type NodeError = Error & {
   code?: string;
 };
 
-// Load pi-web-ui settings from ~/.pi/agent/settings.json (falls back to env vars)
+const AGENT_DIR = path.resolve(
+  (process.env.PI_CODING_AGENT_DIR || path.join(process.env.HOME || "~", ".pi/agent")).replace(
+    /^~(?=$|\/)/,
+    process.env.HOME || "~",
+  ),
+);
+const CUSTOM_SESSIONS_DIR = process.env.PI_CODING_AGENT_SESSION_DIR
+  ? path.resolve(process.env.PI_CODING_AGENT_SESSION_DIR.replace(/^~(?=$|\/)/, process.env.HOME || "~"))
+  : null;
+const SESSIONS_DIR = CUSTOM_SESSIONS_DIR || path.join(AGENT_DIR, "sessions");
+const CUSTOM_SESSIONS_GROUP = "__custom__";
+
+// Load pi-web-ui settings from the Pi agent directory (falls back to env vars)
 function loadSettings(): {
   port: number;
   host: string;
@@ -147,7 +159,7 @@ function loadSettings(): {
 } {
   let settings: SettingsData = {};
   try {
-    const settingsPath = path.join(process.env.HOME || "~", ".pi/agent/settings.json");
+    const settingsPath = path.join(AGENT_DIR, "settings.json");
     settings =
       (
         JSON.parse(fs.readFileSync(settingsPath, "utf8")) as {
@@ -210,7 +222,6 @@ function findStaticDir(): string {
 
   return path.resolve(process.cwd(), "dist");
 }
-const SESSIONS_DIR = path.join(process.env.HOME || "~", ".pi/agent/sessions");
 
 // MIME types for static file serving
 const MIME_TYPES: Record<string, string> = {
@@ -326,7 +337,8 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`pi-web-ui is already running at ${mirrorUrl}`, "warning");
         return;
       }
-      startServer(ctx);
+      latestCtx = ctx;
+      startServer();
       ctx.ui.notify("pi-web-ui server starting...", "info");
     },
   });
@@ -1283,15 +1295,19 @@ export default function (pi: ExtensionAPI) {
 
       const tmuxFiles = getTmuxSessionFiles();
       const readline = await import("node:readline");
-      const dirEntries = fs.readdirSync(SESSIONS_DIR, { withFileTypes: true });
+      const dirEntries = CUSTOM_SESSIONS_DIR
+        ? [{ name: CUSTOM_SESSIONS_GROUP, isDirectory: () => true }]
+        : fs.readdirSync(SESSIONS_DIR, { withFileTypes: true });
       const projects: ProjectSessionGroup[] = [];
 
       for (const dir of dirEntries) {
         if (!dir.isDirectory()) continue;
 
-        const projectDir = path.join(SESSIONS_DIR, dir.name);
+        const projectDir = CUSTOM_SESSIONS_DIR || path.join(SESSIONS_DIR, dir.name);
         const files = fs.readdirSync(projectDir).filter((f) => f.endsWith(".jsonl"));
-        const decodedPath = dir.name.replace(/^--/, "/").replace(/--$/, "").replace(/-/g, "/");
+        const decodedPath = CUSTOM_SESSIONS_DIR
+          ? CUSTOM_SESSIONS_DIR
+          : dir.name.replace(/^--/, "/").replace(/--$/, "").replace(/-/g, "/");
 
         const sessions: SessionListItem[] = [];
 
@@ -1342,7 +1358,10 @@ export default function (pi: ExtensionAPI) {
   // Session file endpoint
   // ═══════════════════════════════════════
   function serveSessionFile(res: http.ServerResponse, dirName: string, file: string) {
-    const filePath = path.join(SESSIONS_DIR, dirName, file);
+    const filePath =
+      CUSTOM_SESSIONS_DIR && dirName === CUSTOM_SESSIONS_GROUP
+        ? path.join(CUSTOM_SESSIONS_DIR, file)
+        : path.join(SESSIONS_DIR, dirName, file);
 
     if (!fs.existsSync(filePath)) {
       res.writeHead(404, { "Content-Type": "application/json" });
@@ -1545,14 +1564,18 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      const dirEntries = fs.readdirSync(SESSIONS_DIR, { withFileTypes: true });
+      const dirEntries = CUSTOM_SESSIONS_DIR
+        ? [{ name: CUSTOM_SESSIONS_GROUP, isDirectory: () => true }]
+        : fs.readdirSync(SESSIONS_DIR, { withFileTypes: true });
 
       for (const dir of dirEntries) {
         if (!dir.isDirectory()) continue;
         if (results.length >= MAX_RESULTS) break;
 
-        const projectDir = path.join(SESSIONS_DIR, dir.name);
-        const decodedPath = dir.name.replace(/^--/, "/").replace(/--$/, "").replace(/-/g, "/");
+        const projectDir = CUSTOM_SESSIONS_DIR || path.join(SESSIONS_DIR, dir.name);
+        const decodedPath = CUSTOM_SESSIONS_DIR
+          ? CUSTOM_SESSIONS_DIR
+          : dir.name.replace(/^--/, "/").replace(/--$/, "").replace(/-/g, "/");
         const files = fs.readdirSync(projectDir).filter((f) => f.endsWith(".jsonl"));
 
         for (const file of files) {
@@ -1658,7 +1681,7 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   // Start server function (reusable)
   // ═══════════════════════════════════════
-  function startServer(ctx: ExtensionContext) {
+  function startServer() {
     if (server) return; // Already running
 
     server = http.createServer(serveStaticFile);
@@ -1771,7 +1794,7 @@ export default function (pi: ExtensionAPI) {
       mirrorStatusBase = `pi-web-ui: ${HOST}:${port}`;
       updateMirrorStatus();
 
-      ctx.ui.notify(`pi-web-ui: ${mirrorUrl}`, "info");
+      latestCtx?.ui.notify(`pi-web-ui: ${mirrorUrl}`, "info");
     };
 
     tryListen(PORT);
@@ -1787,7 +1810,7 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
-    startServer(ctx);
+    startServer();
   });
 
   // ═══════════════════════════════════════
