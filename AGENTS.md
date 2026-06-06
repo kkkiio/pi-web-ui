@@ -45,7 +45,7 @@ Per `adrs/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards event
 
 ### Overview
 
-Pi Web UI is a Pi extension package (`npm:pi-web-ui`). It starts an HTTP + WebSocket server inside the Pi process and serves a React frontend built with Vite.
+Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP + WebSocket server inside the Pi process and serves a React frontend built with Vite.
 
 ### Repo Structure & Important Files
 
