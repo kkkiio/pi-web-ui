@@ -204,7 +204,7 @@ function findStaticDir(): string {
   // 2) Installed package path (for npm-installed extension execution)
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pkgPath = require.resolve("pi-web-ui/package.json");
+    const pkgPath = require.resolve("@kkkiio/pi-web-ui/package.json");
     const pkgDir = path.dirname(pkgPath);
     addCandidate(path.join(pkgDir, "dist"));
     addCandidate(path.join(pkgDir, "public"));
@@ -213,8 +213,8 @@ function findStaticDir(): string {
   // 3) Development fallback from current working directory
   addCandidate(path.resolve(process.cwd(), "dist"));
   addCandidate(path.resolve(process.cwd(), "public"));
-  addCandidate(path.resolve(process.cwd(), "node_modules/pi-web-ui/dist"));
-  addCandidate(path.resolve(process.cwd(), "node_modules/pi-web-ui/public"));
+  addCandidate(path.resolve(process.cwd(), "node_modules/@kkkiio/pi-web-ui/dist"));
+  addCandidate(path.resolve(process.cwd(), "node_modules/@kkkiio/pi-web-ui/public"));
 
   for (const candidate of candidates) {
     if (fs.existsSync(path.join(candidate, "index.html"))) return candidate;

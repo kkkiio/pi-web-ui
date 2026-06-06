@@ -1,5 +1,5 @@
 {
-  "name": "pi-web-ui",
+  "name": "@kkkiio/pi-web-ui",
   "version": "0.1.0",
   "description": "Web UI for Pi coding agent — view and control your Pi session from the browser",
   "keywords": [

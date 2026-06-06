@@ -24,6 +24,12 @@ Install from GitHub:
 pi install git:github.com/kkkiio/pi-web-ui
 ```
 
+Or from npm:
+
+```bash
+pi install npm:@kkkiio/pi-web-ui
+```
+
 ## Usage
 
 1. Start Pi in your terminal
