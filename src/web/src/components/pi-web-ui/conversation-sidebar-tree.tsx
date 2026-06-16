@@ -144,6 +144,7 @@ function ConversationTreeMenuItem({
         loading && "animate-pulse",
       )}
       data-tree-entry-id={item.id}
+      data-tree-branch-child={item.isBranchChild ? "true" : undefined}
       data-tree-forkable={item.isForkable ? "true" : undefined}
       isActive={active}
       onClick={() => onBrowse(item.id)}
@@ -165,6 +166,17 @@ function ConversationTreeMenuItem({
           </span>
         </CollapsibleTrigger>
       ) : null}
+      {item.isBranchChild && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "h-px w-3 shrink-0 rounded-full bg-sidebar-border",
+            item.isForkable && "bg-sky-500/60",
+            inactive && "bg-sidebar-border/60",
+            item.isForkable && inactive && "bg-sky-500/30",
+          )}
+        />
+      )}
       <span className="min-w-0 flex-1 truncate">
         {renderHighlightedSegments(segments)}
         {item.detail && (
