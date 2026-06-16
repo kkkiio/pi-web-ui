@@ -40,7 +40,10 @@ export function buildConversationTreeItems({
   const toolCallsById = buildToolCallIndex(tree);
   const roots: ConversationTreeItem[] = [];
 
-  const visit = (node: SessionTreeNode): { items: ConversationTreeItem[]; matches: boolean } => {
+  const visit = (
+    node: SessionTreeNode,
+    isBranchChild = false,
+  ): { items: ConversationTreeItem[]; matches: boolean } => {
     const id = node.entry.id;
     if (!id) return { items: [], matches: false };
     const { detail, text } = getConversationTreeItemText(node.entry, toolCallsById);
@@ -51,8 +54,9 @@ export function buildConversationTreeItems({
     let descendantMatches = false;
 
     const sortedChildren = [...node.children].sort(compareTreeNodes);
+    const hasBranchChildren = sortedChildren.length > 1;
     for (const child of sortedChildren) {
-      const result = visit(child);
+      const result = visit(child, hasBranchChildren);
       if (result.matches) descendantMatches = true;
       childItems.push(...result.items);
     }
@@ -74,6 +78,7 @@ export function buildConversationTreeItems({
       detail,
       isExpandable,
       isExpanded,
+      isBranchChild,
       isForkable: node.entry.type === "message" && node.entry.message?.role === "user",
       isLeaf: id === leafId,
       isSearchMatch: selfMatches && Boolean(normalizedQuery),

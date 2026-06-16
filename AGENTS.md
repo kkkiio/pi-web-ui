@@ -12,20 +12,39 @@ Pi extension that mirrors the terminal session in the browser — WebSocket + HT
 
 ## Policies & Mandatory Rules
 
+### Two context types — `latestCtx` and `latestExecuteCtx`
+
+Pi has **two distinct context types** with different capabilities:
+
+| Context | Variable | Source | Capabilities |
+|---------|----------|--------|-------------|
+| `ExtensionContext` | `latestCtx` | Event callbacks (`pi.on(...)`) | `ui`, `sessionManager`(read), `model`, `cwd`, `isIdle()`, `abort()`, `shutdown()`, `getContextUsage()`, `compact()` |
+| `ExtensionCommandContext` | `latestExecuteCtx` | `/webui` command handler capture | All of the above **+** `navigateTree()`, `newSession()`, `fork()`, `switchSession()`, `waitForIdle()`, `reload()`, `getSystemPromptOptions()` |
+
+`navigateTree` and other session-control methods **only exist on `ExtensionCommandContext`**. Pi's author deliberately restricts them to command handlers. See [ADR 0003](adrs/0003-navigate-tree-via-captured-command-context.md) for the full workaround design.
+
+**Rule — use the right context for the right job:**
+- Reading state, forwarding events, UI notifications → use `latestCtx`
+- Session control (`navigateTree`, `fork`, etc.) → use `latestExecuteCtx`, check for `null` first
+- Both are cleared on `session_start` and `session_shutdown`; `latestExecuteCtx` requires user to re-run `/webui`
+
 ### `latestCtx` — Never use captured `ctx` in long-lived closures
 
 The Pi extension runner **invalidates** `ExtensionContext` after session replacement, fork, switch, or reload. Any closure that captures a `ctx` parameter and uses it after one of those operations will throw:
 
 > This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload().
 
-**Rule**: `extensions/mirror-server.ts` uses a module-level `latestCtx` variable. Every Pi event callback updates it with the fresh `ctx`:
+**Rule**: `extensions/mirror-server.ts` uses a module-level `latestCtx` variable. Every Pi event callback updates it with the fresh `ctx`.
 
 **All code that may run after a session lifecycle event** — WebSocket `close`/`error`/`connection` handlers, `setInterval` timers, async callbacks from external sources — must use `latestCtx`, never a captured `ctx` parameter.
+
+The same stale-context rule applies to `latestExecuteCtx`. After session replacement, any captured `ExtensionCommandContext` becomes stale and must be re-captured via `/webui`.
 
 Apply this rule when you:
 - Add or modify any closure in `extensions/mirror-server.ts` that references `ctx`
 - Add a new `pi.on(...)` handler that doesn't update `latestCtx`
 - Use `ctx.ui`, `ctx.sessionManager`, `ctx.cwd`, or any other `ctx` property inside `setInterval`, `setTimeout`, WebSocket event handlers, or command handlers
+- Add a new command handler that captures `ExtensionCommandContext` — must update `latestExecuteCtx`
 
 Skip for:
 - Synchronous code that runs immediately inside a `pi.on(...)` callback body, before any `await`
@@ -63,9 +82,23 @@ Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP
 
 ```
 .
-├── adrs/                        # Architecture Decision Records
-│   ├── 0001-...output-policy.md   # Extension output rules (no stdout/stderr)
-│   └── 0002-...event-protocol.md  # Web UI event forwarding protocol
+├── adrs/                        # Architecture Decision Records (必读)
+│   ├── 0001-pi-extension-output-policy.md          # Extension output rules (no stdout/stderr)
+│   ├── 0002-web-ui-extension-event-protocol.md     # Web UI event forwarding protocol
+│   ├── 0003-navigate-tree-via-captured-command-context.md # latestCtx vs latestExecuteCtx workaround
+│   ├── 0004-web-ui-access-bind-address.md          # Server bind address policy
+│   ├── 0005-intercepted-command-ui-lifecycle.md    # Intercepted command UI state handling
+│   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
+│   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
+│   └── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
+├── prds/                        # Product Requirement Documents (功能设计)
+│   ├── arch-mode-ui.md          # Architecture mode toggle UI
+│   ├── tree-sidebar.md          # Conversation tree sidebar
+│   ├── columns-layout.md        # Multi-column layout design
+│   ├── edit-message.md          # Edit & resend user messages
+│   ├── left-sidebar.md          # Left sidebar design
+│   ├── subagent-integration.md  # Sub-agent status display
+│   └── workspace-status-float.md # Workspace status floating indicator
 ├── extensions/
 │   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
 │   └── imessage-bridge.ts       # iMessage integration extension
@@ -86,13 +119,15 @@ Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP
 │   │   └── components/
 │   │       ├── pi-web-ui/       # Pi Web UI components
 │   │       │   ├── chat-item-view.tsx    # Main chat message renderer
-│   │       │   ├── session-sidebar.tsx   # Session list sidebar
+│   │       │   ├── conversation-sidebar.tsx     # Session tree sidebar
+│   │       │   ├── conversation-sidebar-tree.tsx # Tree view component
 │   │       │   ├── command-palette.tsx   # Command palette
 │   │       │   ├── subagent-detail-sidebar.tsx
 │   │       │   ├── model-picker.tsx
 │   │       │   ├── settings-panel.tsx
 │   │       │   ├── context-popover.tsx
 │   │       │   ├── workspace-status-float.tsx
+│   │       │   ├── user-message-view.tsx # User message with edit button
 │   │       │   └── ...
 │   │       ├── ai-elements/     # AI Elements components (conversation, message, tool, reasoning, etc.)
 │   │       └── ui/              # shadcn/ui primitives (button, dialog, input, etc.)
@@ -101,7 +136,6 @@ Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP
 ├── public/                      # Static assets copied by Vite (icons, manifest, sw.js)
 ├── dist/                        # Vite build output (gitignored)
 ├── docs/images/                 # Screenshots for README
-├── specs/                       # Feature specs for UI components
 ├── MOBILE.md                    # Mobile access guide
 ├── RELEASING.md                 # npm publish and pi.dev verification checklist
 

@@ -13,7 +13,7 @@
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { WebSocket, WebSocketServer } from "ws";
 
 type SettingsData = {
@@ -211,7 +211,7 @@ export default function (pi: ExtensionAPI) {
   let latestCtx: ExtensionContext | null = null;
   let archExtensionPresent = false;
   let advancedFeaturesEnabled = false;
-  let latestNavigateTree: ((targetId: string) => Promise<{ cancelled: boolean; editorText?: string }>) | null = null;
+  let latestExecuteCtx: ExtensionCommandContext | null = null;
 
   // ═══════════════════════════════════════
   // Helper: send to one client
@@ -318,9 +318,9 @@ export default function (pi: ExtensionAPI) {
       exec(`open "${mirrorUrl}"`);
       ctx.ui.notify(`Opened ${mirrorUrl}`, "info");
       advancedFeaturesEnabled = true;
-      // navigateTree is only exposed on command contexts; reset this hook on session lifecycle events.
-      latestNavigateTree = (targetId) =>
-        ctx.navigateTree(targetId) as Promise<{ cancelled: boolean; editorText?: string }>;
+      // Capture full ExtensionCommandContext for session-control methods (navigateTree, fork, etc.).
+      // Cleared on session_start/session_shutdown; user must re-run /webui after session replacement.
+      latestExecuteCtx = ctx;
       broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: true } });
     },
   });
@@ -411,7 +411,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     latestCtx = ctx;
     advancedFeaturesEnabled = false;
-    latestNavigateTree = null;
+    latestExecuteCtx = null;
     broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
     turnCount = 0;
     titleSet = false;
@@ -874,7 +874,7 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "navigate_tree": {
-          if (!advancedFeaturesEnabled || !latestNavigateTree) {
+          if (!advancedFeaturesEnabled || !latestExecuteCtx) {
             sendTo(ws, error("Run /webui first to enable editing"));
             break;
           }
@@ -892,7 +892,7 @@ export default function (pi: ExtensionAPI) {
             sendTo(ws, error("No model selected"));
             break;
           }
-          const result = await latestNavigateTree(entry.id);
+          const result = await latestExecuteCtx.navigateTree(entryId);
           if (result.cancelled) {
             sendTo(ws, success({ cancelled: true }));
             break;
@@ -1052,7 +1052,7 @@ export default function (pi: ExtensionAPI) {
         type: "event",
         event: "webui_state",
         payload: {
-          advancedFeatures: advancedFeaturesEnabled && !!latestNavigateTree,
+          advancedFeatures: advancedFeaturesEnabled && !!latestExecuteCtx,
           archAvailable: archExtensionPresent,
         },
       });
@@ -1164,7 +1164,7 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   pi.on("session_shutdown", async () => {
     advancedFeaturesEnabled = false;
-    latestNavigateTree = null;
+    latestExecuteCtx = null;
     latestCtx = null;
     stopServer();
   });
