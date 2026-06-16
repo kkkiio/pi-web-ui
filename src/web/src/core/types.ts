@@ -40,7 +40,7 @@ export type ChatItem =
       presentation?: "normal" | "activity";
       cost?: number;
       images?: PromptImage[];
-      /** Session entry tree node ID, used for edit (navigate_tree). */
+      /** Session entry tree node ID, used for Branch actions via navigate_tree. */
       entryId?: string;
       relatedEntryIds?: string[];
     }
@@ -206,7 +206,9 @@ export type ConversationTreeItem = {
   entryType: string;
   hasChildren: boolean;
   isLeaf: boolean;
-  isForkable: boolean;
+  isBranchable: boolean;
+  isContinuable: boolean;
+  continueTargetId?: string;
   label?: string;
   text: string;
   detail?: string;

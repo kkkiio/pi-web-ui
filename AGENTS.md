@@ -95,7 +95,7 @@ Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP
 │   ├── arch-mode-ui.md          # Architecture mode toggle UI
 │   ├── tree-sidebar.md          # Conversation tree sidebar
 │   ├── columns-layout.md        # Multi-column layout design
-│   ├── edit-message.md          # Edit & resend user messages
+│   ├── branch-message.md        # Branch from user messages
 │   ├── left-sidebar.md          # Left sidebar design
 │   ├── subagent-integration.md  # Sub-agent status display
 │   └── workspace-status-float.md # Workspace status floating indicator
@@ -127,7 +127,7 @@ Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP
 │   │       │   ├── settings-panel.tsx
 │   │       │   ├── context-popover.tsx
 │   │       │   ├── workspace-status-float.tsx
-│   │       │   ├── user-message-view.tsx # User message with edit button
+│   │       │   ├── user-message-view.tsx # User message with Branch button
 │   │       │   └── ...
 │   │       ├── ai-elements/     # AI Elements components (conversation, message, tool, reasoning, etc.)
 │   │       └── ui/              # shadcn/ui primitives (button, dialog, input, etc.)

@@ -1,4 +1,4 @@
-import { CheckIcon, CopyIcon, GitForkIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, GitBranchPlusIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -8,21 +8,24 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { cn } from "@/lib/utils";
 import type { ChatItem } from "../../core/types";
 import { ImagePreviewStrip } from "./image-preview-strip";
 
 export function UserMessageView({
+  actionsVisible,
   item,
+  onBranch,
   onCopy,
-  onFork,
 }: {
+  actionsVisible?: boolean;
   item: ChatItem & { kind: "message"; role: "user" };
+  onBranch?: (entryId: string) => Promise<void> | void;
   onCopy: (text: string) => Promise<void> | void;
-  onFork?: (entryId: string) => Promise<void> | void;
 }) {
   const [copied, setCopied] = useState(false);
   const canCopy = item.text.trim().length > 0 && !item.streaming;
-  const canFork = Boolean(onFork && item.entryId && !item.streaming);
+  const canBranch = Boolean(onBranch && item.entryId && !item.streaming);
 
   const copyMessage = async () => {
     if (!canCopy) return;
@@ -37,19 +40,21 @@ export function UserMessageView({
         {item.images && <ImagePreviewStrip images={item.images} readonly />}
         <MessageResponse>{item.text}</MessageResponse>
       </MessageContent>
-      <MessageActions className="self-end opacity-0 transition-opacity group-hover:opacity-100">
+      <MessageActions
+        className={cn("self-end opacity-0 transition-opacity group-hover:opacity-100", actionsVisible && "opacity-100")}
+      >
         {canCopy && (
           <MessageAction label="Copy message" onClick={copyMessage} tooltip="Copy">
             {copied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
           </MessageAction>
         )}
         <MessageAction
-          disabled={!canFork}
-          label="Fork message"
-          onClick={() => item.entryId && onFork?.(item.entryId)}
-          tooltip={canFork ? "Fork" : "Run /webui in terminal to enable forking"}
+          disabled={!canBranch}
+          label="Branch from message"
+          onClick={() => item.entryId && onBranch?.(item.entryId)}
+          tooltip={canBranch ? "Branch from message" : "Run /webui in terminal to enable branching"}
         >
-          <GitForkIcon className="size-4" />
+          <GitBranchPlusIcon className="size-4" />
         </MessageAction>
       </MessageActions>
     </Message>

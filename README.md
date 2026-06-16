@@ -14,7 +14,7 @@ Pi Web UI connects to your running Pi session and gives you a browser interface.
 ![Conversation tree sidebar](docs/images/conversation-tree-sidebar.jpg)
 
 - **Real-time streaming** — messages, tool calls, and thinking blocks
-- **Conversation tree sidebar** — browse the current session tree, jump to any node, and keep drafts untouched until you fork
+- **Conversation tree sidebar** — inspect the current session tree, select nodes without changing drafts, branch from user messages, and continue from branch ends
 - **React UI** — Vite, Tailwind, shadcn/ui, AI Elements
 - **Markdown rendering** — Streamdown for code blocks, math, Mermaid
 - **No extra process** — the Pi extension *is* the server
@@ -46,7 +46,7 @@ The server starts automatically when a Pi session begins and shuts down when the
 - Streaming text and thinking/reasoning blocks
 - Tool call display with expand/collapse
 - Image attachments with paste, drop, and preview
-- Fork user messages from the conversation stream via `navigate_tree` (requires `/webui` command context)
+- Branch from user messages and continue from branch ends via `navigate_tree` in the current session tree (requires `/webui` command context)
 - Follow-up messages while the agent is streaming
 
 ### Model & Thinking
@@ -55,9 +55,10 @@ The server starts automatically when a Pi session begins and shuts down when the
 - Context-window visualization and compact suggestion
 
 ### Sessions
-- Sidebar with active session info and the current conversation tree
-- Search, expand/collapse, and browse tree nodes without overwriting the input draft
-- Fork from user messages when you want to edit or branch from earlier work
+- Sidebar with the current conversation tree
+- Search, expand/collapse, and select tree nodes without overwriting the input draft
+- Branch from user messages when you want to edit an earlier prompt and continue in the same session
+- Continue from non-user branch ends when you want to resume an existing branch without changing the draft
 
 ### Commands & Settings
 - Command palette: compact, export HTML, session stats, tool toggle

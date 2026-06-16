@@ -908,10 +908,9 @@ export function App() {
         if (itemElementsRef.current.has(cursor)) return cursor;
         cursor = byId.get(cursor)?.parentId ?? null;
       }
-      if (leafId && itemElementsRef.current.has(leafId)) return leafId;
       return null;
     },
-    [leafId, tree],
+    [tree],
   );
 
   const focusEntry = useCallback(
@@ -920,7 +919,30 @@ export function App() {
       if (!visibleEntryId) return false;
       const element = itemElementsRef.current.get(visibleEntryId);
       if (!element) return false;
-      element.scrollIntoView({ block: "center", behavior: "smooth" });
+      let scrollContainer: HTMLElement | null = null;
+      let ancestor = element.parentElement;
+      while (ancestor && ancestor !== document.body) {
+        const style = window.getComputedStyle(ancestor);
+        if (style.overflowY === "hidden" && ancestor.scrollTop !== 0) ancestor.scrollTop = 0;
+        if (
+          !scrollContainer &&
+          ["auto", "scroll"].includes(style.overflowY) &&
+          ancestor.scrollHeight > ancestor.clientHeight
+        ) {
+          scrollContainer = ancestor;
+        }
+        ancestor = ancestor.parentElement;
+      }
+      if (scrollContainer) {
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        const targetTop =
+          scrollContainer.scrollTop +
+          elementRect.top -
+          containerRect.top -
+          (containerRect.height - elementRect.height) / 2;
+        scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+      }
       setHighlightedEntryId(visibleEntryId);
       if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
       highlightTimerRef.current = window.setTimeout(() => setHighlightedEntryId(null), 1200);
@@ -935,27 +957,15 @@ export function App() {
     if (focusEntry(targetEntryId)) pendingFocusEntryIdRef.current = null;
   }, [focusEntry]);
 
-  const browseTree = useCallback(
-    async (entryId: string) => {
-      pendingFocusEntryIdRef.current = entryId;
+  const selectTreeEntry = useCallback(
+    (entryId: string) => {
       setSelectedTreeEntryId(entryId);
-      setLoadingTreeEntryId(entryId);
-      setError(null);
-      try {
-        const result = (await send("navigate_tree", { entryId })) as { cancelled?: boolean } | undefined;
-        if (result?.cancelled) pendingFocusEntryIdRef.current = null;
-        else await requestConversationSync();
-      } catch (err) {
-        pendingFocusEntryIdRef.current = null;
-        setError(err instanceof Error ? err.message : "Navigation failed");
-      } finally {
-        setLoadingTreeEntryId(null);
-      }
+      focusEntry(entryId);
     },
-    [requestConversationSync, send],
+    [focusEntry],
   );
 
-  const forkConversationMessage = useCallback(
+  const branchFromMessage = useCallback(
     async (entryId: string) => {
       if (draftText.trim() && !window.confirm("Replace the current draft with this message?")) return;
       let timestamp = "";
@@ -987,7 +997,7 @@ export function App() {
         await requestConversationSync();
         setDraftText(result?.editorText ?? fallbackText);
         addSystemMessage(
-          `Forking from ${formatTime(timestamp) || "selected message"}. Your previous branch is preserved.`,
+          `Branching from ${formatTime(timestamp) || "selected message"}. Previous branch is preserved in this session.`,
         );
         requestAnimationFrame(() => {
           const input = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
@@ -996,12 +1006,35 @@ export function App() {
         });
       } catch (err) {
         pendingFocusEntryIdRef.current = null;
-        setError(err instanceof Error ? err.message : "Fork failed");
+        setError(err instanceof Error ? err.message : "Branch failed");
       } finally {
         setLoadingTreeEntryId(null);
       }
     },
     [addSystemMessage, draftText, requestConversationSync, send, tree],
+  );
+
+  const continueBranch = useCallback(
+    async (entryId: string) => {
+      setSelectedTreeEntryId(entryId);
+      setLoadingTreeEntryId(entryId);
+      setError(null);
+      try {
+        const result = (await send("navigate_tree", { entryId })) as { cancelled?: boolean } | undefined;
+        if (result?.cancelled) return;
+        await requestConversationSync();
+        requestAnimationFrame(() => {
+          const input = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
+          input?.focus();
+          input?.setSelectionRange(input.value.length, input.value.length);
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Continue branch failed");
+      } finally {
+        setLoadingTreeEntryId(null);
+      }
+    },
+    [requestConversationSync, send],
   );
 
   useEffect(() => {
@@ -1076,16 +1109,17 @@ export function App() {
       style={{ "--sidebar-width": `${leftSidebarWidth}px` } as CSSProperties}
     >
       <ConversationSidebar
+        branchEnabled={advancedFeatures}
         connection={connection}
         leafId={leafId}
         loadingEntryId={loadingTreeEntryId}
-        modelLabel={modelLabel}
-        onBrowseTree={browseTree}
+        onBranchTree={branchFromMessage}
+        onContinueTree={continueBranch}
         onOpenSettings={openSettings}
         onRefreshTree={() => void requestConversationSync()}
         onResizeSidebar={updateLeftSidebarWidth}
+        onSelectTree={selectTreeEntry}
         selectedEntryId={selectedTreeEntryId}
-        sessionName={sessionName}
         syncError={conversationSyncError}
         syncing={conversationSyncing}
         tree={tree}
@@ -1121,38 +1155,43 @@ export function App() {
                     title="Pi Web UI"
                   />
                 ) : (
-                  items.map((item) => (
-                    <div
-                      className={cn(
-                        "rounded-lg transition-[background-color,box-shadow] duration-300",
-                        [item.entryId, ...(item.relatedEntryIds ?? [])].includes(highlightedEntryId ?? "") &&
-                          "bg-primary/10 ring-1 ring-primary/40",
-                      )}
-                      key={item.id}
-                      ref={(node) => registerItemElement(item, node)}
-                    >
-                      {item.kind === "message" && item.role === "user" ? (
-                        <UserMessageView
-                          item={item as typeof item & { kind: "message"; role: "user" }}
-                          onCopy={(text) => copyText(text)}
-                          onFork={advancedFeatures && item.entryId ? forkConversationMessage : undefined}
-                        />
-                      ) : (
-                        <ChatItemView
-                          item={item}
-                          onCopy={(text) => copyText(text)}
-                          onToggleTool={(id, open) =>
-                            setItems((current) =>
-                              current.map((candidate) =>
-                                candidate.kind === "tool" && candidate.id === id ? { ...candidate, open } : candidate,
-                              ),
-                            )
-                          }
-                          showThinking={showThinking}
-                        />
-                      )}
-                    </div>
-                  ))
+                  items.map((item) => {
+                    const highlighted = [item.entryId, ...(item.relatedEntryIds ?? [])].includes(
+                      highlightedEntryId ?? "",
+                    );
+                    return (
+                      <div
+                        className={cn(
+                          "rounded-lg transition-[background-color,box-shadow] duration-300",
+                          highlighted && "bg-primary/10 ring-1 ring-primary/40",
+                        )}
+                        key={item.id}
+                        ref={(node) => registerItemElement(item, node)}
+                      >
+                        {item.kind === "message" && item.role === "user" ? (
+                          <UserMessageView
+                            actionsVisible={highlighted}
+                            item={item as typeof item & { kind: "message"; role: "user" }}
+                            onBranch={advancedFeatures && item.entryId ? branchFromMessage : undefined}
+                            onCopy={(text) => copyText(text)}
+                          />
+                        ) : (
+                          <ChatItemView
+                            item={item}
+                            onCopy={(text) => copyText(text)}
+                            onToggleTool={(id, open) =>
+                              setItems((current) =>
+                                current.map((candidate) =>
+                                  candidate.kind === "tool" && candidate.id === id ? { ...candidate, open } : candidate,
+                                ),
+                              )
+                            }
+                            showThinking={showThinking}
+                          />
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </ConversationContent>
               <ConversationScrollButton />

@@ -24,14 +24,12 @@ export function buildActivePathSet(tree: SessionTreeNode[], leafId: string | nul
 }
 
 export function buildConversationTreeItems({
-  activePathIds,
   collapsedIds,
   leafId,
   searchQuery,
   tree,
 }: {
   tree: SessionTreeNode[];
-  activePathIds: Set<string>;
   leafId: string | null;
   collapsedIds: Set<string>;
   searchQuery: string;
@@ -42,12 +40,14 @@ export function buildConversationTreeItems({
   const visibleById = new Map<string, SessionTreeNode>();
   const visibleRoots: SessionTreeNode[] = [];
   const items: ConversationTreeItem[] = [];
+  const terminalEntryIds = new Set<string>();
 
   const sourceStack = [...tree].reverse();
   while (sourceStack.length > 0) {
     const node = sourceStack.pop();
     if (!node?.entry.id) continue;
     nodeById.set(node.entry.id, node);
+    if (node.children.length === 0) terminalEntryIds.add(node.entry.id);
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
       sourceStack.push(node.children[index]);
     }
@@ -105,12 +105,6 @@ export function buildConversationTreeItems({
     effectiveLeafId = nodeById.get(effectiveLeafId)?.entry.parentId ?? null;
   }
 
-  const compareVisibleNodes = (a: SessionTreeNode, b: SessionTreeNode) => {
-    const activeDelta = Number(activePathIds.has(b.entry.id ?? "")) - Number(activePathIds.has(a.entry.id ?? ""));
-    if (activeDelta !== 0) return activeDelta;
-    return compareTreeNodes(a, b);
-  };
-
   const visit = (
     node: SessionTreeNode,
     branchMeta?: { isBranchChild: boolean; isFirstBranchChild: boolean; isLastBranchChild: boolean },
@@ -124,7 +118,7 @@ export function buildConversationTreeItems({
     const childItems: ConversationTreeItem[] = [];
     let descendantMatches = false;
 
-    const sortedChildren = [...node.children].sort(compareVisibleNodes);
+    const sortedChildren = [...node.children].sort(compareTreeNodes);
     const hasBranchChildren = sortedChildren.length > 1;
     for (const [index, child] of sortedChildren.entries()) {
       const result = visit(
@@ -147,6 +141,9 @@ export function buildConversationTreeItems({
     const isBranchChild = Boolean(branchMeta?.isBranchChild);
     const isFirstBranchChild = Boolean(branchMeta?.isFirstBranchChild);
     const isLastBranchChild = Boolean(branchMeta?.isLastBranchChild);
+    const isBranchable = node.entry.type === "message" && node.entry.message?.role === "user";
+    const isCustomMessage = node.entry.type === "custom_message";
+    const isContinuable = terminalEntryIds.has(id) && id !== leafId && !isBranchable && !isCustomMessage;
     const isSegmentExpanded = Boolean(normalizedQuery) || !collapsedIds.has(id);
     const isExpandable = isBranchChild && childItems.length > 0;
     const shouldNestChildren = hasBranchChildren || isExpandable;
@@ -165,7 +162,9 @@ export function buildConversationTreeItems({
       isExpanded: isSegmentExpanded,
       isBranchChild,
       isFirstBranchChild,
-      isForkable: node.entry.type === "message" && node.entry.message?.role === "user",
+      isBranchable,
+      isContinuable,
+      continueTargetId: isContinuable ? id : undefined,
       isLastBranchChild,
       isLeaf: id === effectiveLeafId,
       isSearchMatch: selfMatches && Boolean(normalizedQuery),
@@ -188,7 +187,7 @@ export function buildConversationTreeItems({
     for (const child of item.children) assignOrder(child);
   };
 
-  for (const node of visibleRoots.sort(compareVisibleNodes)) {
+  for (const node of visibleRoots.sort(compareTreeNodes)) {
     const result = visit(node);
     items.push(...result.items);
   }
@@ -306,7 +305,10 @@ function truncateTreeText(value: string, max: number) {
 }
 
 function compareTreeNodes(a: SessionTreeNode, b: SessionTreeNode) {
-  const aTime = typeof a.entry.timestamp === "string" ? new Date(a.entry.timestamp).getTime() : 0;
-  const bTime = typeof b.entry.timestamp === "string" ? new Date(b.entry.timestamp).getTime() : 0;
-  return aTime - bTime;
+  const aTimeValue = typeof a.entry.timestamp === "string" ? new Date(a.entry.timestamp).getTime() : 0;
+  const bTimeValue = typeof b.entry.timestamp === "string" ? new Date(b.entry.timestamp).getTime() : 0;
+  const aTime = Number.isFinite(aTimeValue) ? aTimeValue : 0;
+  const bTime = Number.isFinite(bTimeValue) ? bTimeValue : 0;
+  if (aTime !== bTime) return aTime - bTime;
+  return (a.entry.id ?? "").localeCompare(b.entry.id ?? "");
 }

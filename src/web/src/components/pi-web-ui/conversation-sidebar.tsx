@@ -15,9 +15,8 @@ import { ConnectionDot } from "./connection-dot";
 import { ConversationSidebarTree } from "./conversation-sidebar-tree";
 
 interface ConversationSidebarProps {
+  branchEnabled: boolean;
   connection: ConnectionState;
-  sessionName: string;
-  modelLabel: string;
   tree: SessionTreeNode[];
   leafId: string | null;
   selectedEntryId: string | null;
@@ -25,15 +24,16 @@ interface ConversationSidebarProps {
   syncing: boolean;
   syncError: string | null;
   onOpenSettings: () => void;
-  onBrowseTree: (entryId: string) => void;
+  onBranchTree: (entryId: string) => void;
+  onContinueTree: (entryId: string) => void;
   onRefreshTree: () => void;
   onResizeSidebar: (width: number) => void;
+  onSelectTree: (entryId: string) => void;
 }
 
 export function ConversationSidebar({
+  branchEnabled,
   connection,
-  sessionName,
-  modelLabel,
   tree,
   leafId,
   selectedEntryId,
@@ -41,9 +41,11 @@ export function ConversationSidebar({
   syncing,
   syncError,
   onOpenSettings,
-  onBrowseTree,
+  onBranchTree,
+  onContinueTree,
   onRefreshTree,
   onResizeSidebar,
+  onSelectTree,
 }: ConversationSidebarProps) {
   const suppressRailClickRef = useRef(false);
   const startSidebarResize = useCallback(
@@ -95,18 +97,12 @@ export function ConversationSidebar({
       <SidebarHeader>
         <div className="flex h-10 items-center gap-2">
           <TerminalIcon className="size-4 shrink-0 text-muted-foreground" />
+          <ConnectionDot state={connection} />
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
             <div className="truncate font-medium text-sm">Pi Web UI</div>
             <div className="truncate text-muted-foreground text-xs">Browser interface for Pi</div>
           </div>
           <SidebarTrigger className="group-data-[collapsible=icon]:hidden" />
-        </div>
-        <div className="flex items-center gap-2 rounded-md px-1.5 py-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <ConnectionDot state={connection} />
-          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <div className="truncate text-sm">{sessionName}</div>
-            <div className="truncate text-muted-foreground text-xs">{modelLabel}</div>
-          </div>
         </div>
       </SidebarHeader>
 
@@ -114,10 +110,13 @@ export function ConversationSidebar({
 
       <SidebarContent>
         <ConversationSidebarTree
+          branchEnabled={branchEnabled}
           leafId={leafId}
           loadingEntryId={loadingEntryId}
-          onBrowse={onBrowseTree}
+          onBranch={onBranchTree}
+          onContinue={onContinueTree}
           onRefresh={onRefreshTree}
+          onSelect={onSelectTree}
           selectedEntryId={selectedEntryId}
           syncError={syncError}
           syncing={syncing}
