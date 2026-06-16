@@ -204,7 +204,6 @@ export type ConversationTreeItem = {
   parentId: string | null;
   entry: SessionEntry;
   entryType: string;
-  hasChildren: boolean;
   isLeaf: boolean;
   isBranchable: boolean;
   isContinuable: boolean;
@@ -212,16 +211,15 @@ export type ConversationTreeItem = {
   label?: string;
   text: string;
   detail?: string;
+  depth: number;
+  connectorColumns: Array<{ key: string; state: "line" | "blank" }>;
+  connectorKind: "none" | "middle" | "last" | "line" | "blank";
   isExpandable: boolean;
   isExpanded: boolean;
-  isBranchChild: boolean;
-  isFirstBranchChild: boolean;
-  isLastBranchChild: boolean;
   hiddenChildCount: number;
   childCount: number;
   isSearchMatch: boolean;
   order: number;
-  children: ConversationTreeItem[];
 };
 
 export type SubagentTokens = {

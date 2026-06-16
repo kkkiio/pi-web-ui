@@ -2,27 +2,6 @@ import { extractText, extractThinking, extractToolCalls, formatToolOutput } from
 import { formatToolInvocationSummary, formatToolInvocationTitle } from "../../core/tool-summary";
 import type { ConversationTreeItem, PiContentBlock, SessionEntry, SessionTreeNode } from "../../core/types";
 
-export function buildActivePathSet(tree: SessionTreeNode[], leafId: string | null) {
-  const byId = new Map<string, SessionEntry>();
-  const stack = [...tree];
-  while (stack.length > 0) {
-    const node = stack.pop();
-    if (!node?.entry.id) continue;
-    byId.set(node.entry.id, node.entry);
-    for (const child of node.children) stack.push(child);
-  }
-
-  const activePathIds = new Set<string>();
-  let cursor: string | null | undefined = leafId;
-  while (cursor) {
-    const entry = byId.get(cursor);
-    if (!entry?.id) break;
-    activePathIds.add(entry.id);
-    cursor = entry.parentId;
-  }
-  return activePathIds;
-}
-
 export function buildConversationTreeItems({
   collapsedIds,
   leafId,
@@ -41,6 +20,16 @@ export function buildConversationTreeItems({
   const visibleRoots: SessionTreeNode[] = [];
   const items: ConversationTreeItem[] = [];
   const terminalEntryIds = new Set<string>();
+  const itemMetaById = new Map<
+    string,
+    {
+      detail?: string;
+      label?: string;
+      selfMatches: boolean;
+      text: string;
+    }
+  >();
+  const subtreeMatchesById = new Map<string, boolean>();
 
   const sourceStack = [...tree].reverse();
   while (sourceStack.length > 0) {
@@ -100,112 +89,153 @@ export function buildConversationTreeItems({
     else visibleRoots.push(visibleNode);
   }
 
+  for (const node of visibleById.values()) {
+    node.children.sort(compareTreeNodes);
+  }
+  visibleRoots.sort(compareTreeNodes);
+
   let effectiveLeafId: string | null = leafId;
   while (effectiveLeafId && !visibleById.has(effectiveLeafId)) {
     effectiveLeafId = nodeById.get(effectiveLeafId)?.entry.parentId ?? null;
   }
 
-  const visit = (
-    node: SessionTreeNode,
-    branchMeta?: { isBranchChild: boolean; isFirstBranchChild: boolean; isLastBranchChild: boolean },
-  ): { items: ConversationTreeItem[]; matches: boolean } => {
-    const id = node.entry.id;
-    if (!id) return { items: [], matches: false };
-    const { detail, text } = getConversationTreeItemText(node.entry, toolCallsById);
-    const label = node.label ?? (typeof node.entry.label === "string" ? node.entry.label : undefined);
-    const searchText = `${text} ${detail ?? ""} ${label ?? ""} ${node.entry.type}`.toLowerCase();
-    const selfMatches = !normalizedQuery || searchText.includes(normalizedQuery);
-    const childItems: ConversationTreeItem[] = [];
-    let descendantMatches = false;
-
-    const sortedChildren = [...node.children].sort(compareTreeNodes);
-    const hasBranchChildren = sortedChildren.length > 1;
-    for (const [index, child] of sortedChildren.entries()) {
-      const result = visit(
-        child,
-        hasBranchChildren
-          ? {
-              isBranchChild: true,
-              isFirstBranchChild: index === 0,
-              isLastBranchChild: index === sortedChildren.length - 1,
-            }
-          : undefined,
-      );
-      if (result.matches) descendantMatches = true;
-      childItems.push(...result.items);
+  const matchStack = visibleRoots.map((node) => ({ node, visited: false })).reverse();
+  while (matchStack.length > 0) {
+    const frame = matchStack.pop();
+    const id = frame?.node.entry.id;
+    if (!frame || !id) continue;
+    if (!frame.visited) {
+      matchStack.push({ node: frame.node, visited: true });
+      for (let index = frame.node.children.length - 1; index >= 0; index -= 1) {
+        matchStack.push({ node: frame.node.children[index], visited: false });
+      }
+      continue;
     }
 
-    const matches = selfMatches || descendantMatches;
-    if (normalizedQuery && !matches) return { items: [], matches: false };
-
-    const isBranchChild = Boolean(branchMeta?.isBranchChild);
-    const isFirstBranchChild = Boolean(branchMeta?.isFirstBranchChild);
-    const isLastBranchChild = Boolean(branchMeta?.isLastBranchChild);
-    const isBranchable = node.entry.type === "message" && node.entry.message?.role === "user";
-    const isCustomMessage = node.entry.type === "custom_message";
-    const isContinuable = terminalEntryIds.has(id) && id !== leafId && !isBranchable && !isCustomMessage;
-    const isSegmentExpanded = Boolean(normalizedQuery) || !collapsedIds.has(id);
-    const isExpandable = isBranchChild && childItems.length > 0;
-    const shouldNestChildren = hasBranchChildren || isExpandable;
-    const visibleChildren = shouldNestChildren && (!isExpandable || isSegmentExpanded) ? childItems : [];
-    const renderedChildCount = shouldNestChildren ? childItems.length : 0;
-    const item: ConversationTreeItem = {
-      childCount: renderedChildCount,
-      children: visibleChildren,
-      entry: node.entry,
-      entryType: node.entry.type,
-      hasChildren: renderedChildCount > 0,
-      hiddenChildCount: isExpandable && !isSegmentExpanded ? childItems.length : 0,
-      id,
-      detail,
-      isExpandable,
-      isExpanded: isSegmentExpanded,
-      isBranchChild,
-      isFirstBranchChild,
-      isBranchable,
-      isContinuable,
-      continueTargetId: isContinuable ? id : undefined,
-      isLastBranchChild,
-      isLeaf: id === effectiveLeafId,
-      isSearchMatch: selfMatches && Boolean(normalizedQuery),
-      label,
-      order: 0,
-      parentId: node.entry.parentId ?? null,
-      text,
-    };
-
-    if (hasBranchChildren || isExpandable) return { items: [item], matches };
-    return { items: [item, ...childItems], matches };
-  };
+    const { detail, text } = getConversationTreeItemText(frame.node.entry, toolCallsById);
+    const label = frame.node.label ?? (typeof frame.node.entry.label === "string" ? frame.node.entry.label : undefined);
+    const searchText = `${text} ${detail ?? ""} ${label ?? ""} ${frame.node.entry.type}`.toLowerCase();
+    const selfMatches = !normalizedQuery || searchText.includes(normalizedQuery);
+    const descendantMatches = frame.node.children.some(
+      (child) => subtreeMatchesById.get(child.entry.id ?? "") === true,
+    );
+    itemMetaById.set(id, { detail, label, selfMatches, text });
+    subtreeMatchesById.set(id, selfMatches || descendantMatches);
+  }
 
   let currentOrder = -1;
-  let order = 0;
-  const assignOrder = (item: ConversationTreeItem) => {
-    item.order = order;
-    if (item.id === effectiveLeafId) currentOrder = order;
-    order += 1;
-    for (const child of item.children) assignOrder(child);
-  };
+  const renderStack = visibleRoots
+    .map((node, index) => ({
+      ancestorColumns: [] as ConversationTreeItem["connectorColumns"],
+      connectorContinues: false,
+      connectorKind: "none" as ConversationTreeItem["connectorKind"],
+      depth: 0,
+      node,
+      siblingIndex: index,
+      siblingCount: visibleRoots.length,
+    }))
+    .reverse();
 
-  for (const node of visibleRoots.sort(compareTreeNodes)) {
-    const result = visit(node);
-    items.push(...result.items);
+  while (renderStack.length > 0) {
+    const frame = renderStack.pop();
+    const id = frame?.node.entry.id;
+    if (!frame || !id) continue;
+    if (normalizedQuery && !subtreeMatchesById.get(id)) continue;
+
+    const meta = itemMetaById.get(id) ?? { selfMatches: false, text: "Event" };
+    const children = frame.node.children.filter(
+      (child) => !normalizedQuery || subtreeMatchesById.get(child.entry.id ?? ""),
+    );
+    const isBranchable = frame.node.entry.type === "message" && frame.node.entry.message?.role === "user";
+    const isCustomMessage = frame.node.entry.type === "custom_message";
+    const isContinuable = terminalEntryIds.has(id) && id !== leafId && !isBranchable && !isCustomMessage;
+    const isBranchSegmentStart = frame.connectorKind === "middle" || frame.connectorKind === "last";
+    const isSegmentExpanded = Boolean(normalizedQuery) || !collapsedIds.has(id);
+    const isExpandable = isBranchSegmentStart && children.length > 0;
+    const item: ConversationTreeItem = {
+      childCount: children.length,
+      connectorColumns: frame.ancestorColumns,
+      connectorKind: frame.connectorKind,
+      continueTargetId: isContinuable ? id : undefined,
+      depth: frame.depth,
+      detail: meta.detail,
+      entry: frame.node.entry,
+      entryType: frame.node.entry.type,
+      hiddenChildCount:
+        isExpandable && !isSegmentExpanded ? countVisibleDescendants(children, normalizedQuery, subtreeMatchesById) : 0,
+      id,
+      isBranchable,
+      isContinuable,
+      isExpandable,
+      isExpanded: isSegmentExpanded,
+      isLeaf: id === effectiveLeafId,
+      isSearchMatch: meta.selfMatches && Boolean(normalizedQuery),
+      label: meta.label,
+      order: items.length,
+      parentId: frame.node.entry.parentId ?? null,
+      text: meta.text,
+    };
+
+    if (item.id === effectiveLeafId) currentOrder = item.order;
+    items.push(item);
+
+    if (isExpandable && !isSegmentExpanded) continue;
+    const childCreatesBranchSegments = children.length > 1;
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index];
+      const childIsLast = index === children.length - 1;
+      renderStack.push(
+        childCreatesBranchSegments
+          ? {
+              ancestorColumns:
+                frame.depth > 0
+                  ? [
+                      ...frame.ancestorColumns,
+                      {
+                        key: `${id}:column-${frame.depth}`,
+                        state: frame.connectorContinues ? "line" : "blank",
+                      },
+                    ]
+                  : [...frame.ancestorColumns],
+              connectorContinues: !childIsLast,
+              connectorKind: childIsLast ? "last" : "middle",
+              depth: frame.depth + 1,
+              node: child,
+              siblingIndex: index,
+              siblingCount: children.length,
+            }
+          : {
+              ancestorColumns: frame.ancestorColumns,
+              connectorContinues: frame.connectorContinues,
+              connectorKind: frame.depth === 0 ? "none" : frame.connectorContinues ? "line" : "blank",
+              depth: frame.depth,
+              node: child,
+              siblingIndex: index,
+              siblingCount: children.length,
+            },
+      );
+    }
   }
-  for (const root of items) assignOrder(root);
 
   return { currentEntryId: effectiveLeafId, currentOrder, items };
 }
 
-export function collectVisibleConversationTreeItems(items: ConversationTreeItem[]) {
-  const output: ConversationTreeItem[] = [];
-  const stack = [...items].reverse();
+function countVisibleDescendants(
+  children: SessionTreeNode[],
+  normalizedQuery: string,
+  subtreeMatchesById: Map<string, boolean>,
+) {
+  let count = 0;
+  const stack = [...children];
   while (stack.length > 0) {
-    const item = stack.pop();
-    if (!item) continue;
-    output.push(item);
-    for (const child of [...item.children].reverse()) stack.push(child);
+    const node = stack.pop();
+    const id = node?.entry.id;
+    if (!node || !id) continue;
+    if (normalizedQuery && !subtreeMatchesById.get(id)) continue;
+    count += 1;
+    stack.push(...node.children);
   }
-  return output;
+  return count;
 }
 
 function getConversationTreeItemText(entry: SessionEntry, toolCallsById: Map<string, ToolCallInfo>) {

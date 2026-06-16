@@ -6,25 +6,23 @@ import {
   RefreshCwIcon,
   SearchIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarInput,
   SidebarMenu,
-  SidebarMenuAction,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { highlightSegments } from "../../core/format";
 import type { ConversationTreeItem, SessionTreeNode } from "../../core/types";
 import { useConversationTree } from "./use-conversation-tree";
+
+const TREE_GUTTER_WIDTH = 16;
 
 export function ConversationSidebarTree({
   branchEnabled,
@@ -54,11 +52,7 @@ export function ConversationSidebarTree({
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const normalizedQuery = query.trim();
-  const { currentEntryId, currentOrder, items, toggleExpanded, visibleItems } = useConversationTree(
-    tree,
-    leafId,
-    normalizedQuery,
-  );
+  const { currentEntryId, currentOrder, items, toggleExpanded } = useConversationTree(tree, leafId, normalizedQuery);
 
   useEffect(() => {
     if (!currentEntryId) return;
@@ -115,14 +109,14 @@ export function ConversationSidebarTree({
             />
           </div>
           <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto px-1" ref={containerRef}>
-            {visibleItems.length === 0 ? (
+            {items.length === 0 ? (
               <div className="p-2 text-muted-foreground text-sm">No matching nodes</div>
             ) : (
               <SidebarMenu>
                 {items.map((item) => (
-                  <ConversationTreeMenuItem
-                    currentOrder={currentOrder}
+                  <ConversationTreeRow
                     branchEnabled={branchEnabled}
+                    currentOrder={currentOrder}
                     item={item}
                     key={item.id}
                     loadingEntryId={loadingEntryId}
@@ -143,7 +137,7 @@ export function ConversationSidebarTree({
   );
 }
 
-function ConversationTreeMenuItem({
+function ConversationTreeRow({
   branchEnabled,
   item,
   currentOrder,
@@ -177,181 +171,184 @@ function ConversationTreeMenuItem({
   const loading = loadingEntryId === item.id;
   const branchTitle = branchEnabled ? "Branch from here" : "Run /webui in terminal to enable branching";
   const continueTitle = branchEnabled ? "Continue from branch end" : "Run /webui in terminal to enable branching";
-  const contentOpen = item.isExpandable ? item.isExpanded : true;
   const title = item.detail ? `${item.text} - ${item.detail}` : item.text;
-  const treeConnectorClass = item.isBranchChild
-    ? cn(
-        "relative before:pointer-events-none before:absolute before:left-[-0.625rem] before:top-3.5 before:z-[1] before:h-px before:w-2.5 before:bg-sidebar-border before:content-['']",
-        "after:pointer-events-none after:absolute after:left-[-0.625rem] after:z-[1] after:w-px after:bg-sidebar-border after:content-['']",
-        item.isFirstBranchChild && !item.isLastBranchChild && "after:top-3.5 after:bottom-[-0.25rem]",
-        !item.isFirstBranchChild && !item.isLastBranchChild && "after:inset-y-[-0.25rem]",
-        item.isLastBranchChild && "after:top-[-0.25rem] after:h-[1.125rem]",
-      )
-    : undefined;
-  const button = (
-    <SidebarMenuButton
-      className={cn(
-        "relative z-[2] h-7 gap-1.5 px-2 text-xs",
-        item.isBranchable &&
-          "font-medium text-sky-950 data-[active=true]:text-sky-950 dark:text-sky-100 dark:data-[active=true]:text-sky-100",
-        (item.hiddenChildCount > 0 || item.isBranchable || item.isContinuable) && "pr-7",
-        item.hiddenChildCount > 0 && item.isBranchable && "pr-12",
-        inactive && "text-sidebar-foreground/45 hover:text-sidebar-accent-foreground",
-        item.isBranchable && inactive && "text-sky-950/45 hover:text-sky-950 dark:text-sky-100/45",
-        loading && "animate-pulse",
-      )}
-      data-tree-entry-id={item.id}
-      data-tree-branch-child={item.isBranchChild ? "true" : undefined}
-      data-tree-branchable={item.isBranchable ? "true" : undefined}
-      isActive={active}
-      onClick={() => onSelect(item.id)}
-      size="sm"
-      title={title}
-      type="button"
-    >
-      {item.isExpandable ? (
-        <CollapsibleTrigger asChild>
-          <span
-            aria-label={item.isExpanded ? "Collapse branch" : "Expand branch"}
-            className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-background"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-            role="button"
-            tabIndex={0}
-          >
-            <ChevronRightIcon className="size-3 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-          </span>
-        </CollapsibleTrigger>
-      ) : null}
-      {item.isBranchable && (
-        <span
-          aria-hidden="true"
-          className={cn(
-            "h-4 w-0.5 shrink-0 rounded-full bg-sky-500/80 dark:bg-sky-400/80",
-            inactive && "bg-sky-500/35 dark:bg-sky-400/35",
-          )}
-        />
-      )}
-      <span className="min-w-0 flex-1 truncate">
-        {renderHighlightedSegments(segments)}
-        {item.detail && (
-          <span className={cn("text-muted-foreground", inactive && "text-sidebar-foreground/35")}>
-            {" · "}
-            {renderHighlightedSegments(detailSegments)}
-          </span>
-        )}
-      </span>
-    </SidebarMenuButton>
-  );
 
-  if (!item.children.length && !item.isExpandable) {
-    return (
-      <SidebarMenuItem className={treeConnectorClass}>
-        {button}
-        {item.isBranchable && (
-          <SidebarMenuAction
-            aria-label={branchTitle}
-            className="z-[3]"
-            disabled={loading || !branchEnabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!branchEnabled) return;
-              onBranch(item.id);
-            }}
-            title={branchTitle}
-            type="button"
-          >
-            <GitBranchPlusIcon />
-          </SidebarMenuAction>
-        )}
-        {item.isContinuable && item.continueTargetId && (
-          <SidebarMenuAction
-            aria-label="Continue branch"
-            className="z-[3]"
-            disabled={loading || !branchEnabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!branchEnabled || !item.continueTargetId) return;
-              onContinue(item.continueTargetId);
-            }}
-            title={continueTitle}
-            type="button"
-          >
-            <ArrowRightToLineIcon />
-          </SidebarMenuAction>
-        )}
-        {!query && currentOrder === item.order && <div className="my-1 h-px bg-sidebar-border" />}
-      </SidebarMenuItem>
-    );
-  }
+  const selectFromKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onSelect(item.id);
+  };
 
   return (
-    <SidebarMenuItem className={treeConnectorClass}>
-      <Collapsible
-        className="group/collapsible"
-        onOpenChange={() => item.isExpandable && onToggleExpand(item.id)}
-        open={contentOpen}
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        className={cn(
+          "h-7 gap-0 px-1 text-xs",
+          item.isBranchable &&
+            "font-medium text-sky-950 data-[active=true]:text-sky-950 dark:text-sky-100 dark:data-[active=true]:text-sky-100",
+          inactive && "text-sidebar-foreground/45 hover:text-sidebar-accent-foreground",
+          item.isBranchable && inactive && "text-sky-950/45 hover:text-sky-950 dark:text-sky-100/45",
+          loading && "animate-pulse",
+        )}
+        isActive={active}
+        size="sm"
+        title={title}
       >
-        {button}
-        {item.isBranchable && (
-          <SidebarMenuAction
-            aria-label={branchTitle}
-            className="z-[3]"
-            disabled={loading || !branchEnabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!branchEnabled) return;
-              onBranch(item.id);
-            }}
-            title={branchTitle}
-            type="button"
-          >
-            <GitBranchPlusIcon />
-          </SidebarMenuAction>
-        )}
-        {item.isContinuable && item.continueTargetId && (
-          <SidebarMenuAction
-            aria-label="Continue branch"
-            className="z-[3]"
-            disabled={loading || !branchEnabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!branchEnabled || !item.continueTargetId) return;
-              onContinue(item.continueTargetId);
-            }}
-            title={continueTitle}
-            type="button"
-          >
-            <ArrowRightToLineIcon />
-          </SidebarMenuAction>
-        )}
-        {item.hiddenChildCount > 0 && (
-          <SidebarMenuBadge className={item.isBranchable ? "right-6" : undefined}>
-            +{item.hiddenChildCount}
-          </SidebarMenuBadge>
-        )}
-        <CollapsibleContent>
-          <SidebarMenuSub className="mr-0 border-l-0 pr-0">
-            {item.children.map((child) => (
-              <ConversationTreeMenuItem
-                branchEnabled={branchEnabled}
-                currentOrder={currentOrder}
-                item={child}
-                key={child.id}
-                loadingEntryId={loadingEntryId}
-                onBranch={onBranch}
-                onContinue={onContinue}
-                onSelect={onSelect}
-                onToggleExpand={onToggleExpand}
-                query={query}
-                selectedEntryId={selectedEntryId}
-              />
-            ))}
-          </SidebarMenuSub>
-        </CollapsibleContent>
-      </Collapsible>
+        <div
+          data-tree-entry-id={item.id}
+          data-tree-depth={item.depth}
+          data-tree-search-match={item.isSearchMatch ? "true" : undefined}
+          onClick={() => onSelect(item.id)}
+          onKeyDown={selectFromKeyboard}
+          role="button"
+          tabIndex={0}
+        >
+          <TreeGutter item={item} onToggleExpand={onToggleExpand} />
+          <TreeActionSlot
+            branchEnabled={branchEnabled}
+            branchTitle={branchTitle}
+            continueTitle={continueTitle}
+            item={item}
+            loading={loading}
+            onBranch={onBranch}
+            onContinue={onContinue}
+          />
+          <span className="min-w-0 flex-1 truncate">
+            {renderHighlightedSegments(segments)}
+            {item.detail && (
+              <span className={cn("text-muted-foreground", inactive && "text-sidebar-foreground/35")}>
+                {" · "}
+                {renderHighlightedSegments(detailSegments)}
+              </span>
+            )}
+          </span>
+          {item.hiddenChildCount > 0 && (
+            <span className="ml-1 shrink-0 rounded-sm bg-sidebar-accent px-1 text-[10px] text-muted-foreground">
+              +{item.hiddenChildCount}
+            </span>
+          )}
+        </div>
+      </SidebarMenuButton>
       {!query && currentOrder === item.order && <div className="my-1 h-px bg-sidebar-border" />}
     </SidebarMenuItem>
+  );
+}
+
+function TreeGutter({
+  item,
+  onToggleExpand,
+}: {
+  item: ConversationTreeItem;
+  onToggleExpand: (entryId: string) => void;
+}) {
+  return (
+    <span
+      aria-hidden={!item.isExpandable}
+      className="flex h-7 shrink-0 items-center"
+      style={{ width: (item.connectorColumns.length + 1) * TREE_GUTTER_WIDTH }}
+    >
+      {item.connectorColumns.map((column) => (
+        <span className="relative h-7 w-4 shrink-0" key={column.key}>
+          {column.state === "line" && <span className="absolute inset-y-[-0.25rem] left-1/2 w-px bg-sidebar-border" />}
+        </span>
+      ))}
+      <span className="relative flex h-7 w-4 shrink-0 items-center justify-center">
+        <CurrentConnector kind={item.connectorKind} />
+        {item.isExpandable && (
+          <button
+            aria-label={item.isExpanded ? "Collapse branch" : "Expand branch"}
+            className="relative z-[2] flex size-4 items-center justify-center rounded-sm bg-sidebar text-muted-foreground hover:bg-background hover:text-sidebar-foreground"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggleExpand(item.id);
+            }}
+            title={item.isExpanded ? "Collapse branch" : "Expand branch"}
+            type="button"
+          >
+            <ChevronRightIcon className={cn("size-3 transition-transform", item.isExpanded && "rotate-90")} />
+          </button>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function CurrentConnector({ kind }: { kind: ConversationTreeItem["connectorKind"] }) {
+  if (kind === "none" || kind === "blank") return null;
+
+  return (
+    <>
+      {kind === "middle" && <span className="absolute inset-y-[-0.25rem] left-1/2 w-px bg-sidebar-border" />}
+      {kind === "last" && <span className="absolute left-1/2 top-[-0.25rem] h-[1.125rem] w-px bg-sidebar-border" />}
+      {kind === "line" && <span className="absolute inset-y-[-0.25rem] left-1/2 w-px bg-sidebar-border" />}
+      {(kind === "middle" || kind === "last") && (
+        <span className="absolute left-1/2 top-1/2 h-px w-1/2 bg-sidebar-border" />
+      )}
+    </>
+  );
+}
+
+function TreeActionSlot({
+  branchEnabled,
+  branchTitle,
+  continueTitle,
+  item,
+  loading,
+  onBranch,
+  onContinue,
+}: {
+  branchEnabled: boolean;
+  branchTitle: string;
+  continueTitle: string;
+  item: ConversationTreeItem;
+  loading: boolean;
+  onBranch: (entryId: string) => void;
+  onContinue: (entryId: string) => void;
+}) {
+  const actionClass =
+    "flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-background hover:text-sidebar-foreground disabled:cursor-not-allowed disabled:opacity-45";
+
+  return (
+    <span className="flex h-7 w-5 shrink-0 items-center justify-center">
+      {item.isBranchable ? (
+        <button
+          aria-label={branchTitle}
+          className={actionClass}
+          disabled={loading || !branchEnabled}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!branchEnabled) return;
+            onBranch(item.id);
+          }}
+          title={branchTitle}
+          type="button"
+        >
+          <GitBranchPlusIcon className="size-3.5" />
+        </button>
+      ) : item.isContinuable && item.continueTargetId ? (
+        <button
+          aria-label="Continue branch"
+          className={actionClass}
+          disabled={loading || !branchEnabled}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!branchEnabled || !item.continueTargetId) return;
+            onContinue(item.continueTargetId);
+          }}
+          title={continueTitle}
+          type="button"
+        >
+          <ArrowRightToLineIcon className="size-3.5" />
+        </button>
+      ) : (
+        <span aria-hidden="true" className="size-5 shrink-0" />
+      )}
+    </span>
   );
 }
 

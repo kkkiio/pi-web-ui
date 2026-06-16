@@ -72,6 +72,42 @@ As a developer, I want session title/model shown once so the sidebar stays focus
 
 ## Functional Requirements
 
+### Flat Row Layout
+
+The tree renders as one flat list of rows. Branch nesting depth is encoded in fixed left columns, not by recursively nesting menu components.
+
+Current nested layout:
+
+```text
+[subtree indent][connector][chevron][accent][text................][action][scrollbar]
+               |---------- extra spacing ----------|              ^ can be covered
+```
+
+Target flat row layout:
+
+```text
+[tree gutters][action slot][text........................]
+
+  |--v   B   user: 可以，那你先帮我建目录...
+  |      C   assistant update
+  |          bash: mkdir -p docs/specs/...
+  `--v   B   user: 写个骨架吧...
+```
+
+Column semantics:
+
+```text
+tree gutter : connector + expand/collapse button
+action slot : B = Branch, C = Continue branch, blank = no action
+text        : message/tool summary, always aligned across rows
+```
+
+- Tree rows are produced by the model as flat rows with `depth` and connector metadata.
+- React renders a single `rows.map(...)` list; it does not use recursive `SidebarMenuSub` nesting.
+- The tree gutter and action slot are fixed-width columns on the left of every row.
+- Branch and Continue actions live in the left action slot so overlay scrollbars cannot cover them.
+- User rows do not use a blue accent rail; branchable state is expressed by the Branch action plus slightly stronger text weight/color.
+
 ### Compact Tree Rendering
 
 - Rows are dense, single-line, and truncate long text.
@@ -87,7 +123,7 @@ As a developer, I want session title/model shown once so the sidebar stays focus
 |---------|-------------|
 | Tree connector | CSS line for branch child rows, independent from collapse |
 | Chevron | Expand/collapse control for branch segment descendants |
-| Blue rail | User message marker and branch anchor hint |
+| Action slot | Fixed left column for Branch, Continue branch, or an empty alignment placeholder |
 | Node text/detail | Compact summary of message/tool/event |
 | Branch button | Branch action on branchable user nodes |
 | Continue button | Continue action on non-current terminal non-user branch leaves |
