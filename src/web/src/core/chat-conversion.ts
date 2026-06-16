@@ -39,6 +39,7 @@ export function syncToItems(
           copyable: toolCalls.length === 0,
           presentation: toolCalls.length > 0 ? "activity" : "normal",
           cost: message.usage?.cost?.total,
+          entryId: entry.id,
         });
       }
 
@@ -49,6 +50,8 @@ export function syncToItems(
           name: call.name || "tool",
           input: call.arguments,
           state: "input-available",
+          entryId: entry.id,
+          relatedEntryIds: entry.id ? [entry.id] : [],
         };
         tools.set(tool.id, tool);
         items.push(tool);
@@ -56,6 +59,9 @@ export function syncToItems(
     } else if (message.role === "toolResult" && message.toolCallId) {
       const tool = tools.get(message.toolCallId);
       if (tool) {
+        if (entry.id && !tool.relatedEntryIds?.includes(entry.id)) {
+          tool.relatedEntryIds = [...(tool.relatedEntryIds ?? []), entry.id];
+        }
         if (message.isError) {
           tool.state = "output-error";
           tool.errorText = formatToolOutput(message.content);

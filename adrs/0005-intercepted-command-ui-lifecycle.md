@@ -7,18 +7,18 @@ Draft
 ## Context
 
 Pi Web UI's Web UI sends user prompts to Pi through a WebSocket connection. The
-mirror-server extension receives `{ type: "prompt", message: "/discuss" }` and
+mirror-server extension receives `{ type: "prompt", message: "/arch" }` and
 calls `pi.sendUserMessage(message)`.
 
 Extensions may intercept commands through two paths:
 
-- **`pi.registerCommand`**: The framework expands `/discuss` before building
+- **`pi.registerCommand`**: The framework expands `/arch` before building
   messages. The command handler runs synchronously inside `prompt()` and returns
   early. No agent run starts.
-- **`pi.on("input", ...)`**: When `sendUserMessage` is used (which sets
-  `expandPromptTemplates: false`), the `input` event fires. If an extension
-  handler returns `{ action: "handled" }`, `prompt()` returns early. Again no
-  agent run starts.
+- **`pi.events` event bus**: Extensions communicate through typed event channels
+  (e.g., `cmd:arch:enter`, `cmd:arch:exit`) instead of intercepting input events.
+  The Web UI can also trigger these directly via WebSocket commands
+  (`enter_arch_mode`, `exit_arch_mode`) without going through the prompt pipeline.
 
 When a command is intercepted, Pi emits no `agent_start`, `agent_end`, or
 `message_start`(user) events. The mirror server sends back `{ type: "response",
@@ -99,11 +99,11 @@ Frontend WebSocket message order:
 ⑤ agent_end           → chatStatus: streaming → ready
 ```
 
-For an **intercepted command** (e.g., `/discuss`):
+For an **intercepted command** (e.g., `/arch`):
 
 ```
-mirror-server:  pi.sendUserMessage("/discuss")
-                → input handler → { action: "handled" } → prompt() return
+mirror-server:  pi.sendUserMessage("/arch")
+                → pi.registerCommand handler → enterMode(ctx) → return
 mirror-server:  sendTo(ws, success("prompt"))
 ```
 
@@ -126,16 +126,20 @@ without a topic, triggering a full agent turn with `agent_start` → LLM respons
 Rejected. A mode switch is not a conversation event. Forcing an LLM call adds
 unnecessary cost and latency with no user value.
 
-### B. Extension emits a custom event via EventBus
+### B. Extension emits a custom event via pi.events (chosen for mode state)
 
-pi-discuss could emit `discussion_mode_entered` / `discussion_mode_exited`
-through `pi.events`. pi-web-ui could subscribe and forward to the Web UI.
+pi-arch-mode emits `arch:state-changed` (with `{ enabled: boolean }`) through
+`pi.events`. pi-web-ui's mirror-server subscribes and forwards to the Web UI.
+The Web UI uses this to keep the architecture mode toggle in sync.
 
-Not mutually exclusive with this ADR. This is a better approach for rich UI
-state (e.g., displaying a "💬 discussing" indicator in the Web UI), but it does
-not address the core lifecycle issue: the frontend needs a signal that the
-prompt was consumed without starting an agent run. Handling `response` solves
-that generically for all intercepted commands, not just pi-discuss.
+Additionally, the Web UI sends `enter_arch_mode` / `exit_arch_mode` WebSocket
+commands to trigger mode changes. The mirror-server emits `cmd:arch:enter` /
+`cmd:arch:exit` on the `pi.events` bus, which the arch-mode extension handles.
+
+This is the approach used for rich UI state (e.g., displaying an architecture
+mode toggle in the input area). It complements the `response` lifecycle handling:
+the `response` message handles the stuck-submitted problem generically, while
+`pi.events` carries mode-specific state.
 
 ### C. Mirror server checks `pi.sendUserMessage` return value
 
@@ -151,9 +155,12 @@ Rejected as out of scope for pi-web-ui. It would require a Pi framework change.
   event is the single source of truth.
 - `lastSentRef` deduplication is removed, simplifying the `message_start` user
   handler.
-- Intercepted extension commands (like `/discuss`, `/discuss off`) do not leave
+- Intercepted extension commands (like `/arch`, `/arch-off`) do not leave
   orphaned user messages in the chat list. Behavior matches the TUI.
 - The `response` message type is now handled, fixing the stuck-submitted state
   for any extension command that intercepts input without starting an agent run.
-- Adding EventBus-based mode announcements (ADR to follow) is not blocked by
-  this change.
+- The arch-mode toggle in the Web UI uses `pi.events` (via
+  `arch:state-changed`) for state sync and WebSocket commands
+  (`enter_arch_mode` / `exit_arch_mode`) for triggering mode changes — replacing
+  the old input-interception approach documented in
+  [pi-arch-mode ADR-003](../pi-arch-mode/adrs/003-event-driven-extension-commands.md).

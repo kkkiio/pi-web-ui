@@ -1,11 +1,5 @@
-import type { ProjectGroup, SessionInfo } from "./types";
-
 export function shortModelName(id: string) {
   return id.replace(/^claude-/, "").replace(/-\d{8}$/, "");
-}
-
-export function sessionTitle(session: SessionInfo) {
-  return session.name || session.firstMessage || "Empty session";
 }
 
 export function formatTime(isoTimestamp?: string) {
@@ -31,14 +25,6 @@ export function formatTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
-}
-
-export function findSession(projects: ProjectGroup[], filePath: string) {
-  for (const project of projects) {
-    const session = project.sessions.find((candidate) => candidate.filePath === filePath);
-    if (session) return { project, session };
-  }
-  return null;
 }
 
 export function highlightSegments(text: string, query: string) {

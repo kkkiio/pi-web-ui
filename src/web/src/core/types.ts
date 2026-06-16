@@ -42,6 +42,7 @@ export type ChatItem =
       images?: PromptImage[];
       /** Session entry tree node ID, used for edit (navigate_tree). */
       entryId?: string;
+      relatedEntryIds?: string[];
     }
   | {
       kind: "tool";
@@ -52,12 +53,16 @@ export type ChatItem =
       errorText?: string;
       state: ToolState;
       open?: boolean;
+      entryId?: string;
+      relatedEntryIds?: string[];
     }
   | {
       kind: "system";
       id: string;
       text: string;
       tone?: SystemTone;
+      entryId?: string;
+      relatedEntryIds?: string[];
     };
 
 export type RpcEvent = {
@@ -127,8 +132,38 @@ export type ModelInfo = {
   contextWindow?: number;
 };
 
-export type MirrorSync = {
+export type WsRequest = {
+  type: "req";
+  id: string;
+  method: string;
+  params?: Record<string, unknown>;
+};
+
+export type WsResponse = {
+  type: "res";
+  id: string;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+};
+
+export type WsEvent = {
+  type: "event";
+  event: string;
+  payload?: Record<string, unknown>;
+};
+
+export type WsError = {
+  type: "error";
+  id?: string;
+  code?: string;
+  message: string;
+};
+
+export type StateSyncPayload = {
   entries?: SessionEntry[];
+  tree?: SessionTreeNode[];
+  leafId?: string | null;
   model?: ModelInfo;
   thinkingLevel?: string;
   sessionName?: string;
@@ -139,14 +174,49 @@ export type MirrorSync = {
 
 export type SessionEntry = {
   type: string;
+  id?: string;
+  parentId?: string | null;
+  timestamp?: string;
   customType?: string;
   message?: PiMessage;
   details?: unknown;
   data?: unknown;
   value?: unknown;
   payload?: unknown;
-  id?: string;
+  summary?: string;
+  label?: string;
+  modelId?: string;
+  provider?: string;
+  thinkingLevel?: string;
+  activeToolNames?: string[];
   [key: string]: unknown;
+};
+
+export type SessionTreeNode = {
+  entry: SessionEntry;
+  children: SessionTreeNode[];
+  label?: string;
+  labelTimestamp?: string;
+};
+
+export type ConversationTreeItem = {
+  id: string;
+  parentId: string | null;
+  entry: SessionEntry;
+  entryType: string;
+  hasChildren: boolean;
+  isLeaf: boolean;
+  isForkable: boolean;
+  label?: string;
+  text: string;
+  detail?: string;
+  isExpandable: boolean;
+  isExpanded: boolean;
+  hiddenChildCount: number;
+  childCount: number;
+  isSearchMatch: boolean;
+  order: number;
+  children: ConversationTreeItem[];
 };
 
 export type SubagentTokens = {
@@ -171,46 +241,6 @@ export type SubagentViewState = {
   isBackground?: boolean;
   source?: "foreground" | "background" | "scheduled" | "history" | "event";
   updatedAt: number;
-};
-
-export type ProjectGroup = {
-  dirName: string;
-  path: string;
-  sessions: SessionInfo[];
-};
-
-export type SessionInfo = {
-  filePath: string;
-  file?: string;
-  name?: string;
-  firstMessage?: string;
-  timestamp?: string;
-  cwd?: string;
-  projectPath?: string;
-  tmux?: boolean;
-};
-
-export type SearchResult = {
-  filePath: string;
-  project?: string;
-  sessionName?: string;
-  firstMessage?: string;
-  sessionTimestamp?: string;
-  matches?: Array<{ snippet?: string }>;
-};
-
-export type RunningInstance = {
-  port: number;
-  sessionFile: string;
-  cwd: string;
-};
-
-export type LaunchProject = {
-  name: string;
-  path: string;
-  active?: boolean;
-  sessionCount?: number;
-  lastActive?: number;
 };
 
 export type ExtensionDialog = {

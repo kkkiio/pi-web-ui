@@ -1,4 +1,4 @@
-# Pi Web UI
+# AGENTS.md
 
 Pi extension that mirrors the terminal session in the browser — WebSocket + HTTP server inside Pi, React frontend.
 
@@ -38,6 +38,18 @@ Per `adrs/0001-pi-extension-output-policy.md`: never write to `stdout`/`stderr` 
 ### Event forwarding — thin transport
 
 Per `adrs/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation. inside the extension. The browser owns feature interpretation.
+
+### Release workflow — `RELEASING.md` is authoritative
+
+Apply when you:
+- Publish `@kkkiio/pi-web-ui` to npm
+- Bump package versions or prepare release commits
+- Change `package.json` fields that affect npm packaging, `pi.image`, `files`, `prepare`, `prepack`, or `publishConfig`
+- Investigate pi.dev package catalog images or README rendering
+
+Before running `npm pack`, `npm version`, `npm publish`, or release-tag commands, read `RELEASING.md` and follow its checklist. Do not run `npm publish` without explicit user approval in the current task.
+
+Skip for local development builds and checks that are not intended for a release.
 
 ### Mandatory Skill Usage
 
@@ -91,6 +103,7 @@ Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP
 ├── docs/images/                 # Screenshots for README
 ├── specs/                       # Feature specs for UI components
 ├── MOBILE.md                    # Mobile access guide
+├── RELEASING.md                 # npm publish and pi.dev verification checklist
 
 ├── package.json                 # npm package config + pi extension manifest
 ├── tsconfig.json                # TypeScript config (only src/web + vite.config.ts)
@@ -190,6 +203,14 @@ To lint only:
 
 ```bash
 npm run lint
+```
+
+### Publishing
+
+For npm releases, read and follow `RELEASING.md` before changing package release metadata or running publish commands.
+
+```bash
+npm pack --dry-run --json
 ```
 
 ### Key Files to Update Together

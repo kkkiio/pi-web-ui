@@ -1,4 +1,4 @@
-# ADR 0003: Frontend Build Distribution Strategy for npm Publishing
+# ADR 0007: Frontend Build Distribution Strategy for npm Publishing
 
 ## Status
 

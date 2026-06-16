@@ -11,7 +11,10 @@ Pi Web UI connects to your running Pi session and gives you a browser interface.
 
 ![Pi Web UI example](docs/images/pi-web-ui-example.png)
 
+![Conversation tree sidebar](docs/images/conversation-tree-sidebar.jpg)
+
 - **Real-time streaming** — messages, tool calls, and thinking blocks
+- **Conversation tree sidebar** — browse the current session tree, jump to any node, and keep drafts untouched until you fork
 - **React UI** — Vite, Tailwind, shadcn/ui, AI Elements
 - **Markdown rendering** — Streamdown for code blocks, math, Mermaid
 - **No extra process** — the Pi extension *is* the server
@@ -43,7 +46,7 @@ The server starts automatically when a Pi session begins and shuts down when the
 - Streaming text and thinking/reasoning blocks
 - Tool call display with expand/collapse
 - Image attachments with paste, drop, and preview
-- Message editing via navigate_tree (requires `/webui` command context)
+- Fork user messages from the conversation stream via `navigate_tree` (requires `/webui` command context)
 - Follow-up messages while the agent is streaming
 
 ### Model & Thinking
@@ -52,8 +55,9 @@ The server starts automatically when a Pi session begins and shuts down when the
 - Context-window visualization and compact suggestion
 
 ### Sessions
-- Sidebar with active session info and history browser
-- Session rename, search, and favourites
+- Sidebar with active session info and the current conversation tree
+- Search, expand/collapse, and browse tree nodes without overwriting the input draft
+- Fork from user messages when you want to edit or branch from earlier work
 
 ### Commands & Settings
 - Command palette: compact, export HTML, session stats, tool toggle
@@ -84,7 +88,7 @@ Or in `~/.pi/agent/settings.json`:
 ```
 
 Pi Web UI follows Pi's `PI_CODING_AGENT_DIR` and `PI_CODING_AGENT_SESSION_DIR`
-overrides when reading settings and session history.
+overrides when reading settings and current session state.
 
 ### Start / Stop
 

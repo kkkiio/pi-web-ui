@@ -1,15 +1,13 @@
 import {
   ArchiveIcon,
   BarChart3Icon,
-  BrainIcon,
-  ChevronsUpDownIcon,
-  CommandIcon,
   DownloadIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   TerminalIcon,
   XIcon,
 } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
@@ -17,30 +15,17 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-} from "@/components/ai-elements/prompt-input";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
-  AppSidebar,
-  AppSidebarContent,
+  AppHeader,
+  ChatInput,
   ChatItemView,
   CommandPalette,
-  ConnectionDot,
   ContextPopover,
+  ConversationSidebar,
   ExtensionDialogView,
   ModelPicker,
-  PromptAttachmentButton,
-  PromptAttachmentPreview,
-  SessionSidebar,
   SettingsPanel,
   SubagentDetailSidebar,
   UserMessageView,
@@ -55,7 +40,7 @@ import {
   processPromptFiles,
   syncToItems,
 } from "./core/chat-conversion";
-import { copyText, formatTokens, isEditableTarget, shortModelName } from "./core/format";
+import { copyText, formatTime, formatTokens, isEditableTarget, shortModelName } from "./core/format";
 import { applySubagentEvent, type SubagentStateMap, subagentList, subagentsFromEntries } from "./core/subagents";
 import { isToolExpandable } from "./core/tool-summary";
 import type {
@@ -63,18 +48,27 @@ import type {
   ChatSubmitStatus,
   ConnectionState,
   ExtensionDialog,
-  MirrorSync,
   ModelInfo,
-  ProjectGroup,
   PromptCommand,
   RpcEvent,
-  SearchResult,
-  SessionInfo,
+  SessionTreeNode,
+  StateSyncPayload,
   SystemTone,
   ThemeMode,
   Usage,
+  WsError,
+  WsEvent,
+  WsRequest,
+  WsResponse,
 } from "./core/types";
 import { wsUrl } from "./core/ws";
+
+type PendingWsRequest = {
+  method: string;
+  request: WsRequest;
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+};
 
 export function App() {
   const [items, setItems] = useState<ChatItem[]>([]);
@@ -86,6 +80,8 @@ export function App() {
   const [sessionName, setSessionName] = useState("Pi Web UI");
   const [error, setError] = useState<string | null>(null);
   const [advancedFeatures, setAdvancedFeatures] = useState(false);
+  const [archModeEnabled, setArchModeEnabled] = useState(false);
+  const [archAvailable, setArchAvailable] = useState(false);
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(
     () => (localStorage.getItem("pi-web-ui-theme-mode") as ThemeMode | null) || "system",
@@ -94,17 +90,15 @@ export function App() {
     () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
   );
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [projects, setProjects] = useState<ProjectGroup[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [sessionQuery, setSessionQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [favourites, setFavourites] = useState<string[]>(
-    () => JSON.parse(localStorage.getItem("pi-web-ui-favourites") || "[]") as string[],
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
   );
-  const [activeSessionFile, setActiveSessionFile] = useState<string | null>(null);
-  const [viewedSessionFile, setViewedSessionFile] = useState<string | null>(null);
-  const [viewedSessionTitle, setViewedSessionTitle] = useState<string | null>(null);
+  const [tree, setTree] = useState<SessionTreeNode[]>([]);
+  const [leafId, setLeafId] = useState<string | null>(null);
+  const [selectedTreeEntryId, setSelectedTreeEntryId] = useState<string | null>(null);
+  const [loadingTreeEntryId, setLoadingTreeEntryId] = useState<string | null>(null);
+  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
+  const [draftText, setDraftText] = useState("");
 
   const [queuedMessages, setQueuedMessages] = useState<PromptCommand[]>([]);
 
@@ -126,6 +120,12 @@ export function App() {
   const [contextOpen, setContextOpen] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const requestCounterRef = useRef(0);
+  const pendingRequestsRef = useRef<Map<string, PendingWsRequest>>(new Map());
+  const queuedRequestsRef = useRef<WsRequest[]>([]);
+  const itemElementsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const pendingFocusEntryIdRef = useRef<string | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const streamingIdRef = useRef<string | null>(null);
   const streamingHasToolCallRef = useRef(false);
@@ -134,7 +134,6 @@ export function App() {
   const originalTitleRef = useRef(document.title);
 
   const resolvedTheme = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
-  const viewingHistory = viewedSessionFile !== null;
 
   const nextId = useCallback((prefix: string) => {
     itemCounterRef.current += 1;
@@ -148,53 +147,50 @@ export function App() {
     [nextId],
   );
 
-  const sendWs = useCallback((data: unknown) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(data));
-      return true;
-    }
-    return false;
+  const flushQueuedRequests = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws?.readyState !== WebSocket.OPEN) return;
+    const queued = queuedRequestsRef.current.splice(0);
+    for (const request of queued) ws.send(JSON.stringify(request));
   }, []);
 
-  const rpc = useCallback(async (cmd: Record<string, unknown>) => {
-    const response = await fetch("/api/rpc", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cmd),
-    });
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.error || "RPC failed");
-    }
-    return result;
-  }, []);
-
-  const loadSessions = useCallback(async () => {
-    setSessionsLoading(true);
-    try {
-      const response = await fetch("/api/sessions");
-      const data = await response.json();
-      setProjects(data.projects || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load sessions");
-    } finally {
-      setSessionsLoading(false);
-    }
-  }, []);
+  const send = useCallback(
+    (method: string, params?: Record<string, unknown>) =>
+      new Promise<unknown>((resolve, reject) => {
+        requestCounterRef.current += 1;
+        const request: WsRequest = {
+          type: "req",
+          id: `req-${Date.now()}-${requestCounterRef.current}`,
+          method,
+          ...(params && { params }),
+        };
+        pendingRequestsRef.current.set(request.id, { method, request, resolve, reject });
+        const ws = wsRef.current;
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(request));
+        } else {
+          queuedRequestsRef.current.push(request);
+        }
+      }),
+    [],
+  );
 
   const refreshState = useCallback(async () => {
     try {
-      const [stateResult, modelsResult] = await Promise.allSettled([
-        rpc({ type: "get_state" }),
-        rpc({ type: "get_available_models" }),
-      ]);
+      const [stateResult, modelsResult] = await Promise.allSettled([send("get_state"), send("get_available_models")]);
 
       if (modelsResult.status === "fulfilled") {
-        setAvailableModels(modelsResult.value.data?.models || []);
+        const data = modelsResult.value as { models?: ModelInfo[] };
+        setAvailableModels(data.models || []);
       }
 
       if (stateResult.status === "fulfilled") {
-        const data = stateResult.value.data || {};
+        const data = (stateResult.value || {}) as {
+          model?: ModelInfo;
+          thinkingLevel?: string;
+          sessionName?: string;
+          autoCompactionEnabled?: boolean;
+        };
         setCurrentModel(data.model || null);
         setModelLabel(shortModelName(data.model?.id || "model"));
         setThinkingLevel(data.thinkingLevel || "off");
@@ -205,21 +201,27 @@ export function App() {
     } catch (err) {
       console.error("[pi-web-ui] get_state failed", err);
     }
-  }, [rpc]);
-
-  const fetchHealth = useCallback(async () => {
-    try {
-      await fetch("/api/health");
-    } catch {
-      // Health only decorates the status label.
-    }
-  }, []);
+  }, [send]);
 
   const applySync = useCallback(
-    (sync: MirrorSync) => {
+    (sync: StateSyncPayload) => {
       const parsedItems = syncToItems(sync.entries ?? [], nextId);
       const nextSubagents = subagentsFromEntries(sync.entries ?? []);
+      const nextTree = sync.tree ?? [];
       setItems(parsedItems);
+      setTree(nextTree);
+      setLeafId(sync.leafId ?? null);
+      setSelectedTreeEntryId((current) => {
+        if (current) {
+          const stack = [...nextTree];
+          while (stack.length > 0) {
+            const node = stack.pop();
+            if (node?.entry.id === current) return current;
+            if (node) stack.push(...node.children);
+          }
+        }
+        return sync.leafId ?? null;
+      });
       setSubagents(nextSubagents);
       setSelectedSubagentId((current) => (current && nextSubagents[current] ? current : null));
       setChatStatus(sync.isStreaming ? "streaming" : "ready");
@@ -228,9 +230,6 @@ export function App() {
       setCurrentModel(sync.model || null);
       setModelLabel(shortModelName(sync.model?.id || "model"));
       setThinkingLevel(sync.thinkingLevel || "off");
-      setActiveSessionFile(sync.sessionFile || null);
-      setViewedSessionFile(null);
-      setViewedSessionTitle(null);
       setLastUsage(findLastUsage(sync.entries ?? []));
       if (sync.model?.contextWindow) setContextWindowSize(sync.model.contextWindow);
       setError(null);
@@ -455,6 +454,10 @@ export function App() {
           setAuthEnabled(Boolean(event.enabled));
           break;
 
+        case "arch:state-changed":
+          setArchModeEnabled(Boolean(event.enabled));
+          break;
+
         case "model_select":
           if (event.model) {
             setCurrentModel(event.model);
@@ -488,44 +491,14 @@ export function App() {
   }, [showThinking]);
 
   useEffect(() => {
-    localStorage.setItem("pi-web-ui-favourites", JSON.stringify(favourites));
-  }, [favourites]);
-
-  useEffect(() => {
     if ("serviceWorker" in navigator && import.meta.env.PROD) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
   }, []);
 
   useEffect(() => {
-    loadSessions();
     refreshState();
-    fetchHealth();
-  }, [fetchHealth, loadSessions, refreshState]);
-
-  useEffect(() => {
-    if (sessionQuery.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    const controller = new AbortController();
-    const timeout = window.setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(sessionQuery.trim())}`, {
-          signal: controller.signal,
-        });
-        const data = await response.json();
-        setSearchResults(data.results || []);
-      } catch (err) {
-        if (!controller.signal.aborted) console.error("[pi-web-ui] search failed", err);
-      }
-    }, 300);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeout);
-    };
-  }, [sessionQuery]);
+  }, [refreshState]);
 
   useEffect(() => {
     let intentionallyClosed = false;
@@ -539,36 +512,44 @@ export function App() {
         if (wsRef.current !== ws) return;
         setConnection("connected");
         setError(null);
-        fetchHealth();
+        flushQueuedRequests();
       };
 
       ws.onmessage = (messageEvent) => {
         if (wsRef.current !== ws) return;
         try {
-          const data = JSON.parse(messageEvent.data) as {
-            type?: string;
-            [key: string]: unknown;
-          };
-          if (data.type === "mirror_sync") {
-            applySync(data as MirrorSync);
-          } else if (data.type === "response") {
-            if (data.success && data.command === "prompt") {
+          const data = JSON.parse(messageEvent.data) as WsResponse | WsEvent | WsError;
+          if (data.type === "res") {
+            const pending = pendingRequestsRef.current.get(data.id);
+            if (!pending) return;
+            pendingRequestsRef.current.delete(data.id);
+            if (data.ok) {
+              pending.resolve(data.result);
+              if (pending.method === "prompt") {
+                setChatStatus((current) => (current === "submitted" ? "ready" : current));
+              }
+            } else {
+              pending.reject(new Error(data.error || "Request failed"));
+            }
+          } else if (data.type === "event") {
+            const payload = data.payload ?? {};
+            if (data.event === "state_sync") {
+              applySync(payload as StateSyncPayload);
+            } else if (data.event === "webui_state") {
+              if (typeof payload.advancedFeatures === "boolean") setAdvancedFeatures(payload.advancedFeatures);
+              if (typeof payload.archAvailable === "boolean") setArchAvailable(payload.archAvailable);
+            } else {
+              handleEvent({ type: data.event, ...payload } as RpcEvent);
+            }
+          } else if (data.type === "error") {
+            setError(data.message || "Server error");
+          } else {
+            const fallback = data as unknown as { type?: string };
+            if (fallback.type) {
               setChatStatus((current) => {
-                if (current === "submitted") return "ready";
                 return current;
               });
             }
-          } else if (data.type === "event") {
-            handleEvent(data.event as RpcEvent);
-          } else if (data.type === "error") {
-            setError(String(data.message || "Server error"));
-          } else if (data.type === "state") {
-            const s = data as { advancedFeatures?: boolean };
-            if (typeof s.advancedFeatures === "boolean") {
-              setAdvancedFeatures(s.advancedFeatures);
-            }
-          } else if (data.type !== "response") {
-            handleEvent(data as unknown as RpcEvent);
           }
         } catch (err) {
           console.error("[pi-web-ui] Failed to parse WebSocket message", err);
@@ -596,8 +577,9 @@ export function App() {
       intentionallyClosed = true;
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
       wsRef.current?.close();
+      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
     };
-  }, [applySync, fetchHealth, handleEvent]);
+  }, [applySync, flushQueuedRequests, handleEvent]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -619,49 +601,28 @@ export function App() {
 
   const sendPrompt = useCallback(
     async (command: PromptCommand) => {
-      if (viewingHistory) {
-        setError("Viewing historical session. Return to the live session to send messages.");
-        return;
-      }
       setChatStatus("submitted");
       setError(null);
 
       try {
-        const payload = {
-          type: "prompt",
+        await send("prompt", {
           message: command.message,
           images: command.images,
-        };
-        if (!sendWs(payload)) {
-          await rpc(payload);
-        }
+        });
       } catch (err) {
         setChatStatus("error");
         setError(err instanceof Error ? err.message : "Prompt failed");
       }
     },
-    [rpc, sendWs, viewingHistory],
+    [send],
   );
 
   useEffect(() => {
-    if (chatStatus !== "ready" || queuedMessages.length === 0 || viewingHistory) return;
+    if (chatStatus !== "ready" || queuedMessages.length === 0) return;
     const [next, ...rest] = queuedMessages;
     setQueuedMessages(rest);
     sendPrompt(next);
-  }, [chatStatus, queuedMessages, sendPrompt, viewingHistory]);
-
-  const handleEditSubmit = useCallback(
-    async (entryId: string, newText: string) => {
-      // Step 1: navigate tree
-      const navResult = await rpc({ type: "navigate_tree", entryId });
-      if (!navResult.success) {
-        throw new Error(navResult.error || "Navigation failed");
-      }
-      // Step 2: send edited prompt
-      await rpc({ type: "prompt", message: newText });
-    },
-    [rpc],
-  );
+  }, [chatStatus, queuedMessages, sendPrompt]);
 
   const submitMessage = useCallback(
     async ({ text, files }: { text: string; files?: unknown[] }) => {
@@ -677,34 +638,34 @@ export function App() {
 
       if (chatStatus === "streaming" || chatStatus === "submitted") {
         setQueuedMessages((current) => [...current, command]);
+        setDraftText("");
         return;
       }
 
       await sendPrompt(command);
+      setDraftText("");
     },
     [chatStatus, nextId, sendPrompt],
   );
 
   const abort = useCallback(async () => {
     try {
-      if (!sendWs({ type: "abort" })) {
-        await rpc({ type: "abort" });
-      }
+      await send("abort");
       setChatStatus("ready");
       addSystemMessage("Aborted by user", "error");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Abort failed");
     }
-  }, [addSystemMessage, rpc, sendWs]);
+  }, [addSystemMessage, send]);
 
   const cycleThinking = useCallback(async () => {
     try {
-      const result = await rpc({ type: "cycle_thinking_level" });
-      setThinkingLevel(result.data?.level || result.data?.thinkingLevel || "off");
+      const result = (await send("cycle_thinking_level")) as { level?: string; thinkingLevel?: string } | undefined;
+      setThinkingLevel(result?.level || result?.thinkingLevel || "off");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to change thinking level");
     }
-  }, [rpc]);
+  }, [send]);
 
   const openModelPicker = useCallback(async () => {
     setModelOpen(true);
@@ -714,8 +675,7 @@ export function App() {
   const selectModel = useCallback(
     async (model: ModelInfo) => {
       try {
-        await rpc({
-          type: "set_model",
+        await send("set_model", {
           provider: model.provider,
           modelId: model.id,
         });
@@ -727,98 +687,57 @@ export function App() {
         setError(err instanceof Error ? err.message : "Failed to switch model");
       }
     },
-    [rpc],
+    [send],
   );
-
-  const selectSession = useCallback(
-    async (session: SessionInfo) => {
-      setError(null);
-
-      if (session.filePath === activeSessionFile) {
-        if (!sendWs({ type: "mirror_sync_request" })) {
-          setError("Cannot return to the live session while disconnected.");
-        }
-        return;
-      }
-
-      const previousViewedSessionFile = viewedSessionFile;
-      const previousViewedSessionTitle = viewedSessionTitle;
-      setViewedSessionFile(session.filePath);
-      setViewedSessionTitle(session.name || session.firstMessage || "Session history");
-      setChatStatus("ready");
-
-      const dirName = projects.find((p) => p.sessions.some((s) => s.filePath === session.filePath))?.dirName;
-      const file = session.file;
-      if (!dirName || !file) return;
-
-      try {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(dirName)}/${encodeURIComponent(file)}`);
-        const data = await response.json();
-        const entries = data.entries || [];
-        const nextSubagents = subagentsFromEntries(entries);
-        setItems(syncToItems(entries, nextId));
-        setSubagents(nextSubagents);
-        setSelectedSubagentId((current) => (current && nextSubagents[current] ? current : null));
-        setLastUsage(findLastUsage(entries));
-      } catch (err) {
-        setViewedSessionFile(previousViewedSessionFile);
-        setViewedSessionTitle(previousViewedSessionTitle);
-        setError(err instanceof Error ? err.message : "Failed to load session");
-      }
-    },
-    [activeSessionFile, nextId, projects, sendWs, viewedSessionFile, viewedSessionTitle],
-  );
-
-  const returnToLive = useCallback(() => {
-    setError(null);
-    if (!sendWs({ type: "mirror_sync_request" })) {
-      setError("Cannot return to the live session while disconnected.");
-    }
-  }, [sendWs]);
 
   const openSettings = useCallback(async () => {
     setSettingsOpen(true);
     await refreshState();
     try {
-      const result = await rpc({ type: "get_auth" });
-      setAuthConfigured(Boolean(result.data?.configured));
-      setAuthEnabled(Boolean(result.data?.enabled));
+      const result = (await send("get_auth")) as { configured?: boolean; enabled?: boolean } | undefined;
+      setAuthConfigured(Boolean(result?.configured));
+      setAuthEnabled(Boolean(result?.enabled));
     } catch {
       setAuthConfigured(false);
     }
-  }, [refreshState, rpc]);
+  }, [refreshState, send]);
 
   const toggleAuth = useCallback(async () => {
     try {
-      const result = await rpc({ type: "set_auth", enabled: !authEnabled });
-      setAuthEnabled(Boolean(result.data?.enabled));
+      const result = (await send("set_auth", { enabled: !authEnabled })) as { enabled?: boolean } | undefined;
+      setAuthEnabled(Boolean(result?.enabled));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update auth");
     }
-  }, [authEnabled, rpc]);
+  }, [authEnabled, send]);
 
   const compactContext = useCallback(async () => {
     try {
-      await rpc({ type: "compact" });
+      await send("compact");
       addSystemMessage("Compaction requested");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Compaction failed");
     }
-  }, [addSystemMessage, rpc]);
+  }, [addSystemMessage, send]);
 
   const exportHtml = useCallback(async () => {
     try {
-      const result = await rpc({ type: "export_html" });
-      if (result.data?.path) addSystemMessage(`Exported: ${result.data.path}`, "success");
+      const result = (await send("export_html")) as { path?: string } | undefined;
+      if (result?.path) addSystemMessage(`Exported: ${result.path}`, "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed");
     }
-  }, [addSystemMessage, rpc]);
+  }, [addSystemMessage, send]);
 
   const showSessionStats = useCallback(async () => {
     try {
-      const result = await rpc({ type: "get_session_stats" });
-      const stats = result.data;
+      const stats = (await send("get_session_stats")) as {
+        totalMessages?: number;
+        userMessages?: number;
+        assistantMessages?: number;
+        toolCalls?: number;
+        tokens?: { input?: number; total?: number };
+      };
       addSystemMessage(
         [
           "Session stats",
@@ -832,7 +751,13 @@ export function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Stats failed");
     }
-  }, [addSystemMessage, rpc]);
+  }, [addSystemMessage, send]);
+
+  const toggleArchMode = useCallback(() => {
+    send(archModeEnabled ? "exit_arch_mode" : "enter_arch_mode").catch((err) =>
+      setError(err instanceof Error ? err.message : "Arch mode toggle failed"),
+    );
+  }, [archModeEnabled, send]);
 
   const toggleAllTools = useCallback((open: boolean) => {
     setItems((current) =>
@@ -845,30 +770,22 @@ export function App() {
       const trimmed = name.trim();
       if (!trimmed) return;
       try {
-        await rpc({ type: "set_session_name", name: trimmed });
+        await send("set_session_name", { name: trimmed });
         setSessionName(trimmed);
-        setProjects((current) =>
-          current.map((project) => ({
-            ...project,
-            sessions: project.sessions.map((session) =>
-              session.filePath === activeSessionFile ? { ...session, name: trimmed } : session,
-            ),
-          })),
-        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Rename failed");
       }
     },
-    [activeSessionFile, rpc],
+    [send],
   );
 
   const respondDialog = useCallback(
     (response: Record<string, unknown>) => {
       if (!dialog) return;
-      sendWs({ type: "extension_ui_response", id: dialog.id, ...response });
+      send("extension_ui_response", { id: dialog.id, ...response }).catch(() => {});
       setDialog(null);
     },
-    [dialog, sendWs],
+    [dialog, send],
   );
 
   useEffect(() => {
@@ -876,6 +793,124 @@ export function App() {
     const timeout = window.setTimeout(() => respondDialog({ cancelled: true }), dialog.timeout);
     return () => window.clearTimeout(timeout);
   }, [dialog, respondDialog]);
+
+  const registerItemElement = useCallback((item: ChatItem, node: HTMLElement | null) => {
+    const ids = [item.entryId, ...(item.relatedEntryIds ?? [])].filter((value): value is string => Boolean(value));
+    for (const id of ids) {
+      if (node) itemElementsRef.current.set(id, node);
+      else itemElementsRef.current.delete(id);
+    }
+  }, []);
+
+  const findVisibleEntryId = useCallback(
+    (entryId: string) => {
+      const byId = new Map<string, { parentId?: string | null }>();
+      const stack = [...tree];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (!node?.entry.id) continue;
+        byId.set(node.entry.id, { parentId: node.entry.parentId });
+        stack.push(...node.children);
+      }
+
+      let cursor: string | null | undefined = entryId;
+      while (cursor) {
+        if (itemElementsRef.current.has(cursor)) return cursor;
+        cursor = byId.get(cursor)?.parentId ?? null;
+      }
+      if (leafId && itemElementsRef.current.has(leafId)) return leafId;
+      return null;
+    },
+    [leafId, tree],
+  );
+
+  const focusEntry = useCallback(
+    (entryId: string) => {
+      const visibleEntryId = findVisibleEntryId(entryId);
+      if (!visibleEntryId) return false;
+      const element = itemElementsRef.current.get(visibleEntryId);
+      if (!element) return false;
+      element.scrollIntoView({ block: "center", behavior: "smooth" });
+      setHighlightedEntryId(visibleEntryId);
+      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = window.setTimeout(() => setHighlightedEntryId(null), 1200);
+      return true;
+    },
+    [findVisibleEntryId],
+  );
+
+  useEffect(() => {
+    const targetEntryId = pendingFocusEntryIdRef.current;
+    if (!targetEntryId) return;
+    if (focusEntry(targetEntryId)) pendingFocusEntryIdRef.current = null;
+  }, [focusEntry]);
+
+  const browseTree = useCallback(
+    async (entryId: string) => {
+      pendingFocusEntryIdRef.current = entryId;
+      setSelectedTreeEntryId(entryId);
+      setLoadingTreeEntryId(entryId);
+      setError(null);
+      try {
+        const result = (await send("navigate_tree", { entryId })) as { cancelled?: boolean } | undefined;
+        if (result?.cancelled) pendingFocusEntryIdRef.current = null;
+      } catch (err) {
+        pendingFocusEntryIdRef.current = null;
+        setError(err instanceof Error ? err.message : "Navigation failed");
+      } finally {
+        setLoadingTreeEntryId(null);
+      }
+    },
+    [send],
+  );
+
+  const forkConversationMessage = useCallback(
+    async (entryId: string) => {
+      if (draftText.trim() && !window.confirm("Replace the current draft with this message?")) return;
+      let timestamp = "";
+      let fallbackText = "";
+      const stack = [...tree];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (!node) continue;
+        if (node.entry.id === entryId) {
+          timestamp = typeof node.entry.timestamp === "string" ? node.entry.timestamp : "";
+          fallbackText = extractText(node.entry.message?.content);
+          break;
+        }
+        stack.push(...node.children);
+      }
+
+      pendingFocusEntryIdRef.current = entryId;
+      setSelectedTreeEntryId(entryId);
+      setLoadingTreeEntryId(entryId);
+      setError(null);
+      try {
+        const result = (await send("navigate_tree", { entryId })) as
+          | { editorText?: string; cancelled?: boolean }
+          | undefined;
+        if (result?.cancelled) {
+          pendingFocusEntryIdRef.current = null;
+          return;
+        }
+        setDraftText(result?.editorText ?? fallbackText);
+        addSystemMessage(
+          `Forking from ${formatTime(timestamp) || "selected message"}. Your previous branch is preserved.`,
+        );
+        requestAnimationFrame(() => {
+          const input = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
+          input?.focus();
+          input?.setSelectionRange(input.value.length, input.value.length);
+        });
+      } catch (err) {
+        pendingFocusEntryIdRef.current = null;
+        setError(err instanceof Error ? err.message : "Fork failed");
+      } finally {
+        setLoadingTreeEntryId(null);
+      }
+    },
+    [addSystemMessage, draftText, send, tree],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -942,90 +977,43 @@ export function App() {
   ];
 
   return (
-    <TooltipProvider>
-      <main className="flex h-full min-h-0 bg-background text-foreground">
-        <AppSidebar
-          open={sidebarOpen}
-          onToggle={setSidebarOpen}
-          onOpenSettings={openSettings}
-        >
-          <AppSidebarContent
+    <SidebarProvider
+      className="h-full min-h-0 bg-background text-foreground"
+      onOpenChange={setSidebarOpen}
+      open={sidebarOpen}
+      style={{ "--sidebar-width": "20rem" } as CSSProperties}
+    >
+      <ConversationSidebar
+        connection={connection}
+        leafId={leafId}
+        loadingEntryId={loadingTreeEntryId}
+        modelLabel={modelLabel}
+        onBrowseTree={browseTree}
+        onOpenSettings={openSettings}
+        selectedEntryId={selectedTreeEntryId}
+        sessionName={sessionName}
+        tree={tree}
+      />
+
+      <SidebarInset className="h-full min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <AppHeader
             connection={connection}
-            sessionName={sessionName}
+            contextPercent={contextPercent}
+            contextWindowSize={contextWindowSize}
+            isViewingOtherSession={false}
             modelLabel={modelLabel}
-            sessionQuery={sessionQuery}
-            sessionsLoading={sessionsLoading}
-            activeSessionFile={activeSessionFile}
-            viewedSessionFile={viewedSessionFile}
-            favourites={favourites}
-            projects={projects}
-            searchResults={searchResults}
-            onToggle={setSidebarOpen}
-            onOpenSettings={openSettings}
-            onLoadSessions={loadSessions}
-            onSessionQueryChange={setSessionQuery}
-            onSelectSession={selectSession}
-            onToggleFavourite={(filePath) =>
-              setFavourites((current) =>
-                current.includes(filePath) ? current.filter((item) => item !== filePath) : [...current, filePath],
-              )
-            }
+            onCompactContext={compactContext}
+            onCycleThinking={cycleThinking}
+            onOpenCommandPalette={() => setCommandOpen(true)}
+            onOpenModelPicker={openModelPicker}
+            onReturnToLive={() => send("sync_request").catch(() => {})}
+            onToggleContext={() => setContextOpen((open) => !open)}
+            shouldSuggestCompaction={shouldSuggestCompaction}
+            thinkingLevel={thinkingLevel}
+            title={sessionName}
+            totalCost={totalCost}
           />
-        </AppSidebar>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3">
-            <div className="min-w-0">
-              <div className="truncate font-medium text-sm">{viewedSessionTitle || sessionName}</div>
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                <ConnectionDot state={connection} />
-                <span>{connection}</span>
-                <span>/</span>
-                <span>{modelLabel}</span>
-              </div>
-            </div>
-
-            {viewedSessionFile && viewedSessionFile !== activeSessionFile && (
-              <Button onClick={returnToLive} size="sm" type="button" variant="ghost">
-                ← Live
-              </Button>
-            )}
-
-            <div className="flex items-center gap-1">
-              <Button onClick={openModelPicker} size="sm" type="button" variant="outline">
-                <ChevronsUpDownIcon className="size-4" />
-                <span className="hidden sm:inline">{modelLabel}</span>
-              </Button>
-              <Button onClick={cycleThinking} size="sm" type="button" variant="outline">
-                <BrainIcon className="size-4" />
-                <span className="hidden sm:inline">{thinkingLevel}</span>
-              </Button>
-              {contextWindowSize > 0 && (
-                <Button
-                  className={cn(shouldSuggestCompaction && "border-amber-500 text-amber-600")}
-                  onClick={() => setContextOpen((open) => !open)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  {contextPercent}%
-                </Button>
-              )}
-              {totalCost > 0 && (
-                <div className="hidden rounded-md border px-2 py-1 text-muted-foreground text-xs lg:block">
-                  ${totalCost.toFixed(4)}
-                </div>
-              )}
-              {shouldSuggestCompaction && (
-                <Button onClick={compactContext} size="sm" type="button" variant="secondary">
-                  Compact
-                </Button>
-              )}
-              <Button onClick={() => setCommandOpen(true)} size="icon-sm" type="button" variant="ghost">
-                <CommandIcon className="size-4" />
-              </Button>
-            </div>
-          </header>
 
           <div className="relative min-h-0 flex-1">
             <Conversation className="h-full">
@@ -1037,30 +1025,38 @@ export function App() {
                     title="Pi Web UI"
                   />
                 ) : (
-                  items.map((item) =>
-                    item.kind === "message" && item.role === "user" ? (
-                      <UserMessageView
-                        item={item as typeof item & { kind: "message"; role: "user" }}
-                        key={item.id}
-                        onCopy={(text) => copyText(text)}
-                        onEdit={advancedFeatures && item.entryId ? handleEditSubmit : undefined}
-                      />
-                    ) : (
-                      <ChatItemView
-                        item={item}
-                        key={item.id}
-                        onCopy={(text) => copyText(text)}
-                        onToggleTool={(id, open) =>
-                          setItems((current) =>
-                            current.map((candidate) =>
-                              candidate.kind === "tool" && candidate.id === id ? { ...candidate, open } : candidate,
-                            ),
-                          )
-                        }
-                        showThinking={showThinking}
-                      />
-                    ),
-                  )
+                  items.map((item) => (
+                    <div
+                      className={cn(
+                        "rounded-lg transition-[background-color,box-shadow] duration-300",
+                        [item.entryId, ...(item.relatedEntryIds ?? [])].includes(highlightedEntryId ?? "") &&
+                          "bg-primary/10 ring-1 ring-primary/40",
+                      )}
+                      key={item.id}
+                      ref={(node) => registerItemElement(item, node)}
+                    >
+                      {item.kind === "message" && item.role === "user" ? (
+                        <UserMessageView
+                          item={item as typeof item & { kind: "message"; role: "user" }}
+                          onCopy={(text) => copyText(text)}
+                          onFork={advancedFeatures && item.entryId ? forkConversationMessage : undefined}
+                        />
+                      ) : (
+                        <ChatItemView
+                          item={item}
+                          onCopy={(text) => copyText(text)}
+                          onToggleTool={(id, open) =>
+                            setItems((current) =>
+                              current.map((candidate) =>
+                                candidate.kind === "tool" && candidate.id === id ? { ...candidate, open } : candidate,
+                              ),
+                            )
+                          }
+                          showThinking={showThinking}
+                        />
+                      )}
+                    </div>
+                  ))
                 )}
               </ConversationContent>
               <ConversationScrollButton />
@@ -1107,39 +1103,18 @@ export function App() {
             </div>
           )}
 
-          {!viewingHistory ? (
-            <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
-              <div className="mx-auto w-full max-w-3xl">
-                <PromptInput
-                  accept="image/*"
-                  className="rounded-xl border bg-card shadow-sm"
-                  globalDrop={true}
-                  multiple
-                  onSubmit={submitMessage}
-                >
-                  <PromptAttachmentPreview />
-                  <PromptInputBody>
-                    <PromptInputTextarea className="min-h-20 resize-none" placeholder="Message Pi..." />
-                  </PromptInputBody>
-                  <PromptInputFooter>
-                    <PromptInputTools>
-                      <PromptAttachmentButton />
-                      <div className="hidden items-center gap-1 px-2 text-muted-foreground text-xs sm:flex">
-                        Enter sends, Shift+Enter inserts a newline
-                      </div>
-                    </PromptInputTools>
-                    <PromptInputSubmit onStop={abort} status={chatStatus} />
-                  </PromptInputFooter>
-                </PromptInput>
-              </div>
-            </footer>
-          ) : (
-            <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
-              <div className="mx-auto w-full max-w-3xl text-center text-muted-foreground text-sm py-4">
-                Viewing history
-              </div>
-            </footer>
-          )}
+          <ChatInput
+            archAvailable={archAvailable}
+            archModeEnabled={archModeEnabled}
+            chatStatus={chatStatus}
+            connection={connection}
+            onAbort={abort}
+            onSubmit={submitMessage}
+            onToggleArchMode={toggleArchMode}
+            onValueChange={setDraftText}
+            value={draftText}
+            viewingHistory={false}
+          />
         </div>
 
         {selectedSubagent && (
@@ -1165,11 +1140,11 @@ export function App() {
             onRenameSession={renameActiveSession}
             onSetAutoCompaction={async (enabled) => {
               setAutoCompaction(enabled);
-              await rpc({ type: "set_auto_compaction", enabled });
+              await send("set_auto_compaction", { enabled });
             }}
             onSetTheme={setThemeMode}
             onSetThinking={async (level) => {
-              await rpc({ type: "set_thinking_level", level });
+              await send("set_thinking_level", { level });
               setThinkingLevel(level);
             }}
             onToggleAuth={toggleAuth}
@@ -1188,7 +1163,7 @@ export function App() {
             onRespond={respondDialog}
           />
         )}
-      </main>
-    </TooltipProvider>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
