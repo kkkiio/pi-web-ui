@@ -150,7 +150,9 @@ The current `mirror_sync` type becomes a standard event:
 }
 ```
 
-Sent on WebSocket connect (full state snapshot) and after `session_tree` events.
+Sent on WebSocket connect (full state snapshot). After `session_tree` or turn
+completion events, the browser requests a fresh snapshot with `sync_request`
+instead of the extension broadcasting an unsolicited full state update.
 
 ### RPC Method Registry
 

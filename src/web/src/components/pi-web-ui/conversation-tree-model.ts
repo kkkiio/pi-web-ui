@@ -25,7 +25,7 @@ export function buildActivePathSet(tree: SessionTreeNode[], leafId: string | nul
 
 export function buildConversationTreeItems({
   activePathIds,
-  expandedIds,
+  collapsedIds,
   leafId,
   searchQuery,
   tree,
@@ -33,16 +33,87 @@ export function buildConversationTreeItems({
   tree: SessionTreeNode[];
   activePathIds: Set<string>;
   leafId: string | null;
-  expandedIds: Set<string>;
+  collapsedIds: Set<string>;
   searchQuery: string;
 }) {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const toolCallsById = buildToolCallIndex(tree);
-  const roots: ConversationTreeItem[] = [];
+  const nodeById = new Map<string, SessionTreeNode>();
+  const visibleById = new Map<string, SessionTreeNode>();
+  const visibleRoots: SessionTreeNode[] = [];
+  const items: ConversationTreeItem[] = [];
+
+  const sourceStack = [...tree].reverse();
+  while (sourceStack.length > 0) {
+    const node = sourceStack.pop();
+    if (!node?.entry.id) continue;
+    nodeById.set(node.entry.id, node);
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      sourceStack.push(node.children[index]);
+    }
+  }
+
+  const isVisibleNode = (node: SessionTreeNode) => {
+    const entry = node.entry;
+    const isCurrentLeaf = entry.id === leafId;
+    const isSettingsEntry =
+      entry.type === "label" ||
+      entry.type === "custom" ||
+      entry.type === "model_change" ||
+      entry.type === "thinking_level_change" ||
+      entry.type === "session_info";
+
+    if (isSettingsEntry) return false;
+    if (entry.type !== "message" || entry.message?.role !== "assistant" || isCurrentLeaf) return true;
+
+    const message = entry.message as { errorMessage?: string; stopReason?: string };
+    const hasText = extractText(entry.message.content).trim().length > 0;
+    const isErrorOrAborted = Boolean(message.errorMessage || (message.stopReason && message.stopReason !== "stop"));
+    return hasText || isErrorOrAborted;
+  };
+
+  for (const node of nodeById.values()) {
+    if (!isVisibleNode(node)) continue;
+    const nodeId = node.entry.id;
+    if (!nodeId) continue;
+    visibleById.set(nodeId, {
+      children: [],
+      entry: node.entry,
+      label: node.label,
+      labelTimestamp: node.labelTimestamp,
+    });
+  }
+
+  for (const node of nodeById.values()) {
+    const nodeId = node.entry.id;
+    if (!nodeId) continue;
+    const visibleNode = visibleById.get(nodeId);
+    if (!visibleNode) continue;
+
+    let parentId = node.entry.parentId ?? null;
+    while (parentId && !visibleById.has(parentId)) {
+      parentId = nodeById.get(parentId)?.entry.parentId ?? null;
+    }
+
+    const visibleParent = parentId ? visibleById.get(parentId) : undefined;
+    if (visibleParent) visibleParent.children.push(visibleNode);
+    else visibleRoots.push(visibleNode);
+  }
+
+  let effectiveLeafId: string | null = leafId;
+  while (effectiveLeafId && !visibleById.has(effectiveLeafId)) {
+    effectiveLeafId = nodeById.get(effectiveLeafId)?.entry.parentId ?? null;
+  }
+
+  const compareVisibleNodes = (a: SessionTreeNode, b: SessionTreeNode) => {
+    const activeDelta = Number(activePathIds.has(b.entry.id ?? "")) - Number(activePathIds.has(a.entry.id ?? ""));
+    if (activeDelta !== 0) return activeDelta;
+    return compareTreeNodes(a, b);
+  };
 
   const visit = (
     node: SessionTreeNode,
-    isBranchChild = false,
+    branchMeta?: { isBranchChild: boolean; isFirstBranchChild: boolean; isLastBranchChild: boolean },
   ): { items: ConversationTreeItem[]; matches: boolean } => {
     const id = node.entry.id;
     if (!id) return { items: [], matches: false };
@@ -53,10 +124,19 @@ export function buildConversationTreeItems({
     const childItems: ConversationTreeItem[] = [];
     let descendantMatches = false;
 
-    const sortedChildren = [...node.children].sort(compareTreeNodes);
+    const sortedChildren = [...node.children].sort(compareVisibleNodes);
     const hasBranchChildren = sortedChildren.length > 1;
-    for (const child of sortedChildren) {
-      const result = visit(child, hasBranchChildren);
+    for (const [index, child] of sortedChildren.entries()) {
+      const result = visit(
+        child,
+        hasBranchChildren
+          ? {
+              isBranchChild: true,
+              isFirstBranchChild: index === 0,
+              isLastBranchChild: index === sortedChildren.length - 1,
+            }
+          : undefined,
+      );
       if (result.matches) descendantMatches = true;
       childItems.push(...result.items);
     }
@@ -64,23 +144,30 @@ export function buildConversationTreeItems({
     const matches = selfMatches || descendantMatches;
     if (normalizedQuery && !matches) return { items: [], matches: false };
 
-    const isExpandable = sortedChildren.length > 1;
-    const isExpanded = Boolean(normalizedQuery) || expandedIds.has(id) || activePathIds.has(id);
-    const visibleChildren = isExpandable && isExpanded ? childItems : [];
+    const isBranchChild = Boolean(branchMeta?.isBranchChild);
+    const isFirstBranchChild = Boolean(branchMeta?.isFirstBranchChild);
+    const isLastBranchChild = Boolean(branchMeta?.isLastBranchChild);
+    const isSegmentExpanded = Boolean(normalizedQuery) || !collapsedIds.has(id);
+    const isExpandable = isBranchChild && childItems.length > 0;
+    const shouldNestChildren = hasBranchChildren || isExpandable;
+    const visibleChildren = shouldNestChildren && (!isExpandable || isSegmentExpanded) ? childItems : [];
+    const renderedChildCount = shouldNestChildren ? childItems.length : 0;
     const item: ConversationTreeItem = {
-      childCount: childItems.length,
+      childCount: renderedChildCount,
       children: visibleChildren,
       entry: node.entry,
       entryType: node.entry.type,
-      hasChildren: childItems.length > 0,
-      hiddenChildCount: isExpandable && !isExpanded ? childItems.length : 0,
+      hasChildren: renderedChildCount > 0,
+      hiddenChildCount: isExpandable && !isSegmentExpanded ? childItems.length : 0,
       id,
       detail,
       isExpandable,
-      isExpanded,
+      isExpanded: isSegmentExpanded,
       isBranchChild,
+      isFirstBranchChild,
       isForkable: node.entry.type === "message" && node.entry.message?.role === "user",
-      isLeaf: id === leafId,
+      isLastBranchChild,
+      isLeaf: id === effectiveLeafId,
       isSearchMatch: selfMatches && Boolean(normalizedQuery),
       label,
       order: 0,
@@ -88,25 +175,26 @@ export function buildConversationTreeItems({
       text,
     };
 
-    return { items: isExpandable ? [item] : [item, ...childItems], matches };
+    if (hasBranchChildren || isExpandable) return { items: [item], matches };
+    return { items: [item, ...childItems], matches };
   };
 
   let currentOrder = -1;
   let order = 0;
   const assignOrder = (item: ConversationTreeItem) => {
     item.order = order;
-    if (item.id === leafId) currentOrder = order;
+    if (item.id === effectiveLeafId) currentOrder = order;
     order += 1;
     for (const child of item.children) assignOrder(child);
   };
 
-  for (const node of [...tree].sort(compareTreeNodes)) {
+  for (const node of visibleRoots.sort(compareVisibleNodes)) {
     const result = visit(node);
-    roots.push(...result.items);
+    items.push(...result.items);
   }
-  for (const root of roots) assignOrder(root);
+  for (const root of items) assignOrder(root);
 
-  return { currentOrder, items: roots };
+  return { currentEntryId: effectiveLeafId, currentOrder, items };
 }
 
 export function collectVisibleConversationTreeItems(items: ConversationTreeItem[]) {

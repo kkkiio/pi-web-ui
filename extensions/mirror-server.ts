@@ -384,7 +384,6 @@ export default function (pi: ExtensionAPI) {
     latestCtx = ctx;
     const payload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
     broadcast({ type: "event", event: "session_tree", payload });
-    broadcast(await buildStateSnapshot(ctx));
   });
 
   // Forward arch-mode state changes from other extensions to browser clients
@@ -821,7 +820,6 @@ export default function (pi: ExtensionAPI) {
             ? await buildStateSnapshot(ctx)
             : { type: "event", event: "state_sync", payload: { entries: [], tree: [], leafId: null, model: null } };
           sendTo(ws, success(snapshot.payload));
-          sendTo(ws, snapshot);
           break;
         }
 
@@ -898,7 +896,6 @@ export default function (pi: ExtensionAPI) {
             break;
           }
           sendTo(ws, success({ editorText: result.editorText, cancelled: false }));
-          broadcast(await buildStateSnapshot(latestCtx));
           break;
         }
 

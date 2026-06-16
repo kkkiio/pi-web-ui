@@ -1,4 +1,5 @@
 import { Settings2Icon, TerminalIcon } from "lucide-react";
+import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -21,8 +22,12 @@ interface ConversationSidebarProps {
   leafId: string | null;
   selectedEntryId: string | null;
   loadingEntryId: string | null;
+  syncing: boolean;
+  syncError: string | null;
   onOpenSettings: () => void;
   onBrowseTree: (entryId: string) => void;
+  onRefreshTree: () => void;
+  onResizeSidebar: (width: number) => void;
 }
 
 export function ConversationSidebar({
@@ -33,9 +38,58 @@ export function ConversationSidebar({
   leafId,
   selectedEntryId,
   loadingEntryId,
+  syncing,
+  syncError,
   onOpenSettings,
   onBrowseTree,
+  onRefreshTree,
+  onResizeSidebar,
 }: ConversationSidebarProps) {
+  const suppressRailClickRef = useRef(false);
+  const startSidebarResize = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0 || !window.matchMedia("(min-width: 768px)").matches) return;
+      const sidebar = event.currentTarget.closest<HTMLElement>("[data-slot='sidebar']");
+      if (sidebar?.dataset.state !== "expanded") return;
+      event.preventDefault();
+
+      const startX = event.clientX;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+      suppressRailClickRef.current = false;
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        if (Math.abs(moveEvent.clientX - startX) < 4 && !suppressRailClickRef.current) return;
+        suppressRailClickRef.current = true;
+        onResizeSidebar(moveEvent.clientX);
+      };
+
+      const stopResize = () => {
+        const didResize = suppressRailClickRef.current;
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", stopResize);
+        document.removeEventListener("pointercancel", stopResize);
+        window.setTimeout(() => {
+          if (didResize) suppressRailClickRef.current = false;
+        }, 120);
+      };
+
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", stopResize);
+      document.addEventListener("pointercancel", stopResize);
+    },
+    [onResizeSidebar],
+  );
+  const handleRailClick = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (!suppressRailClickRef.current) return;
+    suppressRailClickRef.current = false;
+    event.preventDefault();
+  }, []);
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -63,7 +117,10 @@ export function ConversationSidebar({
           leafId={leafId}
           loadingEntryId={loadingEntryId}
           onBrowse={onBrowseTree}
+          onRefresh={onRefreshTree}
           selectedEntryId={selectedEntryId}
+          syncError={syncError}
+          syncing={syncing}
           tree={tree}
         />
       </SidebarContent>
@@ -79,7 +136,12 @@ export function ConversationSidebar({
           <span className="group-data-[collapsible=icon]:hidden">Settings</span>
         </Button>
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail
+        aria-label="Resize or toggle sidebar"
+        onClick={handleRailClick}
+        onPointerDown={startSidebarResize}
+        title="Drag to resize, click to toggle"
+      />
     </Sidebar>
   );
 }

@@ -20,8 +20,9 @@ As a developer using Pi Web UI, I want to see the tree structure of my current c
 - The tree shows all messages in the current session as nodes
 - Nodes are connected by lines showing parent→child relationships
 - The active branch (root → current leaf) is visually highlighted
-- Branch points (nodes with multiple children) are marked with a visual indicator
-- Child nodes are sorted by timestamp (oldest first)
+- Branch points are inferred from parent nodes with multiple visible children, but the visible branch affordance is shown on each child branch segment start, matching Pi TUI `/tree`
+- Direct branch segment starts show a short leading horizontal tree connector, so sibling branches are visually grouped at the point where the conversation actually diverges
+- Sibling branches are ordered with the active branch first when available, then chronologically
 
 **US-1.2 — Identify user operations first**
 As a developer, I want my own inputs and commands to stand out because they are the memorable edit, rollback, and fork anchors.
@@ -91,9 +92,9 @@ As a developer, I want a brief confirmation or tooltip explaining that forking a
 **US-4.1 — Collapse / expand branches**
 As a developer, I want to collapse branches I'm not interested in, so I can focus on a specific branch.
 
-- Branch points with multiple children default to showing first child only
-- A "[+N more]" indicator shows how many hidden children exist
-- Clicking the indicator expands all children
+- Sibling branch segment starts are visible by default, matching Pi TUI `/tree`
+- A branch segment start may show a collapse chevron when it has visible descendants
+- Clicking the chevron collapses or expands that segment's descendants only; sibling branch segments remain visible
 - Collapse/expand state persists within the session (not across page reloads)
 
 **US-4.2 — Scroll to current leaf**
@@ -138,7 +139,7 @@ As a developer, I want current-row selection and the current-position divider to
 - Tree data comes from `state_sync` event payload (see ADR 0008)
 - `tree: SessionTreeNode[]` — recursive tree structure from `ctx.sessionManager.getTree()`
 - `leafId: string | null` — current position in tree
-- Tree updates on: WebSocket connect (full state), `session_tree` event (after navigation)
+- Tree updates on: WebSocket connect (full state) and client-initiated `sync_request` after `session_tree` or turn completion events
 
 ### FR-2: Compact Tree Rendering
 
@@ -147,8 +148,11 @@ As a developer, I want current-row selection and the current-position divider to
 - The visual treatment follows a common shadcn/file-tree pattern: chevron expanders, nested depth, tree connectors, hover rows, and active-row styling
 - Indentation is based on branch nesting depth, not raw parent-chain depth; long linear conversations must not drift horizontally
 - Nested row right edges align with their parent row; indentation is left-only and must not reduce the usable right edge
-- Branch points are compact by default: show the active child when available, otherwise show the first chronological child, plus a `+N` indicator for hidden siblings
-- Users can expand a branch point to reveal hidden siblings, and collapse it back to the compact form
+- Direct branch child rows draw neutral CSS tree connectors from the parent branch line to the row edge, similar to ASCII branch prefixes, but ordinary linear descendants do not
+- Tree connector rendering is independent from the collapsible widget: a row can show a branch connector without showing a chevron
+- Branch points are represented through all visible child segment starts; sibling branches are not hidden behind a parent-level expander
+- Users can collapse a branch segment start to hide that segment's visible descendants, and expand it back without affecting sibling branch segments
+- Default rendering hides low-signal bookkeeping entries (`custom`, `label`, `model_change`, `thinking_level_change`, `session_info`) and reattaches visible descendants to their nearest visible ancestor before computing branch points
 - Current position: only the current leaf or explicitly browsed node receives selected-row styling
 - The current row is followed by a divider; rows after that divider are visually muted, while previous context keeps normal sidebar foreground
 
@@ -158,14 +162,15 @@ Each node renders:
 
 | Element | Description |
 |---------|-------------|
-| Tree line connector | shadcn `SidebarMenuSub` nesting/connector for expanded branch points |
-| Branch chevron | Only shown for expandable branch points; non-expandable rows do not reserve icon/chevron space |
+| Tree line connector | CSS connector drawn on branch child rows, independent from collapsible state |
+| Branch chevron | Shown on branch segment starts that can collapse/expand their visible descendants; the parent branch point itself does not get the primary fork affordance |
+| Branch child marker | Neutral horizontal/vertical tree connector rendered on branch segment start rows, outside the message button/content |
 | Node text | Truncated first line of message content, assistant action summary, or event name |
 | Node detail | Useful same-line muted summary when available: file path for Read/Edit/Write, command for Bash, description/type for Agent, or event/model detail |
 | Forkable marker | User input/command rows use a thin blue accent rail and slightly stronger text instead of an icon or tinted background |
 | Metadata | Omitted by default; timestamps are intentionally not shown until a higher-signal design is chosen |
 | Label badge | If entry has a label (from `getLabel()`) |
-| Branch indicator | If entry has multiple children: "[+N]" badge |
+| Branch indicator | If a branch segment start is collapsed: `+N` badge for hidden descendants |
 
 **Click targets on a node:**
 
@@ -267,6 +272,9 @@ interface ConversationTreeItem {
   // Interaction
   isExpandable: boolean;
   isExpanded: boolean;
+  isBranchChild: boolean;
+  isFirstBranchChild: boolean;
+  isLastBranchChild: boolean;
   hiddenChildCount: number;
   children: ConversationTreeItem[];
 }
@@ -279,17 +287,21 @@ function buildConversationTreeItems(args: {
   tree: SessionTreeNode[],
   activePathIds: Set<string>,
   leafId: string | null,
-  expandedIds: Set<string>,
+  collapsedIds: Set<string>,
   searchQuery: string
 }): { currentOrder: number; items: ConversationTreeItem[] }
 ```
 
 Walk the tree depth-first and build compact render nodes:
-1. Sort children chronologically
-2. Mark branch points with multiple children as expandable
-3. Inline single-child chains at the same sidebar depth so long linear sessions stay compact
-4. Keep true branch points as recursive `children`, record `hiddenChildCount`, and render nested shadcn `SidebarMenuSub` content only when expanded or searching
-5. Compute `currentOrder` for the visual divider/muted-after-current treatment, then derive `isLeaf` for selected-row focus
+1. Build the full entry map and active path from `leafId`
+2. Apply Pi TUI default visibility: hide bookkeeping entries and assistant tool-call-only messages unless they are the current leaf or an error/aborted message
+3. Rebuild the visible tree by attaching each visible node to its nearest visible ancestor, so hidden metadata nodes never become visible branch containers
+4. Order siblings with the active subtree first, then chronological order for the remaining sibling branches
+5. Treat a node as a branch segment start when its visible parent has multiple visible children; draw branch connectors and collapse affordances on those child segment starts, not on the parent branch point row
+6. Inline single-child chains at the same sidebar depth so long linear sessions stay compact
+7. Render every visible sibling branch segment start; connector metadata records first/middle/last sibling shape separately from collapse state
+8. Collapse state is keyed by the branch segment start id and hides only that segment's visible descendants
+9. Compute `currentOrder` for the visual divider/muted-after-current treatment, then derive `isLeaf` for selected-row focus
 
 ---
 
@@ -315,7 +327,7 @@ SidebarProvider
 | `hooks/use-mobile.ts` | shadcn sidebar mobile breakpoint hook |
 | `conversation-sidebar.tsx` | Product sidebar shell composed from shadcn `Sidebar*` primitives |
 | `conversation-sidebar-tree.tsx` | Compact recursive tree UI using `SidebarMenu`, `SidebarMenuSub`, and `Collapsible` |
-| `use-conversation-tree.ts` | Hook: active path, expanded branch state, search, and visible-item collection |
+| `use-conversation-tree.ts` | Hook: active path, collapsed segment state, search, and visible-item collection |
 | `conversation-tree-model.ts` | Pure model functions: active path, compact tree items, labels, forkable markers, chronological ordering |
 
 ### Modified Files
@@ -368,17 +380,18 @@ This is the core interaction model of the tree sidebar:
 
 ### Current Position Divider
 
-- The active path entry IDs are still derived by walking from `leafId` to root via `parentId`, but they are used for branch expansion and compacting decisions, not for painting every ancestor as selected
+- The active path entry IDs are still derived by walking from `leafId` to root via `parentId`, but they are used for sibling ordering and current-position lookup, not for painting every ancestor as selected
 - Only the current leaf or explicitly browsed entry gets selected-row styling
 - Render a divider immediately after the current row
 - Rows after that divider are muted so later/inactive history reads as outside the current position
 
-### Branch Points
+### Branch Points And Segment Starts
 
 - A node is a "branch point" when it has > 1 child
-- Default state: collapsed branch points render as a single parent row plus a `+N` badge for hidden children
-- Branch points on the active path are expanded so the current leaf remains visible
-- Clicking the chevron expands or collapses the nested `SidebarMenuSub`
+- The UI represents the branch at each child branch segment start, not by turning the parent branch point row into a fork container
+- Default state: every visible sibling branch segment start is rendered; active child segment is ordered first when present
+- Segment starts can be collapsed only when they have visible descendants
+- Clicking the chevron expands or collapses the nested descendants for that segment start only
 - Searching expands matching branches so matching descendants are visible
 
 ### Fork Button
@@ -410,12 +423,12 @@ This is the core interaction model of the tree sidebar:
 ## Acceptance Criteria
 
 1. Tree renders correctly for linear sessions (no branches)
-2. Tree renders correctly for branched sessions (multiple children under one parent)
+2. Tree renders correctly for branched sessions: parent branch points remain normal rows, and each visible child branch segment start carries the connector/expand affordance
 3. Current position is visually distinct, with a divider before muted later/inactive rows
 4. **Clicking a tree node body**: navigates to that entry, refreshes conversation list, does NOT modify chat input
 5. **Clicking Fork button (⎇) under a conversation user message**: navigates to the message's parent, refreshes conversation list, populates chat input with original text
 6. Modifying and re-sending the populated message creates a new branch (fork)
-7. Branch points show "[+N]" and expand/collapse correctly
+7. Branch segment starts show connector lines independently from chevrons, and collapse only their own descendants
 8. Search filters nodes and highlights matching text
 9. Tree updates live when new messages arrive (agent_end → request state_sync)
 10. Dark/light mode works correctly

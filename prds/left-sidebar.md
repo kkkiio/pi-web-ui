@@ -90,6 +90,7 @@ Sidebar (展开)                     Main Panel
 - **灰底高亮** = 当前正在展示的 session item（独立于绿点），浏览 history 时跟随所选 item，回到 live 时回到活跃 session
 - **Active session 标题** = 永远显示绿点对应的 session 名，浏览历史时不变化
 - **Input 区域** = 只在浏览活跃 session 时显示，查看历史时隐藏
+- **宽度调整** = 仅桌面展开状态启用；拖动 rail 改变 `--sidebar-width` 并持久化，点击 rail 不拖动时仍切换展开/收起
 
 ## User Stories
 
@@ -102,6 +103,8 @@ Sidebar (展开)                     Main Panel
 1b. 作为 Pi Web UI 用户，在侧边栏收起时，我希望看到一列图标按钮：顶部为展开按钮，底部为设置入口，布局简洁不杂乱。
 
 2. 作为 Pi Web UI 用户，我希望 sidebar 展开/收起时过渡平滑，toggle 不闪烁、内容不闪现。
+
+2a. 作为 Pi Web UI 桌面端用户，我希望可以拖动侧边栏右侧 rail 调整宽度，这样长会话树和文件路径能按当前屏幕空间阅读；轻点 rail 仍然用于展开/收起。
 
 3. 作为 Pi Web UI 用户，我希望 sidebar 顶部显示当前活跃会话的摘要（连接状态、模型名称），这样不用滚动就能了解会话概况。
 

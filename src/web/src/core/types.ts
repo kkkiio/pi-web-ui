@@ -213,6 +213,8 @@ export type ConversationTreeItem = {
   isExpandable: boolean;
   isExpanded: boolean;
   isBranchChild: boolean;
+  isFirstBranchChild: boolean;
+  isLastBranchChild: boolean;
   hiddenChildCount: number;
   childCount: number;
   isSearchMatch: boolean;

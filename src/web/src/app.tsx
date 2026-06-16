@@ -70,6 +70,12 @@ type PendingWsRequest = {
   reject: (reason?: unknown) => void;
 };
 
+const DEFAULT_LEFT_SIDEBAR_WIDTH = 320;
+const MIN_LEFT_SIDEBAR_WIDTH = 240;
+const MAX_LEFT_SIDEBAR_WIDTH = 560;
+const MIN_MAIN_CONTENT_WIDTH = 560;
+const LEFT_SIDEBAR_WIDTH_STORAGE_KEY = "pi-web-ui-left-sidebar-width";
+
 export function App() {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
@@ -93,10 +99,21 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
   );
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
+    const storedWidth = Number(localStorage.getItem(LEFT_SIDEBAR_WIDTH_STORAGE_KEY));
+    const requestedWidth = Number.isFinite(storedWidth) && storedWidth > 0 ? storedWidth : DEFAULT_LEFT_SIDEBAR_WIDTH;
+    const maxWidth = Math.max(
+      MIN_LEFT_SIDEBAR_WIDTH,
+      Math.min(MAX_LEFT_SIDEBAR_WIDTH, window.innerWidth - MIN_MAIN_CONTENT_WIDTH),
+    );
+    return Math.min(maxWidth, Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(requestedWidth)));
+  });
   const [tree, setTree] = useState<SessionTreeNode[]>([]);
   const [leafId, setLeafId] = useState<string | null>(null);
   const [selectedTreeEntryId, setSelectedTreeEntryId] = useState<string | null>(null);
   const [loadingTreeEntryId, setLoadingTreeEntryId] = useState<string | null>(null);
+  const [conversationSyncing, setConversationSyncing] = useState(false);
+  const [conversationSyncError, setConversationSyncError] = useState<string | null>(null);
   const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
 
@@ -124,6 +141,9 @@ export function App() {
   const pendingRequestsRef = useRef<Map<string, PendingWsRequest>>(new Map());
   const queuedRequestsRef = useRef<WsRequest[]>([]);
   const itemElementsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const conversationSyncInFlightRef = useRef(false);
+  const conversationSyncPendingRef = useRef(false);
+  const conversationSyncTimerRef = useRef<number | null>(null);
   const pendingFocusEntryIdRef = useRef<string | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -134,6 +154,14 @@ export function App() {
   const originalTitleRef = useRef(document.title);
 
   const resolvedTheme = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
+
+  const updateLeftSidebarWidth = useCallback((nextWidth: number) => {
+    const maxWidth = Math.max(
+      MIN_LEFT_SIDEBAR_WIDTH,
+      Math.min(MAX_LEFT_SIDEBAR_WIDTH, window.innerWidth - MIN_MAIN_CONTENT_WIDTH),
+    );
+    setLeftSidebarWidth(Math.min(maxWidth, Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(nextWidth))));
+  }, []);
 
   const nextId = useCallback((prefix: string) => {
     itemCounterRef.current += 1;
@@ -237,6 +265,42 @@ export function App() {
     [nextId],
   );
 
+  const requestConversationSync = useCallback(
+    async (options?: { debounce?: boolean }) => {
+      if (options?.debounce) {
+        if (conversationSyncTimerRef.current) window.clearTimeout(conversationSyncTimerRef.current);
+        conversationSyncTimerRef.current = window.setTimeout(() => {
+          conversationSyncTimerRef.current = null;
+          void requestConversationSync();
+        }, 250);
+        return;
+      }
+
+      if (conversationSyncInFlightRef.current) {
+        conversationSyncPendingRef.current = true;
+        return;
+      }
+
+      conversationSyncInFlightRef.current = true;
+      setConversationSyncing(true);
+      setConversationSyncError(null);
+      try {
+        const sync = (await send("sync_request")) as StateSyncPayload;
+        applySync(sync);
+      } catch (err) {
+        setConversationSyncError(err instanceof Error ? err.message : "Sync failed");
+      } finally {
+        conversationSyncInFlightRef.current = false;
+        setConversationSyncing(false);
+        if (conversationSyncPendingRef.current) {
+          conversationSyncPendingRef.current = false;
+          window.setTimeout(() => void requestConversationSync(), 0);
+        }
+      }
+    },
+    [applySync, send],
+  );
+
   const handleEvent = useCallback(
     (event: RpcEvent) => {
       setSubagents((current) => applySubagentEvent(current, event));
@@ -268,8 +332,14 @@ export function App() {
             unreadCountRef.current += 1;
             document.title = `(${unreadCountRef.current}) ${originalTitleRef.current}`;
           }
+          void requestConversationSync({ debounce: true });
           break;
         }
+
+        case "turn_end":
+        case "session_tree":
+          void requestConversationSync({ debounce: true });
+          break;
 
         case "message_start":
           if (event.message?.role === "assistant") {
@@ -470,7 +540,7 @@ export function App() {
           break;
       }
     },
-    [addSystemMessage, nextId],
+    [addSystemMessage, nextId, requestConversationSync],
   );
 
   useEffect(() => {
@@ -489,6 +559,24 @@ export function App() {
   useEffect(() => {
     localStorage.setItem("pi-web-ui-show-thinking", String(showThinking));
   }, [showThinking]);
+
+  useEffect(() => {
+    localStorage.setItem(LEFT_SIDEBAR_WIDTH_STORAGE_KEY, String(leftSidebarWidth));
+  }, [leftSidebarWidth]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setLeftSidebarWidth((current) => {
+        const maxWidth = Math.max(
+          MIN_LEFT_SIDEBAR_WIDTH,
+          Math.min(MAX_LEFT_SIDEBAR_WIDTH, window.innerWidth - MIN_MAIN_CONTENT_WIDTH),
+        );
+        return Math.min(maxWidth, Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(current)));
+      });
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if ("serviceWorker" in navigator && import.meta.env.PROD) {
@@ -513,6 +601,7 @@ export function App() {
         setConnection("connected");
         setError(null);
         flushQueuedRequests();
+        void requestConversationSync();
       };
 
       ws.onmessage = (messageEvent) => {
@@ -576,10 +665,11 @@ export function App() {
     return () => {
       intentionallyClosed = true;
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
+      if (conversationSyncTimerRef.current) window.clearTimeout(conversationSyncTimerRef.current);
       wsRef.current?.close();
       if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
     };
-  }, [applySync, flushQueuedRequests, handleEvent]);
+  }, [applySync, flushQueuedRequests, handleEvent, requestConversationSync]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -854,6 +944,7 @@ export function App() {
       try {
         const result = (await send("navigate_tree", { entryId })) as { cancelled?: boolean } | undefined;
         if (result?.cancelled) pendingFocusEntryIdRef.current = null;
+        else await requestConversationSync();
       } catch (err) {
         pendingFocusEntryIdRef.current = null;
         setError(err instanceof Error ? err.message : "Navigation failed");
@@ -861,7 +952,7 @@ export function App() {
         setLoadingTreeEntryId(null);
       }
     },
-    [send],
+    [requestConversationSync, send],
   );
 
   const forkConversationMessage = useCallback(
@@ -893,6 +984,7 @@ export function App() {
           pendingFocusEntryIdRef.current = null;
           return;
         }
+        await requestConversationSync();
         setDraftText(result?.editorText ?? fallbackText);
         addSystemMessage(
           `Forking from ${formatTime(timestamp) || "selected message"}. Your previous branch is preserved.`,
@@ -909,7 +1001,7 @@ export function App() {
         setLoadingTreeEntryId(null);
       }
     },
-    [addSystemMessage, draftText, send, tree],
+    [addSystemMessage, draftText, requestConversationSync, send, tree],
   );
 
   useEffect(() => {
@@ -981,7 +1073,7 @@ export function App() {
       className="h-full min-h-0 bg-background text-foreground"
       onOpenChange={setSidebarOpen}
       open={sidebarOpen}
-      style={{ "--sidebar-width": "20rem" } as CSSProperties}
+      style={{ "--sidebar-width": `${leftSidebarWidth}px` } as CSSProperties}
     >
       <ConversationSidebar
         connection={connection}
@@ -990,8 +1082,12 @@ export function App() {
         modelLabel={modelLabel}
         onBrowseTree={browseTree}
         onOpenSettings={openSettings}
+        onRefreshTree={() => void requestConversationSync()}
+        onResizeSidebar={updateLeftSidebarWidth}
         selectedEntryId={selectedTreeEntryId}
         sessionName={sessionName}
+        syncError={conversationSyncError}
+        syncing={conversationSyncing}
         tree={tree}
       />
 
@@ -1007,7 +1103,7 @@ export function App() {
             onCycleThinking={cycleThinking}
             onOpenCommandPalette={() => setCommandOpen(true)}
             onOpenModelPicker={openModelPicker}
-            onReturnToLive={() => send("sync_request").catch(() => {})}
+            onReturnToLive={() => void requestConversationSync()}
             onToggleContext={() => setContextOpen((open) => !open)}
             shouldSuggestCompaction={shouldSuggestCompaction}
             thinkingLevel={thinkingLevel}
