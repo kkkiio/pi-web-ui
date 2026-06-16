@@ -42,7 +42,7 @@
 
 ### 区域分区设计
 
-目前仅包含 Subagents 区域。未来可能增加 Artifacts 区域（计划、报告、预览等）。每个区域呈现该类型特定的有用信息，不使用通用的 context-item 形状。
+目前仅包含 Subagents 区域。未来可能增加 Artifacts 区域（计划、报告、预览等）。每个区域呈现该类型特定的有用信息，不混用不同内容类型的展示形状。
 
 ### 移动端适配
 
@@ -58,5 +58,5 @@
 
 ## Further Notes
 
-- 组件名保持 WorkspaceStatusFloat 以留出扩展 Artifacts 的空间
+- 浮窗为 Artifacts 扩展预留空间
 - Artifacts 计划在后续版本支持，届时 Subagents 和 Artifacts 在浮窗中各自独立分区

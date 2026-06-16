@@ -14,7 +14,7 @@
 
 2. 作为 Pi Web UI 用户，我希望浮窗中显示每个子 agent 的紧凑指标——工具调用次数、token 总量、耗时——这样能快速判断子 agent 的进展和规模。
 
-3. 作为 Pi Web UI 用户，当我点击浮窗中的一个已完成或出错的子 agent 行时，我希望右侧详情侧边栏打开并展示该子 agent 的完整结果，包括 Markdown 富文本回复、元数据网格和错误文本，这样能深入审查而不离开聊天。
+3. 作为 Pi Web UI 用户，当我点击浮窗中的一个已完成或出错的子 agent 行时，我希望右侧详情侧边栏打开并展示该子 agent 的完整结果，包括富文本回复、元数据网格和错误文本，这样能深入审查而不离开聊天。
 
 4. 作为 Pi Web UI 用户，我希望刷新页面后，之前已完成的子 agent 状态仍能正确恢复显示，这样不会丢失对当前会话进度的认知。
 
@@ -24,31 +24,21 @@
 
 ## Implementation Decisions
 
-### 数据来源分层
+### 数据来源
 
-子 agent UI 状态从三个来源构建：
+子 agent 状态由实时事件和历史记录共同构建。前台子 agent 在刷新后必须可恢复；后台子 agent 仅在扩展写入持久化条目时可恢复。
 
-1. **实时事件**：Mirror Server 转发的 `subagents:*` 扩展事件
-2. **Pi 事件**：`tool_execution_update` 和 `tool_execution_end` 事件中的 Agent 工具调用
-3. **历史记录**：持久化的 assistant 消息中的 Agent tool call 和 toolResult，以及扩展写入的 `subagents:record`、`subagent-notification` 等条目
+### 子 agent 展示信息
 
-前台 Agent 工具调用在刷新后必须可恢复（通过 tool call + toolResult 构建）；后台和定时子 agent 仅在扩展写入持久化条目时可恢复。
-
-### 子 agent 展示模型
-
-Web UI 维护每个子 agent 的展示模型，包含：稳定 id（优先使用 `details.agentId`，前台 Agent 使用 tool call id 作为临时 id）、类型/显示名称、描述、状态、来源、最终回复、错误文本、结果预览、工具调用次数、耗时、token 总量、压缩次数、输出文件路径、最后更新时间。
-
-### 状态定义
-
-状态值：`queued`（已创建未运行）、`running`（前台活跃或正在执行的子 agent）、`background`（后台工作已接受）、`completed`（完成）、`steered`（steering 交接完成）、`aborted`（用户或宿主中断）、`stopped`（策略或调度停止）、`error`（错误）。终态（completed/steered/aborted/stopped/error）不会被后续非终态更新覆盖。
+每个子 agent 展示以下信息：类型/显示名称、描述、状态（排队/运行中/后台/完成/已交接/中断/停止/错误）、最终回复、错误文本、工具调用次数、耗时、token 总量。终态不会被后续非终态更新覆盖。
 
 ### 浮动卡片与详情侧边栏的分工
 
-悬浮状态卡片仅显示紧凑摘要，最终回复和详细元数据在右侧详情侧边栏中展示。点击浮窗中的可点击行打开侧边栏并隐藏浮窗。详情侧边栏中的最终回复以 Markdown 富文本渲染，长内容在侧边栏体内滚动。
+悬浮状态卡片仅显示紧凑摘要，最终回复和详细元数据在右侧详情侧边栏中展示。点击浮窗中的可点击行打开侧边栏并隐藏浮窗。详情侧边栏中的最终回复以富文本渲染，长内容在侧边栏体内滚动。
 
-### 历史恢复逻辑
+### 历史恢复
 
-收到 `mirror_sync` 快照或从左侧导航栏打开已保存 session 时，重建子 agent 状态：assistant 的 Agent tool call 创建前景行（临时 id、运行中状态）；匹配的 toolResult 更新为终态信息。若结果文本以标准 "Agent completed..." 引言开头，在展示时将其移除。
+打开已保存 session 或刷新页面时，从历史记录重建子 agent 状态。结果文本中标准的 "Agent completed..." 引言在展示时移除。
 
 ### 注意力机制
 
@@ -63,5 +53,5 @@ Web UI 维护每个子 agent 的展示模型，包含：稳定 id（优先使用
 
 ## Further Notes
 
-- 悬浮卡片当前版本仅显示 Subagents，组件名保持 WorkspaceStatusFloat 以预留 Artifacts 支持
+- 悬浮卡片当前版本仅显示 Subagents，为其预留 Artifacts 扩展空间
 - 子 agent 的行交互规则：有最终回复或错误的行可点击；仅显示运行中的行可能不可点击

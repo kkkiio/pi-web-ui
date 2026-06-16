@@ -90,7 +90,8 @@ Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP
 │   ├── 0005-intercepted-command-ui-lifecycle.md    # Intercepted command UI state handling
 │   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
 │   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
-│   └── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
+│   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
+│   └── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
 ├── prds/                        # Product Requirement Documents (功能设计)
 │   ├── arch-mode-ui.md          # Architecture mode toggle UI
 │   ├── tree-sidebar.md          # Conversation tree sidebar
