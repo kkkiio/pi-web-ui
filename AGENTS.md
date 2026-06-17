@@ -27,11 +27,11 @@ After session replacement, any captured `ExtensionCommandContext` becomes stale 
 
 ### Extension output — `ctx.ui.setStatus` / `ctx.ui.notify` only
 
-Per `adrs/0001-pi-extension-output-policy.md`: never write to `stdout`/`stderr` from extension code. Use `ctx.ui.setStatus(...)` for persistent state and `ctx.ui.notify(...)` for one-shot user messages. Use `latestCtx`, not a captured `ctx`.
+Per `docs/adr/0001-pi-extension-output-policy.md`: never write to `stdout`/`stderr` from extension code. Use `ctx.ui.setStatus(...)` for persistent state and `ctx.ui.notify(...)` for one-shot user messages. Use `latestCtx`, not a captured `ctx`.
 
 ### Event forwarding — thin transport
 
-Per `adrs/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation.
+Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation.
 
 ### Mandatory Skill Usage
 
@@ -45,24 +45,26 @@ Real integration + visual validation workflow. Use after UI/WebSocket/session-tr
 
 ```
 .
-├── adrs/                        # Architecture Decision Records (必读)
-│   ├── 0001-pi-extension-output-policy.md          # Extension output rules (no stdout/stderr)
-│   ├── 0002-web-ui-extension-event-protocol.md     # Web UI event forwarding protocol
-│   ├── 0003-navigate-tree-via-captured-command-context.md # latestCtx vs latestExecuteCtx workaround
-│   ├── 0004-web-ui-access-bind-address.md          # Server bind address policy
-│   ├── 0005-intercepted-command-ui-lifecycle.md    # Intercepted command UI state handling
-│   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
-│   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
-│   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
-│   └── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
-├── prds/                        # Product Requirement Documents (功能设计)
-│   ├── arch-mode-ui.md          # Architecture mode toggle UI
-│   ├── tree-sidebar.md          # Conversation tree sidebar
-│   ├── columns-layout.md        # Multi-column layout design
-│   ├── branch-message.md        # Branch from user messages
-│   ├── left-sidebar.md          # Left sidebar design
-│   ├── subagent-integration.md  # Sub-agent status display
-│   └── workspace-status-float.md # Workspace status floating indicator
+├── docs/
+│   ├── adr/                     # Architecture Decision Records (必读)
+│   │   ├── 0001-pi-extension-output-policy.md          # Extension output rules (no stdout/stderr)
+│   │   ├── 0002-web-ui-extension-event-protocol.md     # Web UI event forwarding protocol
+│   │   ├── 0003-navigate-tree-via-captured-command-context.md # latestCtx vs latestExecuteCtx workaround
+│   │   ├── 0004-web-ui-access-bind-address.md          # Server bind address policy
+│   │   ├── 0005-intercepted-command-ui-lifecycle.md    # Intercepted command UI state handling
+│   │   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
+│   │   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
+│   │   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
+│   │   └── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
+│   ├── prd/                     # Product Requirement Documents (功能设计)
+│   │   ├── arch-mode-ui.md          # Architecture mode toggle UI
+│   │   ├── tree-sidebar.md          # Conversation tree sidebar
+│   │   ├── columns-layout.md        # Multi-column layout design
+│   │   ├── branch-message.md        # Branch from user messages
+│   │   ├── left-sidebar.md          # Left sidebar design
+│   │   ├── subagent-integration.md  # Sub-agent status display
+│   │   └── workspace-status-float.md # Workspace status floating indicator
+│   └── images/                  # Screenshots for README
 ├── extensions/
 │   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
 │   └── imessage-bridge.ts       # iMessage integration extension
@@ -99,7 +101,7 @@ Real integration + visual validation workflow. Use after UI/WebSocket/session-tr
 │       └── utils.ts             # shadcn/ui utility (cn helper)
 ├── public/                      # Static assets copied by Vite (icons, manifest, sw.js)
 ├── dist/                        # Vite build output (gitignored)
-├── docs/images/                 # Screenshots for README
+
 ├── MOBILE.md                    # Mobile access guide
 ├── RELEASING.md                 # npm publish and pi.dev verification checklist
 
