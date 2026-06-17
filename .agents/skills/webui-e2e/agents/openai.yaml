@@ -1,0 +1,4 @@
+interface:
+  display_name: "Web UI E2E Check"
+  short_description: "Real Pi Web UI integration and visual validation"
+  default_prompt: "Use $webui-e2e to run real Pi Web UI integration and visual validation."

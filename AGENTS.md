@@ -12,23 +12,7 @@ Pi extension that mirrors the terminal session in the browser — WebSocket + HT
 
 ## Policies & Mandatory Rules
 
-### Two context types — `latestCtx` and `latestExecuteCtx`
-
-Pi has **two distinct context types** with different capabilities:
-
-| Context | Variable | Source | Capabilities |
-|---------|----------|--------|-------------|
-| `ExtensionContext` | `latestCtx` | Event callbacks (`pi.on(...)`) | `ui`, `sessionManager`(read), `model`, `cwd`, `isIdle()`, `abort()`, `shutdown()`, `getContextUsage()`, `compact()` |
-| `ExtensionCommandContext` | `latestExecuteCtx` | `/webui` command handler capture | All of the above **+** `navigateTree()`, `newSession()`, `fork()`, `switchSession()`, `waitForIdle()`, `reload()`, `getSystemPromptOptions()` |
-
-`navigateTree` and other session-control methods **only exist on `ExtensionCommandContext`**. Pi's author deliberately restricts them to command handlers. See [ADR 0003](adrs/0003-navigate-tree-via-captured-command-context.md) for the full workaround design.
-
-**Rule — use the right context for the right job:**
-- Reading state, forwarding events, UI notifications → use `latestCtx`
-- Session control (`navigateTree`, `fork`, etc.) → use `latestExecuteCtx`, check for `null` first
-- Both are cleared on `session_start` and `session_shutdown`; `latestExecuteCtx` requires user to re-run `/webui`
-
-### `latestCtx` — Never use captured `ctx` in long-lived closures
+### `latestCtx` — Never capture `ctx` in long-lived closures
 
 The Pi extension runner **invalidates** `ExtensionContext` after session replacement, fork, switch, or reload. Any closure that captures a `ctx` parameter and uses it after one of those operations will throw:
 
@@ -38,17 +22,8 @@ The Pi extension runner **invalidates** `ExtensionContext` after session replace
 
 **All code that may run after a session lifecycle event** — WebSocket `close`/`error`/`connection` handlers, `setInterval` timers, async callbacks from external sources — must use `latestCtx`, never a captured `ctx` parameter.
 
-The same stale-context rule applies to `latestExecuteCtx`. After session replacement, any captured `ExtensionCommandContext` becomes stale and must be re-captured via `/webui`.
-
-Apply this rule when you:
-- Add or modify any closure in `extensions/mirror-server.ts` that references `ctx`
-- Add a new `pi.on(...)` handler that doesn't update `latestCtx`
-- Use `ctx.ui`, `ctx.sessionManager`, `ctx.cwd`, or any other `ctx` property inside `setInterval`, `setTimeout`, WebSocket event handlers, or command handlers
-- Add a new command handler that captures `ExtensionCommandContext` — must update `latestExecuteCtx`
-
-Skip for:
-- Synchronous code that runs immediately inside a `pi.on(...)` callback body, before any `await`
-- Code that only uses `pi` (the `ExtensionAPI`), not `ctx`
+The same stale-context rule applies to `latestExecuteCtx` (`ExtensionCommandContext`, captured via `/webui`, adds `navigateTree()`, `fork()`, and other session-control methods). 
+After session replacement, any captured `ExtensionCommandContext` becomes stale and must be re-captured via `/webui`.
 
 ### Extension output — `ctx.ui.setStatus` / `ctx.ui.notify` only
 
@@ -56,27 +31,15 @@ Per `adrs/0001-pi-extension-output-policy.md`: never write to `stdout`/`stderr` 
 
 ### Event forwarding — thin transport
 
-Per `adrs/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation. inside the extension. The browser owns feature interpretation.
-
-### Release workflow — `RELEASING.md` is authoritative
-
-Apply when you:
-- Publish `@kkkiio/pi-web-ui` to npm
-- Bump package versions or prepare release commits
-- Change `package.json` fields that affect npm packaging, `pi.image`, `files`, `prepare`, `prepack`, or `publishConfig`
-- Investigate pi.dev package catalog images or README rendering
-
-Before running `npm pack`, `npm version`, `npm publish`, or release-tag commands, read `RELEASING.md` and follow its checklist. Do not run `npm publish` without explicit user approval in the current task.
-
-Skip for local development builds and checks that are not intended for a release.
+Per `adrs/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation.
 
 ### Mandatory Skill Usage
 
+#### `$webui-e2e` 
+
+Real integration + visual validation workflow. Use after UI/WebSocket/session-tree changes where DOM-only checks can miss visible regressions.
+
 ## Project Structure Guide
-
-### Overview
-
-Pi Web UI is a Pi extension package (`npm:@kkkiio/pi-web-ui`). It starts an HTTP + WebSocket server inside the Pi process and serves a React frontend built with Vite.
 
 ### Repo Structure & Important Files
 
@@ -159,13 +122,7 @@ graph LR
 - **Frontend (`src/web/`)**: React + Vite + Tailwind. Connects to extension via WebSocket. Converts raw events to UI models in `chat-conversion.ts`.
 - **Dev proxy**: `vite dev` on `:4444` proxies `/api` → `:3001` and `/ws` → `ws://localhost:3001`.
 
-### Key Design Patterns
-
-#### 1. `latestCtx` — stale context guard
-
-The `ctx` parameter in Pi event callbacks is invalidated on session replacement. See Policies section for full rules.
-
-#### 2. Event envelope
+#### Event envelope
 
 All WebSocket messages to the browser use:
 
@@ -175,20 +132,15 @@ All WebSocket messages to the browser use:
 
 Pi core events carry their native fields. Extension-bus events nest under `event.payload`.
 
-#### 3. State snapshot on connect
+#### State snapshot on connect
 
 When a browser WebSocket connects, `buildStateSnapshot(latestCtx)` sends full session state (messages, model, session info, tool calls). After that, incremental events keep the UI in sync.
 
-#### 4. Commands from browser → extension
+#### Commands from browser → extension
 
-Browser sends JSON commands over WebSocket. Commands invoke Pi extension API methods (send message, cancel, set model, etc.) through `latestCtx`.
+Browser sends JSON commands over WebSocket. Commands invoke Pi extension API methods (send message, cancel, set model, etc.) through `latestCtx`/`latestExecuteCtx`.
 
 ## Operation Guide
-
-### Prerequisites
-
-- Node.js >= 18
-- npm
 
 ### Development Workflow
 
@@ -212,12 +164,6 @@ Output goes to `dist/`. Then run Pi with the built assets:
 
 ```bash
 PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
-```
-
-#### Install dependencies
-
-```bash
-npm install
 ```
 
 ### Testing & Checks
