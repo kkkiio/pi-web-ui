@@ -11,8 +11,6 @@ Pi Web UI connects to your running Pi session and gives you a browser interface.
 
 ![Pi Web UI example](docs/images/pi-web-ui-example.png)
 
-![Conversation tree sidebar](docs/images/conversation-tree-sidebar.jpg)
-
 - **Real-time streaming** — messages, tool calls, and thinking blocks
 - **Conversation tree sidebar** — inspect the current session tree, select nodes without changing drafts, branch from user messages, and continue from branch ends
 - **React UI** — Vite, Tailwind, shadcn/ui, AI Elements
