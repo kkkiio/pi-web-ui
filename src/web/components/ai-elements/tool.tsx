@@ -1,13 +1,24 @@
 "use client";
 
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
-import { CheckCircleIcon, ChevronRightIcon, CircleIcon, ClockIcon, XCircleIcon } from "lucide-react";
+import {
+  CheckCircleIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  CircleIcon,
+  ClockIcon,
+  XCircleIcon,
+} from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { isValidElement } from "react";
+import { isValidElement, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 
 import { CodeBlock } from "./code-block";
+
+const TOOL_BLOCK_PREVIEW_LINES = 12;
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
@@ -118,14 +129,39 @@ export type ToolInputProps = ComponentProps<"div"> & {
   input: ToolPart["input"];
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div className={cn("space-y-1.5 overflow-hidden", className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Parameters</h4>
-    <div className="rounded-md bg-muted/35">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const code = useMemo(() => JSON.stringify(input, null, 2) ?? "undefined", [input]);
+  const lines = useMemo(() => code.split("\n"), [code]);
+  const isLong = lines.length > TOOL_BLOCK_PREVIEW_LINES;
+  const visibleCode = isLong && !isExpanded ? lines.slice(0, TOOL_BLOCK_PREVIEW_LINES).join("\n") : code;
+  const buttonLabel = isExpanded ? "Collapse" : "Show full";
+
+  return (
+    <div className={cn("space-y-1.5 overflow-hidden", className)} {...props}>
+      <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Parameters</h4>
+      <div className="overflow-hidden rounded-md bg-muted/35">
+        <CodeBlock code={visibleCode} className={cn(isLong && "rounded-b-none border-b-0")} language="json" />
+        {isLong && (
+          <div className="flex justify-end border bg-background/80 px-2 py-1.5">
+            <Button
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? "Collapse parameters" : "Show full parameters"}
+              className="text-muted-foreground"
+              onClick={() => setIsExpanded((expanded) => !expanded)}
+              size="xs"
+              type="button"
+              variant="ghost"
+            >
+              {isExpanded ? <ChevronUpIcon className="size-3" /> : <ChevronDownIcon className="size-3" />}
+              {buttonLabel}
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: ToolPart["output"];
@@ -133,17 +169,33 @@ export type ToolOutputProps = ComponentProps<"div"> & {
 };
 
 export const ToolOutput = ({ className, output, errorText, ...props }: ToolOutputProps) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (!(output || errorText)) {
     return null;
   }
 
-  let Output = <div>{output as ReactNode}</div>;
+  const code =
+    errorText ||
+    (typeof output === "object" && !isValidElement(output)
+      ? JSON.stringify(output, null, 2)
+      : typeof output === "string"
+        ? output
+        : null);
+  const lines = code?.split("\n") ?? [];
+  const isLong = lines.length > TOOL_BLOCK_PREVIEW_LINES;
+  const visibleCode = code && isLong && !isExpanded ? lines.slice(0, TOOL_BLOCK_PREVIEW_LINES).join("\n") : code;
+  const buttonLabel = isExpanded ? "Collapse" : "Show full";
 
-  if (typeof output === "object" && !isValidElement(output)) {
-    Output = <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />;
-  } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />;
-  }
+  const Output = visibleCode ? (
+    <CodeBlock
+      code={visibleCode}
+      className={cn(isLong && "rounded-b-none border-b-0", errorText && "border-destructive/20 bg-destructive/10")}
+      language="json"
+    />
+  ) : (
+    <div>{output as ReactNode}</div>
+  );
 
   return (
     <div className={cn("space-y-1.5", className)} {...props}>
@@ -156,8 +208,23 @@ export const ToolOutput = ({ className, output, errorText, ...props }: ToolOutpu
           errorText ? "bg-destructive/10 text-destructive" : "bg-muted/35 text-foreground",
         )}
       >
-        {errorText && <div>{errorText}</div>}
         {Output}
+        {isLong && (
+          <div className="flex justify-end border bg-background/80 px-2 py-1.5">
+            <Button
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? "Collapse tool result" : "Show full tool result"}
+              className={cn("text-muted-foreground", errorText && "text-destructive hover:text-destructive")}
+              onClick={() => setIsExpanded((expanded) => !expanded)}
+              size="xs"
+              type="button"
+              variant="ghost"
+            >
+              {isExpanded ? <ChevronUpIcon className="size-3" /> : <ChevronDownIcon className="size-3" />}
+              {buttonLabel}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
