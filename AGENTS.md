@@ -1,15 +1,5 @@
 # AGENTS.md
 
-Pi extension that mirrors the terminal session in the browser — WebSocket + HTTP server inside Pi, React frontend.
-
-**Location:** `AGENTS.md` at the repository root.
-
-## Table of Contents
-
-1. [Policies & Mandatory Rules](#policies--mandatory-rules)
-2. [Project Structure Guide](#project-structure-guide)
-3. [Operation Guide](#operation-guide)
-
 ## Policies & Mandatory Rules
 
 ### `latestCtx` — Never capture `ctx` in long-lived closures
@@ -35,9 +25,9 @@ Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards e
 
 ### Mandatory Skill Usage
 
-#### `$webui-e2e` 
+#### `$webui-visual-check`
 
-Real integration + visual validation workflow. Use after UI/WebSocket/session-tree changes where DOM-only checks can miss visible regressions.
+Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree/sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
 
 ## Project Structure Guide
 
@@ -55,19 +45,27 @@ Real integration + visual validation workflow. Use after UI/WebSocket/session-tr
 │   │   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
 │   │   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
 │   │   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
-│   │   └── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
+│   │   ├── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
+│   │   ├── 0010-real-pi-web-ui-e2e.md                  # Real Pi agent Web UI E2E tests
+│   │   └── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
 │   ├── prd/                     # Product Requirement Documents (功能设计)
 │   │   ├── arch-mode-ui.md          # Architecture mode toggle UI
 │   │   ├── tree-sidebar.md          # Conversation tree sidebar
 │   │   ├── columns-layout.md        # Multi-column layout design
 │   │   ├── branch-message.md        # Branch from user messages
 │   │   ├── left-sidebar.md          # Left sidebar design
-│   │   ├── subagent-integration.md  # Sub-agent status display
-│   │   └── workspace-status-float.md # Workspace status floating indicator
+│   │   ├── right-panel.md           # Tabbed right panel design
+│   │   ├── workspace-artifacts.md   # Markdown artifact detection/display
+│   │   └── workspace-status-float.md # Git status + artifacts floating indicator
 │   └── images/                  # Screenshots for README
 ├── extensions/
 │   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
 │   └── imessage-bridge.ts       # iMessage integration extension
+├── e2e/                         # Real Pi agent E2E tests
+│   ├── features/                # Playwright-BDD feature files
+│   ├── steps/                   # Step definitions
+│   ├── fixtures/                # Faux provider extension and response fixtures
+│   └── harness/                 # pi --mode rpc process/session launcher
 ├── src/web/                     # React frontend source
 │   ├── index.html               # Vite entry HTML
 │   ├── index.css                # Global styles (Tailwind)
@@ -79,7 +77,7 @@ Real integration + visual validation workflow. Use after UI/WebSocket/session-tr
 │   │   │   ├── types.ts         # TypeScript types for WebSocket protocol
 │   │   │   ├── chat-conversion.ts # Converts raw events → UI message models
 │   │   │   ├── format.ts        # Display formatting utilities
-│   │   │   ├── subagents.ts     # Sub-agent data handling
+│   │   │   ├── workspace-artifacts.ts # Markdown artifact recovery from tool events/session entries
 │   │   │   ├── tool-summary.ts  # Tool call summary rendering
 │   │   │   └── constants.ts     # Shared constants
 │   │   └── components/
@@ -88,10 +86,10 @@ Real integration + visual validation workflow. Use after UI/WebSocket/session-tr
 │   │       │   ├── conversation-sidebar.tsx     # Session tree sidebar
 │   │       │   ├── conversation-sidebar-tree.tsx # Tree view component
 │   │       │   ├── command-palette.tsx   # Command palette
-│   │       │   ├── subagent-detail-sidebar.tsx
 │   │       │   ├── model-picker.tsx
 │   │       │   ├── settings-panel.tsx
 │   │       │   ├── context-popover.tsx
+│   │       │   ├── right-panel.tsx
 │   │       │   ├── workspace-status-float.tsx
 │   │       │   ├── user-message-view.tsx # User message with Branch button
 │   │       │   └── ...
@@ -129,10 +127,10 @@ graph LR
 All WebSocket messages to the browser use:
 
 ```json
-{ "type": "event", "event": { "type": "<event-name>", ... } }
+{ "type": "event", "event": "<event-name>", "payload": { "...": "..." } }
 ```
 
-Pi core events carry their native fields. Extension-bus events nest under `event.payload`.
+Pi core events carry their native fields inside `payload`. Extension-bus events keep their source payload nested under `payload` when needed to avoid field collisions.
 
 #### State snapshot on connect
 
@@ -170,13 +168,60 @@ PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
 
 ### Testing & Checks
 
+Testing has three layers:
+
+| Layer | Purpose | Includes Pi agent? | Primary tool |
+|-------|---------|--------------------|--------------|
+| Check | Fast local static/build validation | No | `just check`, `npm run build:web` |
+| E2E | Validate the real Pi Web UI product path | Yes | Playwright-BDD + `pi --mode rpc` + faux provider |
+| Visual validation | Inspect rendered UI for visible layout defects | Optional | Browser screenshots via `$webui-visual-check` |
+
+E2E means the test includes the real Pi product path:
+
+```text
+Playwright Browser
+  -> Pi mirror-server static UI + /ws
+  -> pi --mode rpc
+  -> Pi agent session
+  -> faux LLM provider
+  -> real tools / real temp workspace / real git
+```
+
+E2E rules:
+
+- Put E2E tests under `e2e/`.
+- Use Playwright-BDD feature files for product-level flows.
+- Start a real `pi --mode rpc` process for each scenario.
+- Load the local `extensions/mirror-server.ts` extension normally.
+- Use built `dist` assets served by mirror-server in CI.
+- Use a faux LLM provider only to make model responses deterministic.
+- Use real Pi `write` / `edit` tools when testing Markdown artifacts.
+- Use real git repositories in temp workspaces when testing git status or diff.
+- Do not mock `/ws`, set React state directly, or call component props in E2E.
+
+Run the real Pi E2E suite with:
+
+```bash
+npm run e2e
+```
+
+Regenerate Playwright tests from feature files without running the browser with:
+
+```bash
+npm run e2e:gen
+```
+
+GitHub Actions runs E2E on every PR after `npm run build:web`. Local default checks do not run E2E unless the developer explicitly invokes the E2E command or is changing E2E harness/tests.
+
+Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree/sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E.
+
 Run before committing:
 
 ```bash
 just check
 ```
 
-This runs `biome check .` (format + lint). To format only:
+This runs `npx tsc --noEmit` and then `npm run check` (`biome check .`). To format only:
 
 ```bash
 just fmt
@@ -210,6 +255,22 @@ When adding a new browser → extension command:
 1. `src/web/src/core/ws.ts` — add the send function
 2. `extensions/mirror-server.ts` — add the command handler (use `latestCtx`)
 3. `src/web/src/core/types.ts` — add the type
+
+When changing Workspace Status Float, Right Panel, or Artifacts:
+
+1. `docs/prd/workspace-status-float.md` — update floating summary and entry behavior
+2. `docs/prd/right-panel.md` — update tab, toggle, and panel lifecycle behavior
+3. `docs/prd/workspace-artifacts.md` — update Markdown artifact source and display rules
+4. `docs/adr/0008-unified-websocket-protocol.md` — update WebSocket methods if data access changes
+5. `src/web/src/components/pi-web-ui/workspace-status-float.tsx` and related right-panel components — keep UI behavior aligned with the PRDs
+
+When changing real Pi E2E behavior:
+
+1. `docs/adr/0010-real-pi-web-ui-e2e.md` — update process, fixtures, or scope decisions
+2. `e2e/features/*.feature` — update product-level scenarios
+3. `e2e/steps/*.ts` — update Playwright-BDD steps
+4. `e2e/harness/*.ts` and `e2e/fixtures/**` — update Pi launch, temp workspace, or faux provider behavior
+5. `.github/workflows/ci.yml` and `package.json` — keep CI and local commands aligned
 
 ### Reference
 

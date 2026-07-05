@@ -63,6 +63,9 @@ Examples:
 { "type": "req", "id": "r3", "method": "set_model", "params": { "provider": "anthropic", "modelId": "claude-sonnet-4-5" } }
 { "type": "req", "id": "r4", "method": "navigate_tree", "params": { "entryId": "a1b2c3d4" } }
 { "type": "req", "id": "r5", "method": "get_files", "params": { "path": "/src" } }
+{ "type": "req", "id": "r6", "method": "get_git_status" }
+{ "type": "req", "id": "r7", "method": "get_git_diff" }
+{ "type": "req", "id": "r8", "method": "get_file_content", "params": { "path": "docs/prd/workspace-artifacts.md" } }
 ```
 
 #### Response (server → browser)
@@ -154,6 +157,10 @@ Sent on WebSocket connect (full state snapshot). After `session_tree` or turn
 completion events, the browser requests a fresh snapshot with `sync_request`
 instead of the extension broadcasting an unsolicited full state update.
 
+Workspace git state is intentionally not part of `state_sync`. The browser asks
+for it with `get_git_status` when connection, sync, tool, or turn events imply
+the workspace may have changed.
+
 ### RPC Method Registry
 
 All current commands become methods under the unified `req`/`res` pattern:
@@ -186,6 +193,9 @@ All current commands become methods under the unified `req`/`res` pattern:
 | `GET /api/health` | `health` | — |
 | `GET /api/files` | `get_files` | `{ path? }` |
 | `POST /api/open` | `open_file` | `{ filePath }` |
+| New | `get_git_status` | — |
+| New | `get_git_diff` | `{ path? }` optional file-specific diff |
+| New | `get_file_content` | `{ path }` |
 | `GET /api/projects` | Deleted (unused in current UI) | — |
 | `POST /api/projects/launch` | Deleted (iTerm2-specific) | — |
 | `GET /api/sessions` | Deleted (ADR 0007) | — |

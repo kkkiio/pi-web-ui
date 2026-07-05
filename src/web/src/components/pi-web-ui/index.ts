@@ -14,7 +14,7 @@ export {
   PromptAttachmentButton,
   PromptAttachmentPreview,
 } from "./prompt-attachments";
+export { RightPanel } from "./right-panel";
 export { SettingsPanel } from "./settings-panel";
-export { SubagentDetailSidebar } from "./subagent-detail-sidebar";
 export { UserMessageView } from "./user-message-view";
 export { WorkspaceStatusFloat } from "./workspace-status-float";

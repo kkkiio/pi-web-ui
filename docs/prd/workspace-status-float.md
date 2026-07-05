@@ -2,61 +2,77 @@
 
 ## Problem Statement
 
-在 Pi Web UI 双列模式下，聊天区域的上方和右侧空余空间没有被有效利用。当用户在使用子 agent 或生成计划、报告等中间结果时，没有任何轻量级的方式能够感知当前后台任务的进展。用户要么不得不密切关注聊天流中零散的更新，要么在聊天头部寻找本不存在的状态区域。
+在 Pi Web UI 双列模式下，聊天区域右上角有空间可以承载当前 workspace 的轻量状态。用户需要快速看到当前 git branch、当前 diff 规模，以及本轮 agent 产出的 Markdown artifacts。现在这些信息分散在聊天工具卡片、文件系统和终端状态中，用户需要额外操作才能确认当前 workspace 发生了什么。
 
 ## Solution
 
-在聊天区域右上角增加一个 Codex 风格的悬浮状态卡片，紧凑地展示当前 workspace 的关键活动摘要。当前版本仅显示子 agent（Subagents）的实时状态概览，后续可扩展展示 Artifacts（计划、报告等）。浮窗与右侧详情侧边栏互斥：点击需要展开查看的条目时，自动打开侧边栏并隐藏浮窗。
+在聊天区域右上角增加 Codex 风格的 Workspace Status Float。浮窗展示 git 状态和 Markdown Artifacts 摘要；点击 git diff 或 artifact 会打开 Right Panel 对应 tab。浮窗是入口和摘要，不负责展示完整 diff 或完整文件内容。
 
 ## User Stories
 
-1. 作为 Pi Web UI 桌面用户，我希望在双列模式的聊天区域右上角看到一个悬浮状态卡片，这样我可以随时了解后台子 agent 的运行状态，而不必切换视图或打断聊天。
-
-2. 作为 Pi Web UI 桌面用户，即使当前没有任何活跃项，我希望浮窗仍然显示一个紧凑的空状态，而不是完全消失，这样我知道浮窗功能可用且处于就绪状态。
-
-3. 作为 Pi Web UI 桌面用户，当我打开右侧详情侧边栏时，我希望悬浮卡片自动隐藏，以免两个表面冲突或重复展示同一信息。
-
-4. 作为 Pi Web UI 移动端用户，我不希望看到一个大浮窗覆盖在聊天区域上，而是通过一个紧凑的触发按钮或 sheet 来访问同样的状态信息。
-
-5. 作为 Pi Web UI 用户，我希望浮窗中的条目在收到更新（如子 agent 完成、出错或收到新信息）时能够以注意力状态提示我，这样我不会错过关键反馈。
-
-6. 作为 Pi Web UI 用户，我希望浮窗定位在聊天区域的右上角，不遮挡消息内容也不覆盖消息输入框，这样不会影响正常的阅读和输入流程。
+1. 作为 Pi Web UI 桌面用户，我希望在聊天区域右上角看到当前 git branch，这样我能确认当前工作分支。
+2. 作为 Pi Web UI 桌面用户，我希望看到当前 git diff 统计，例如 `+251 -414`，这样我能快速判断变更规模。
+3. 作为 Pi Web UI 用户，我希望点击 git diff 状态后在右侧 panel 查看完整 diff。
+4. 作为 Pi Web UI 用户，我希望看到 agent 修改过的 Markdown artifacts，并能点击查看文件内容。
+5. 作为 Pi Web UI 用户，即使当前没有变更或 artifact，浮窗也应显示紧凑空状态，而不是完全消失。
+6. 作为移动端用户，我不希望大浮窗覆盖聊天内容，而是通过紧凑入口打开同样的状态内容。
 
 ## Implementation Decisions
 
-### 仅属于双列模式
+### 显示内容
 
-悬浮状态卡片仅在两列模式下显示。当右侧详情侧边栏打开时（三列模式），浮窗隐藏。浮窗与右侧详情侧边栏是互斥的展示表面，避免右侧区域出现两个内容源。
+Workspace Status Float v1 包含两个区域：
 
-### 默认可见
+- Git：当前 branch、diff 统计、非 git repo 或无变更状态。
+- Artifacts：最近由 `edit` / `write` 工具改动过的 Markdown 文件。
 
-桌面双列模式下浮窗默认显示。即使没有任何支持的条目，也展示紧凑的空状态，而不是完全消失。
+不显示 workspace 名称、路径来源或 `Local` 行。
 
-### 位置与交互
+### Git 状态
 
-定位在聊天区域右上角，视觉上与消息流保持分离但不形成侧面板。不遮挡消息输入框。点击需要展开查看的条目行时，打开右侧详情侧边栏并隐藏浮窗。
+前端主动查询 git 状态。Git 状态不放入 `state_sync` / `get_state`。前端在 WebSocket 连接、重连、session sync、工具结束和 turn 结束后 debounce 请求最新状态。
 
-### 注意力状态
+Git 区域展示：
 
-运行中或排队中的条目视为活跃。失败、停止、中断或完成的条目在未被打开查看前可标记为待关注。已打开的条目若后续收到新信息可再次请求关注。关注行为仅为 UI 状态，不修改底层结果。
+- 当前 branch，例如 `main`。
+- 有变更时显示 additions/deletions，例如 `+251 -414`。
+- 没有变更时显示 `No changes`。
+- 不在 git repo 时显示 `No git repository`。
 
-### 区域分区设计
+点击 diff 统计或 `No changes` 行打开 Right Panel 的 `git-diff` tab。无 git repo 时该行不可打开。
 
-目前仅包含 Subagents 区域。未来可能增加 Artifacts 区域（计划、报告、预览等）。每个区域呈现该类型特定的有用信息，不混用不同内容类型的展示形状。
+### Artifacts 摘要
+
+Artifacts 区域展示最近 Markdown artifacts，来源规则见 `docs/prd/workspace-artifacts.md`。每行点击后打开 Right Panel 的 `artifact-file` tab。重复点击同一 artifact 激活已有 tab。
+
+### 与 Right Panel 的关系
+
+Workspace Status Float 只负责打开 tab：
+
+- Git diff 行打开 `git-diff` tab。
+- Artifact 行打开 `artifact-file` tab。
+
+Right Panel 打开时，浮窗隐藏。Right Panel 隐藏或关闭后，浮窗恢复。
 
 ### 移动端适配
 
-移动端不以大型浮窗形式展示。使用紧凑的触发按钮或 sheet 作为替代方案。
+移动端不显示大型浮窗。移动端使用紧凑触发按钮或 sheet 入口，内容结构保持与桌面浮窗一致。
 
 ## Out of Scope
 
-- 不将浮窗设计为通用的 context-item 渲染器
-- 当前版本不展示 Progress、Environment 或 Sources
-- 不暴露原始事件 JSON 作为浮窗主要内容
-- 不在首个版本中添加手动创建子 agent 的控制
-- 不替换现有的 model、session、settings 或 TUI 管理控件
+- 不展示完整 git diff。
+- 不在浮窗内展示完整 artifact 内容。
+- 不执行 commit、push、checkout 或其他 git 操作。
+- 不在浮窗内编辑文件。
+- 不展示外部 agent 状态。
+- 不将浮窗设计成通用 context item 渲染器。
 
-## Further Notes
+## Acceptance Criteria
 
-- 浮窗为 Artifacts 扩展预留空间
-- Artifacts 计划在后续版本支持，届时 Subagents 和 Artifacts 在浮窗中各自独立分区
+1. 桌面双列模式下浮窗默认可见。
+2. 浮窗展示当前 branch 和 diff additions/deletions。
+3. 无变更时显示 `No changes`，非 git repo 时显示 `No git repository`。
+4. 点击 git diff 打开 Right Panel 的 `git-diff` tab。
+5. `edit` / `write` 修改 Markdown 文件后，Artifacts 区域出现对应文件。
+6. 点击 Artifact 打开 Right Panel 的 `artifact-file` tab。
+7. Right Panel 打开时浮窗隐藏；Right Panel 关闭后浮窗恢复。

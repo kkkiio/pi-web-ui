@@ -7,16 +7,6 @@ export type AppView = "chat" | "projects";
 export type SystemTone = "info" | "success" | "error";
 export type ToolState = "input-streaming" | "input-available" | "output-available" | "output-error";
 
-export type SubagentStatus =
-  | "queued"
-  | "running"
-  | "background"
-  | "completed"
-  | "steered"
-  | "aborted"
-  | "stopped"
-  | "error";
-
 export type PromptImage = {
   data: string;
   mimeType: string;
@@ -222,29 +212,60 @@ export type ConversationTreeItem = {
   order: number;
 };
 
-export type SubagentTokens = {
-  input?: number;
-  output?: number;
-  total?: number;
+export type GitStatusResult = {
+  isRepo: boolean;
+  branch: string | null;
+  hasChanges: boolean;
+  additions: number;
+  deletions: number;
+  untracked?: number;
 };
 
-export type SubagentViewState = {
+export type GitDiffResult = {
+  isRepo: boolean;
+  branch: string | null;
+  diff: string;
+};
+
+export type FileContentResult = {
+  path: string;
+  name: string;
+  size: number;
+  content: string;
+};
+
+export type WorkspaceArtifact = {
   id: string;
-  type?: string;
-  description?: string;
-  status: SubagentStatus;
-  finalResponse?: string;
-  resultPreview?: string;
-  error?: string;
-  toolUses?: number;
-  durationMs?: number;
-  tokens?: SubagentTokens;
-  outputFile?: string;
-  compactionCount?: number;
-  isBackground?: boolean;
-  source?: "foreground" | "background" | "scheduled" | "history" | "event";
+  path: string;
+  name: string;
+  directory: string;
+  tool: "edit" | "write";
   updatedAt: number;
 };
+
+export type RightPanelTab =
+  | {
+      id: "git-diff";
+      kind: "git-diff";
+      title: string;
+      branch: string | null;
+      diff?: string;
+      isRepo?: boolean;
+      loading?: boolean;
+      error?: string;
+      updatedAt: number;
+    }
+  | {
+      id: `artifact:${string}`;
+      kind: "artifact-file";
+      title: string;
+      path: string;
+      content?: string;
+      size?: number;
+      loading?: boolean;
+      error?: string;
+      updatedAt: number;
+    };
 
 export type ExtensionDialog = {
   id: string;

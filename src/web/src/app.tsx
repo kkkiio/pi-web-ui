@@ -26,8 +26,8 @@ import {
   ConversationSidebar,
   ExtensionDialogView,
   ModelPicker,
+  RightPanel,
   SettingsPanel,
-  SubagentDetailSidebar,
   UserMessageView,
   WorkspaceStatusFloat,
 } from "./components/pi-web-ui";
@@ -41,26 +41,31 @@ import {
   syncToItems,
 } from "./core/chat-conversion";
 import { copyText, formatTime, formatTokens, isEditableTarget, shortModelName } from "./core/format";
-import { applySubagentEvent, type SubagentStateMap, subagentList, subagentsFromEntries } from "./core/subagents";
 import { isToolExpandable } from "./core/tool-summary";
 import type {
   ChatItem,
   ChatSubmitStatus,
   ConnectionState,
   ExtensionDialog,
+  FileContentResult,
+  GitDiffResult,
+  GitStatusResult,
   ModelInfo,
   PromptCommand,
+  RightPanelTab,
   RpcEvent,
   SessionTreeNode,
   StateSyncPayload,
   SystemTone,
   ThemeMode,
   Usage,
+  WorkspaceArtifact,
   WsError,
   WsEvent,
   WsRequest,
   WsResponse,
 } from "./core/types";
+import { artifactsFromEntries, artifactsFromToolEvent, mergeArtifacts } from "./core/workspace-artifacts";
 import { wsUrl } from "./core/ws";
 
 type PendingWsRequest = {
@@ -129,8 +134,12 @@ export function App() {
   const [authConfigured, setAuthConfigured] = useState(false);
   const [authEnabled, setAuthEnabled] = useState(false);
   const [dialog, setDialog] = useState<ExtensionDialog | null>(null);
-  const [subagents, setSubagents] = useState<SubagentStateMap>({});
-  const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
+  const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
+  const [gitLoading, setGitLoading] = useState(false);
+  const [artifacts, setArtifacts] = useState<WorkspaceArtifact[]>([]);
+  const [rightPanelTabs, setRightPanelTabs] = useState<RightPanelTab[]>([]);
+  const [activeRightPanelTabId, setActiveRightPanelTabId] = useState<string | null>(null);
+  const [rightPanelVisible, setRightPanelVisible] = useState(false);
 
   const [lastUsage, setLastUsage] = useState<Usage | null>(null);
   const [contextWindowSize, setContextWindowSize] = useState(0);
@@ -147,6 +156,7 @@ export function App() {
   const pendingFocusEntryIdRef = useRef<string | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
+  const gitRefreshTimerRef = useRef<number | null>(null);
   const streamingIdRef = useRef<string | null>(null);
   const streamingHasToolCallRef = useRef(false);
   const itemCounterRef = useRef(0);
@@ -231,10 +241,37 @@ export function App() {
     }
   }, [send]);
 
+  const refreshGitStatus = useCallback(async () => {
+    setGitLoading(true);
+    try {
+      setGitStatus((await send("get_git_status")) as GitStatusResult);
+    } catch (err) {
+      console.error("[pi-web-ui] get_git_status failed", err);
+      setGitStatus(null);
+    } finally {
+      setGitLoading(false);
+    }
+  }, [send]);
+
+  const requestGitStatusRefresh = useCallback(
+    (options?: { debounce?: boolean }) => {
+      if (options?.debounce) {
+        if (gitRefreshTimerRef.current) window.clearTimeout(gitRefreshTimerRef.current);
+        gitRefreshTimerRef.current = window.setTimeout(() => {
+          gitRefreshTimerRef.current = null;
+          void refreshGitStatus();
+        }, 350);
+        return;
+      }
+      void refreshGitStatus();
+    },
+    [refreshGitStatus],
+  );
+
   const applySync = useCallback(
     (sync: StateSyncPayload) => {
       const parsedItems = syncToItems(sync.entries ?? [], nextId);
-      const nextSubagents = subagentsFromEntries(sync.entries ?? []);
+      const nextArtifacts = artifactsFromEntries(sync.entries ?? []);
       const nextTree = sync.tree ?? [];
       setItems(parsedItems);
       setTree(nextTree);
@@ -250,8 +287,7 @@ export function App() {
         }
         return sync.leafId ?? null;
       });
-      setSubagents(nextSubagents);
-      setSelectedSubagentId((current) => (current && nextSubagents[current] ? current : null));
+      setArtifacts(nextArtifacts);
       setChatStatus(sync.isStreaming ? "streaming" : "ready");
       setConnection("connected");
       setSessionName(sync.sessionName || "Pi Web UI");
@@ -261,8 +297,9 @@ export function App() {
       setLastUsage(findLastUsage(sync.entries ?? []));
       if (sync.model?.contextWindow) setContextWindowSize(sync.model.contextWindow);
       setError(null);
+      requestGitStatusRefresh({ debounce: true });
     },
-    [nextId],
+    [nextId, requestGitStatusRefresh],
   );
 
   const requestConversationSync = useCallback(
@@ -303,8 +340,6 @@ export function App() {
 
   const handleEvent = useCallback(
     (event: RpcEvent) => {
-      setSubagents((current) => applySubagentEvent(current, event));
-
       switch (event.type) {
         case "agent_start":
           setChatStatus("streaming");
@@ -333,12 +368,14 @@ export function App() {
             document.title = `(${unreadCountRef.current}) ${originalTitleRef.current}`;
           }
           void requestConversationSync({ debounce: true });
+          requestGitStatusRefresh({ debounce: true });
           break;
         }
 
         case "turn_end":
         case "session_tree":
           void requestConversationSync({ debounce: true });
+          requestGitStatusRefresh({ debounce: true });
           break;
 
         case "message_start":
@@ -472,6 +509,8 @@ export function App() {
           break;
 
         case "tool_execution_end":
+          setArtifacts((current) => mergeArtifacts(current, artifactsFromToolEvent(event)));
+          requestGitStatusRefresh({ debounce: true });
           if (!event.toolCallId) break;
           setItems((current) =>
             current.map((item) =>
@@ -540,7 +579,7 @@ export function App() {
           break;
       }
     },
-    [addSystemMessage, nextId, requestConversationSync],
+    [addSystemMessage, nextId, requestConversationSync, requestGitStatusRefresh],
   );
 
   useEffect(() => {
@@ -602,6 +641,7 @@ export function App() {
         setError(null);
         flushQueuedRequests();
         void requestConversationSync();
+        requestGitStatusRefresh();
       };
 
       ws.onmessage = (messageEvent) => {
@@ -666,10 +706,11 @@ export function App() {
       intentionallyClosed = true;
       if (reconnectTimerRef.current) window.clearTimeout(reconnectTimerRef.current);
       if (conversationSyncTimerRef.current) window.clearTimeout(conversationSyncTimerRef.current);
+      if (gitRefreshTimerRef.current) window.clearTimeout(gitRefreshTimerRef.current);
       wsRef.current?.close();
       if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
     };
-  }, [applySync, flushQueuedRequests, handleEvent, requestConversationSync]);
+  }, [applySync, flushQueuedRequests, handleEvent, requestConversationSync, requestGitStatusRefresh]);
 
   useEffect(() => {
     const onFocus = () => {
@@ -818,6 +859,122 @@ export function App() {
       setError(err instanceof Error ? err.message : "Export failed");
     }
   }, [addSystemMessage, send]);
+
+  const upsertRightPanelTab = useCallback((tab: RightPanelTab) => {
+    setRightPanelTabs((current) => {
+      const index = current.findIndex((candidate) => candidate.id === tab.id);
+      if (index === -1) return [...current, tab];
+      return current.map((candidate) => (candidate.id === tab.id ? { ...candidate, ...tab } : candidate));
+    });
+    setActiveRightPanelTabId(tab.id);
+    setRightPanelVisible(true);
+  }, []);
+
+  const openGitDiff = useCallback(async () => {
+    const startedAt = Date.now();
+    upsertRightPanelTab({
+      id: "git-diff",
+      kind: "git-diff",
+      title: "Changes",
+      branch: gitStatus?.branch ?? null,
+      isRepo: gitStatus?.isRepo,
+      loading: true,
+      updatedAt: startedAt,
+    });
+    try {
+      const result = (await send("get_git_diff")) as GitDiffResult;
+      upsertRightPanelTab({
+        id: "git-diff",
+        kind: "git-diff",
+        title: "Changes",
+        branch: result.branch,
+        diff: result.diff,
+        isRepo: result.isRepo,
+        loading: false,
+        updatedAt: Date.now(),
+      });
+    } catch (err) {
+      upsertRightPanelTab({
+        id: "git-diff",
+        kind: "git-diff",
+        title: "Changes",
+        branch: gitStatus?.branch ?? null,
+        isRepo: gitStatus?.isRepo,
+        error: err instanceof Error ? err.message : "Failed to load git diff",
+        loading: false,
+        updatedAt: Date.now(),
+      });
+    }
+  }, [gitStatus?.branch, gitStatus?.isRepo, send, upsertRightPanelTab]);
+
+  const openArtifact = useCallback(
+    async (artifact: WorkspaceArtifact) => {
+      upsertRightPanelTab({
+        id: `artifact:${artifact.path}`,
+        kind: "artifact-file",
+        title: artifact.name,
+        path: artifact.path,
+        loading: true,
+        updatedAt: Date.now(),
+      });
+      try {
+        const result = (await send("get_file_content", { path: artifact.path })) as FileContentResult;
+        upsertRightPanelTab({
+          id: `artifact:${artifact.path}`,
+          kind: "artifact-file",
+          title: result.name || artifact.name,
+          path: result.path || artifact.path,
+          content: result.content,
+          size: result.size,
+          loading: false,
+          updatedAt: Date.now(),
+        });
+      } catch (err) {
+        upsertRightPanelTab({
+          id: `artifact:${artifact.path}`,
+          kind: "artifact-file",
+          title: artifact.name,
+          path: artifact.path,
+          error: err instanceof Error ? err.message : "Failed to load artifact",
+          loading: false,
+          updatedAt: Date.now(),
+        });
+      }
+    },
+    [send, upsertRightPanelTab],
+  );
+
+  const refreshRightPanelTab = useCallback(
+    (tab: RightPanelTab) => {
+      if (tab.kind === "git-diff") {
+        void openGitDiff();
+        return;
+      }
+      void openArtifact({
+        id: tab.path,
+        path: tab.path,
+        name: tab.title,
+        directory: tab.path.includes("/") ? tab.path.slice(0, tab.path.lastIndexOf("/")) : ".",
+        tool: "edit",
+        updatedAt: Date.now(),
+      });
+    },
+    [openArtifact, openGitDiff],
+  );
+
+  const closeRightPanelTab = useCallback((id: string) => {
+    setRightPanelTabs((current) => {
+      const index = current.findIndex((tab) => tab.id === id);
+      const next = current.filter((tab) => tab.id !== id);
+      setActiveRightPanelTabId((activeId) => {
+        if (activeId !== id)
+          return activeId && next.some((tab) => tab.id === activeId) ? activeId : (next[0]?.id ?? null);
+        return next[index]?.id ?? next[index - 1]?.id ?? null;
+      });
+      if (next.length === 0) setRightPanelVisible(false);
+      return next;
+    });
+  }, []);
 
   const showSessionStats = useCallback(async () => {
     try {
@@ -1065,8 +1222,7 @@ export function App() {
   const usedContextTokens = (lastUsage?.input || 0) + (lastUsage?.cacheRead || 0);
   const contextPercent = contextWindowSize > 0 ? Math.round((usedContextTokens / contextWindowSize) * 100) : 0;
   const shouldSuggestCompaction = contextPercent >= 80;
-  const subagentItems = useMemo(() => subagentList(subagents), [subagents]);
-  const selectedSubagent = selectedSubagentId ? subagents[selectedSubagentId] : null;
+  const rightPanelOpen = rightPanelVisible && rightPanelTabs.length > 0;
 
   const commandActions = [
     {
@@ -1126,135 +1282,156 @@ export function App() {
       />
 
       <SidebarInset className="h-full min-h-0">
-        <div className="flex min-h-0 flex-1 flex-col">
-          <AppHeader
-            connection={connection}
-            contextPercent={contextPercent}
-            contextWindowSize={contextWindowSize}
-            isViewingOtherSession={false}
-            modelLabel={modelLabel}
-            onCompactContext={compactContext}
-            onCycleThinking={cycleThinking}
-            onOpenCommandPalette={() => setCommandOpen(true)}
-            onOpenModelPicker={openModelPicker}
-            onReturnToLive={() => void requestConversationSync()}
-            onToggleContext={() => setContextOpen((open) => !open)}
-            shouldSuggestCompaction={shouldSuggestCompaction}
-            thinkingLevel={thinkingLevel}
-            title={sessionName}
-            totalCost={totalCost}
-          />
+        <AppHeader
+          connection={connection}
+          contextPercent={contextPercent}
+          contextWindowSize={contextWindowSize}
+          isViewingOtherSession={false}
+          modelLabel={modelLabel}
+          onCompactContext={compactContext}
+          onCycleThinking={cycleThinking}
+          onOpenCommandPalette={() => setCommandOpen(true)}
+          onOpenModelPicker={openModelPicker}
+          onReturnToLive={() => void requestConversationSync()}
+          onToggleContext={() => setContextOpen((open) => !open)}
+          shouldSuggestCompaction={shouldSuggestCompaction}
+          thinkingLevel={thinkingLevel}
+          title={sessionName}
+          totalCost={totalCost}
+        />
 
-          <div className="relative min-h-0 flex-1">
-            <Conversation className="h-full">
-              <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-4 py-6">
-                {items.length === 0 ? (
-                  <ConversationEmptyState
-                    description="Connect to the running Pi session and send a message."
-                    icon={<TerminalIcon className="size-7" />}
-                    title="Pi Web UI"
-                  />
-                ) : (
-                  items.map((item) => {
-                    const highlighted = [item.entryId, ...(item.relatedEntryIds ?? [])].includes(
-                      highlightedEntryId ?? "",
-                    );
-                    return (
-                      <div
-                        className={cn(
-                          "rounded-lg transition-[background-color,box-shadow] duration-300",
-                          highlighted && "bg-primary/10 ring-1 ring-primary/40",
-                        )}
-                        key={item.id}
-                        ref={(node) => registerItemElement(item, node)}
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="relative min-h-0 flex-1">
+              <Conversation className="h-full">
+                <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-4 py-6">
+                  {items.length === 0 ? (
+                    <ConversationEmptyState
+                      description="Connect to the running Pi session and send a message."
+                      icon={<TerminalIcon className="size-7" />}
+                      title="Pi Web UI"
+                    />
+                  ) : (
+                    items.map((item) => {
+                      const highlighted = [item.entryId, ...(item.relatedEntryIds ?? [])].includes(
+                        highlightedEntryId ?? "",
+                      );
+                      return (
+                        <div
+                          className={cn(
+                            "rounded-lg transition-[background-color,box-shadow] duration-300",
+                            highlighted && "bg-primary/10 ring-1 ring-primary/40",
+                          )}
+                          key={item.id}
+                          ref={(node) => registerItemElement(item, node)}
+                        >
+                          {item.kind === "message" && item.role === "user" ? (
+                            <UserMessageView
+                              actionsVisible={highlighted}
+                              item={item as typeof item & { kind: "message"; role: "user" }}
+                              onBranch={advancedFeatures && item.entryId ? branchFromMessage : undefined}
+                              onCopy={(text) => copyText(text)}
+                            />
+                          ) : (
+                            <ChatItemView
+                              item={item}
+                              onCopy={(text) => copyText(text)}
+                              onToggleTool={(id, open) =>
+                                setItems((current) =>
+                                  current.map((candidate) =>
+                                    candidate.kind === "tool" && candidate.id === id
+                                      ? { ...candidate, open }
+                                      : candidate,
+                                  ),
+                                )
+                              }
+                              showThinking={showThinking}
+                            />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </ConversationContent>
+                <ConversationScrollButton />
+              </Conversation>
+
+              {contextOpen && (
+                <ContextPopover
+                  contextWindowSize={contextWindowSize}
+                  lastUsage={lastUsage}
+                  onClose={() => setContextOpen(false)}
+                />
+              )}
+              {!rightPanelOpen && !contextOpen && (
+                <WorkspaceStatusFloat
+                  artifacts={artifacts}
+                  gitLoading={gitLoading}
+                  gitStatus={gitStatus}
+                  onOpenArtifact={openArtifact}
+                  onOpenGitDiff={openGitDiff}
+                />
+              )}
+            </div>
+
+            {queuedMessages.length > 0 && (
+              <div className="mx-auto w-full max-w-3xl px-4 pt-2">
+                <div className="flex flex-wrap gap-2">
+                  {queuedMessages.map((queued) => (
+                    <div
+                      className="flex items-center gap-2 rounded-md border bg-muted px-2 py-1 text-xs"
+                      key={queued.id}
+                    >
+                      <span className="text-muted-foreground">Queued</span>
+                      <span className="max-w-72 truncate">{queued.message}</span>
+                      <button
+                        onClick={() =>
+                          setQueuedMessages((current) => current.filter((candidate) => candidate.id !== queued.id))
+                        }
+                        type="button"
                       >
-                        {item.kind === "message" && item.role === "user" ? (
-                          <UserMessageView
-                            actionsVisible={highlighted}
-                            item={item as typeof item & { kind: "message"; role: "user" }}
-                            onBranch={advancedFeatures && item.entryId ? branchFromMessage : undefined}
-                            onCopy={(text) => copyText(text)}
-                          />
-                        ) : (
-                          <ChatItemView
-                            item={item}
-                            onCopy={(text) => copyText(text)}
-                            onToggleTool={(id, open) =>
-                              setItems((current) =>
-                                current.map((candidate) =>
-                                  candidate.kind === "tool" && candidate.id === id ? { ...candidate, open } : candidate,
-                                ),
-                              )
-                            }
-                            showThinking={showThinking}
-                          />
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </ConversationContent>
-              <ConversationScrollButton />
-            </Conversation>
+                        <XIcon className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {contextOpen && (
-              <ContextPopover
-                contextWindowSize={contextWindowSize}
-                lastUsage={lastUsage}
-                onClose={() => setContextOpen(false)}
-              />
+            {error && (
+              <div className="mx-auto w-full max-w-3xl px-4 py-2">
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
+                  {error}
+                </div>
+              </div>
             )}
-            {!selectedSubagent && !contextOpen && (
-              <WorkspaceStatusFloat onOpenSubagent={setSelectedSubagentId} subagents={subagentItems} />
-            )}
+
+            <ChatInput
+              archAvailable={archAvailable}
+              archModeEnabled={archModeEnabled}
+              chatStatus={chatStatus}
+              connection={connection}
+              onAbort={abort}
+              onSubmit={submitMessage}
+              onToggleArchMode={toggleArchMode}
+              onValueChange={setDraftText}
+              value={draftText}
+              viewingHistory={false}
+            />
           </div>
 
-          {queuedMessages.length > 0 && (
-            <div className="mx-auto w-full max-w-3xl px-4 pt-2">
-              <div className="flex flex-wrap gap-2">
-                {queuedMessages.map((queued) => (
-                  <div className="flex items-center gap-2 rounded-md border bg-muted px-2 py-1 text-xs" key={queued.id}>
-                    <span className="text-muted-foreground">Queued</span>
-                    <span className="max-w-72 truncate">{queued.message}</span>
-                    <button
-                      onClick={() =>
-                        setQueuedMessages((current) => current.filter((candidate) => candidate.id !== queued.id))
-                      }
-                      type="button"
-                    >
-                      <XIcon className="size-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {rightPanelTabs.length > 0 && (
+            <RightPanel
+              activeTabId={activeRightPanelTabId}
+              onCloseTab={closeRightPanelTab}
+              onRefreshTab={refreshRightPanelTab}
+              onSelectTab={setActiveRightPanelTabId}
+              onToggleVisible={() => setRightPanelVisible((visible) => !visible)}
+              tabs={rightPanelTabs}
+              visible={rightPanelVisible}
+            />
           )}
-
-          {error && (
-            <div className="mx-auto w-full max-w-3xl px-4 py-2">
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
-                {error}
-              </div>
-            </div>
-          )}
-
-          <ChatInput
-            archAvailable={archAvailable}
-            archModeEnabled={archModeEnabled}
-            chatStatus={chatStatus}
-            connection={connection}
-            onAbort={abort}
-            onSubmit={submitMessage}
-            onToggleArchMode={toggleArchMode}
-            onValueChange={setDraftText}
-            value={draftText}
-            viewingHistory={false}
-          />
         </div>
-
-        {selectedSubagent && (
-          <SubagentDetailSidebar agent={selectedSubagent} onClose={() => setSelectedSubagentId(null)} />
-        )}
 
         {modelOpen && (
           <ModelPicker

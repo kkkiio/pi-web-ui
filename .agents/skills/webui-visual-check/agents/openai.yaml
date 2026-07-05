@@ -1,0 +1,4 @@
+interface:
+  display_name: "Web UI Visual Check"
+  short_description: "Browser screenshot validation for Pi Web UI"
+  default_prompt: "Use $webui-visual-check to inspect the real Pi Web UI in the Browser and verify visible layout with screenshots."

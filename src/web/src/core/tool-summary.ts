@@ -59,10 +59,8 @@ function formatBashSummary(input: Record<string, unknown> | null): string {
 function formatAgentSummary(input: Record<string, unknown> | null): string {
   if (!input) return "";
   const description = firstString(input, ["description"]);
-  const subagentType = firstString(input, ["subagent_type", "subagentType", "type"]);
   const prompt = firstString(input, ["prompt", "message"]);
-  const parts = [description ? truncate(description, 120) : "", subagentType ? `type ${subagentType}` : ""];
-  if (parts.some(Boolean)) return parts.filter(Boolean).join(" · ");
+  if (description) return truncate(description, 120);
   return prompt ? truncate(prompt.replace(/\s+/g, " "), 180) : formatRecordSummary(input);
 }
 

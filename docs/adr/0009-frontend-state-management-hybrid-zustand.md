@@ -16,7 +16,7 @@ Proposed
 
 - **单一 WebSocket 连接**推送高频 streaming 事件（`message_update` delta、`tool_execution_update` 等）
 - **大部分状态来自同一条事件流**，权威源是 `state_sync` snapshot + 增量事件
-- **6-8 个 UI feature**（chat、conversation tree、subagents、model picker、settings、command palette、arch mode）共享 session state
+- **6-8 个 UI feature**（chat、conversation tree、workspace status、right panel、model picker、settings、command palette、arch mode）共享 session state
 - **小团队**，需要平缓的学习曲线和清晰的 ownership
 
 ## Decision
@@ -41,7 +41,8 @@ WebSocket 事件流
   ├── connectionSlice         ← WebSocket 状态
   ├── sessionSlice            ← state_sync snapshot, tree, leafId
   ├── streamSlice             ← streaming assistant message, tool calls
-  ├── subagentSlice           ← subagent 生命周期状态
+  ├── workspaceSlice          ← git status + artifacts
+  ├── rightPanelSlice         ← tabs + active tab + visible state
   └── settingsSlice           ← model, thinkingLevel, theme, sessionName
        │
        ▼
@@ -61,7 +62,8 @@ WebSocket 事件流
 | connection | `connectionState`, `error` | WebSocket 连接状态，多个组件需要展示 |
 | session | `items`, `tree`, `leafId`, `lastUsage`, `chatStatus` | 来自 `state_sync` 的权威会话数据 |
 | stream | `streamingId`, `streamingHasToolCall` | 流式增量更新状态 |
-| subagents | `subagentStates` | 子代理状态，workspace float + detail sidebar 都需要 |
+| workspace | `gitStatus`, `artifacts` | Workspace Status Float + Right Panel 都需要 |
+| rightPanel | `tabs`, `activeTabId`, `visible` | Git diff 和 artifact-file tab 容器状态 |
 | settings | `model`, `thinkingLevel`, `sessionName`, `themeMode` | header + settings panel 都需要 |
 
 **不进 Zustand（组件局部 UI 状态）：**
@@ -70,7 +72,7 @@ WebSocket 事件流
 - 输入框草稿（draftText）
 - 搜索词（modelSearch）
 - hover/highlight（highlightedEntryId）
-- 选中态（selectedSubagentId, selectedTreeEntryId）
+- 选中态（selectedTreeEntryId）
 - 加载态（loadingTreeEntryId, conversationSyncing）
 - 队列（queuedMessages）
 
@@ -101,7 +103,8 @@ src/web/src/
 │   │   ├── connection-slice.ts
 │   │   ├── session-slice.ts
 │   │   ├── stream-slice.ts
-│   │   ├── subagent-slice.ts
+│   │   ├── workspace-slice.ts
+│   │   ├── right-panel-slice.ts
 │   │   └── settings-slice.ts
 │   └── types.ts              # 共享类型
 │
@@ -111,7 +114,8 @@ src/web/src/
 │   │   ├── chat-input-container.tsx
 │   │   └── chat-selectors.ts # 派生 selector
 │   ├── conversation-tree/    # 对话树侧边栏
-│   └── subagents/            # 子代理面板
+│   ├── workspace-status/     # Workspace Float + Artifacts
+│   └── right-panel/          # Tabbed details panel
 │
 └── app.tsx                   # 布局组合 + 局部 UI state
 ```
@@ -151,7 +155,7 @@ src/web/src/
 
 1. **引入 Zustand** — 安装依赖，创建空 store 骨架
 2. **抽 PiClient** — 把 `send`、pending requests、WS connect/reconnect 从 App 移出
-3. **建 store slices** — 按 domain 拆：connect → session → stream → subagents → settings
+3. **建 store slices** — 按 domain 拆：connect → session → stream → workspace → rightPanel → settings
 4. **迁事件处理** — 把 `handleEvent` switch 的每个 case 迁到对应 slice action
 5. **迁 state_sync** — `applySync` 改造成 store action，原子替换 session state
 6. **迁 UI** — 各 feature 组件改用 store selector 读状态，局部 UI state 留在组件内

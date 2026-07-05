@@ -10,6 +10,7 @@
  * - Sends full state snapshot on client connect (messages, model, etc.)
  */
 
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
@@ -81,6 +82,28 @@ type FileListItem = {
   mtime: number;
 };
 
+type GitStatusResult = {
+  isRepo: boolean;
+  branch: string | null;
+  hasChanges: boolean;
+  additions: number;
+  deletions: number;
+  untracked: number;
+};
+
+type GitDiffResult = {
+  isRepo: boolean;
+  branch: string | null;
+  diff: string;
+};
+
+type FileContentResult = {
+  path: string;
+  name: string;
+  size: number;
+  content: string;
+};
+
 type ModelCandidate = {
   provider?: string;
   id?: string;
@@ -141,6 +164,8 @@ const SETTINGS = loadSettings();
 const PORT = SETTINGS.port;
 const HOST = SETTINGS.host;
 const AUTO_START = SETTINGS.autoStart;
+const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
+const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
 // @ts-expect-error — __dirname is provided by jiti at runtime
 const STATIC_DIR = process.env.PI_WEB_UI_STATIC_DIR || findStaticDir();
 
@@ -357,26 +382,6 @@ export default function (pi: ExtensionAPI) {
         event: eventType,
         payload: eventPayload,
       });
-    });
-  }
-
-  const subagentEventTypes = [
-    "subagents:ready",
-    "subagents:created",
-    "subagents:started",
-    "subagents:completed",
-    "subagents:failed",
-    "subagents:steered",
-    "subagents:compacted",
-    "subagents:scheduled",
-    "subagents:scheduler_ready",
-    "subagents:settings_loaded",
-    "subagents:settings_changed",
-  ] as const;
-
-  for (const eventType of subagentEventTypes) {
-    (pi as ExtensionAPIWithEvents).events?.on?.(eventType, (payload: unknown) => {
-      broadcast({ type: "event", event: eventType, payload: { payload } });
     });
   }
 
@@ -842,6 +847,27 @@ export default function (pi: ExtensionAPI) {
           break;
         }
 
+        case "get_git_status": {
+          sendTo(ws, success(getGitStatus(ctx)));
+          break;
+        }
+
+        case "get_git_diff": {
+          const filePath = typeof params.path === "string" ? params.path : undefined;
+          sendTo(ws, success(getGitDiff(ctx, filePath)));
+          break;
+        }
+
+        case "get_file_content": {
+          const filePath = typeof params.path === "string" ? params.path : "";
+          if (!filePath) {
+            sendTo(ws, error("path required"));
+            break;
+          }
+          sendTo(ws, success(getFileContent(ctx, filePath)));
+          break;
+        }
+
         case "open_file": {
           const filePath = typeof params.filePath === "string" ? params.filePath : "";
           if (!filePath) {
@@ -974,6 +1000,212 @@ export default function (pi: ExtensionAPI) {
     ".nyc_output",
     ".parcel-cache",
   ]);
+
+  function getGitStatus(ctx: ExtensionContext | null): GitStatusResult {
+    let workspaceDir = path.resolve(process.cwd());
+    if (ctx) {
+      try {
+        const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+        const sessionEntry = entries.find((entry) => entry.type === "session");
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+      } catch {}
+    }
+
+    const rootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: workspaceDir,
+      encoding: "utf8",
+      maxBuffer: MAX_GIT_OUTPUT_BYTES,
+    });
+    if (rootResult.error || rootResult.status !== 0 || typeof rootResult.stdout !== "string") {
+      return { isRepo: false, branch: null, hasChanges: false, additions: 0, deletions: 0, untracked: 0 };
+    }
+    const gitRoot = path.resolve(rootResult.stdout.trim());
+
+    const gitOptions = { cwd: gitRoot, encoding: "utf8" as const, maxBuffer: MAX_GIT_OUTPUT_BYTES };
+    const outputs = new Map<string, string>();
+    const commands: Array<[string, string[]]> = [
+      ["branch", ["branch", "--show-current"]],
+      ["head", ["rev-parse", "--short", "HEAD"]],
+      ["porcelain", ["status", "--porcelain=v1", "--untracked-files=all"]],
+      ["unstagedStat", ["diff", "--numstat"]],
+      ["stagedStat", ["diff", "--cached", "--numstat"]],
+      ["untracked", ["ls-files", "--others", "--exclude-standard", "-z"]],
+    ];
+    for (const [name, args] of commands) {
+      const result = spawnSync("git", args, gitOptions);
+      if (result.error) throw result.error;
+      if (result.status !== 0 && name !== "branch") {
+        throw new Error(String(result.stderr || `git ${args.join(" ")} failed`).trim());
+      }
+      outputs.set(name, typeof result.stdout === "string" ? result.stdout : "");
+    }
+
+    let additions = 0;
+    let deletions = 0;
+    for (const line of `${outputs.get("unstagedStat") || ""}\n${outputs.get("stagedStat") || ""}`.split(/\r?\n/)) {
+      const [added, deleted] = line.split("\t");
+      const addedCount = Number(added);
+      const deletedCount = Number(deleted);
+      if (Number.isFinite(addedCount)) additions += addedCount;
+      if (Number.isFinite(deletedCount)) deletions += deletedCount;
+    }
+
+    const untrackedPaths = (outputs.get("untracked") || "").split("\0").filter(Boolean);
+    let untrackedAdditions = 0;
+
+    for (const relativePath of untrackedPaths) {
+      const absolutePath = path.resolve(gitRoot, relativePath);
+      try {
+        const stat = fs.statSync(absolutePath);
+        if (!stat.isFile() || stat.size > MAX_FILE_CONTENT_BYTES) continue;
+        const content = fs.readFileSync(absolutePath, "utf8");
+        if (content.includes("\0")) continue;
+        untrackedAdditions += content ? (content.match(/\n/g)?.length ?? 0) + (content.endsWith("\n") ? 0 : 1) : 0;
+      } catch {}
+    }
+
+    return {
+      isRepo: true,
+      branch: (outputs.get("branch") || outputs.get("head") || "").trim() || null,
+      hasChanges: (outputs.get("porcelain") || "").trim().length > 0,
+      additions: additions + untrackedAdditions,
+      deletions,
+      untracked: untrackedPaths.length,
+    };
+  }
+
+  function getGitDiff(ctx: ExtensionContext | null, requestedPath?: string): GitDiffResult {
+    let workspaceDir = path.resolve(process.cwd());
+    if (ctx) {
+      try {
+        const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+        const sessionEntry = entries.find((entry) => entry.type === "session");
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+      } catch {}
+    }
+
+    const rootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: workspaceDir,
+      encoding: "utf8",
+      maxBuffer: MAX_GIT_OUTPUT_BYTES,
+    });
+    if (rootResult.error || rootResult.status !== 0 || typeof rootResult.stdout !== "string") {
+      return { isRepo: false, branch: null, diff: "" };
+    }
+    const gitRoot = path.resolve(rootResult.stdout.trim());
+    let requestedRelativePath: string | null = null;
+    if (requestedPath) {
+      const absolutePath = path.isAbsolute(requestedPath)
+        ? path.resolve(requestedPath)
+        : path.resolve(workspaceDir, requestedPath);
+      if (absolutePath !== workspaceDir && !absolutePath.startsWith(`${workspaceDir}${path.sep}`)) {
+        throw new Error("path outside workspace");
+      }
+      requestedRelativePath = path.relative(gitRoot, absolutePath).replace(/\\/g, "/");
+      if (requestedRelativePath.startsWith("..") || path.isAbsolute(requestedRelativePath)) {
+        throw new Error("path outside git repository");
+      }
+    }
+
+    const gitOptions = { cwd: gitRoot, encoding: "utf8" as const, maxBuffer: MAX_GIT_OUTPUT_BYTES };
+    const pathArgs = requestedRelativePath ? ["--", requestedRelativePath] : [];
+    const outputs = new Map<string, string>();
+    const commands: Array<[string, string[]]> = [
+      ["branch", ["branch", "--show-current"]],
+      ["head", ["rev-parse", "--short", "HEAD"]],
+      ["staged", ["diff", "--cached", "--no-ext-diff", ...pathArgs]],
+      ["unstaged", ["diff", "--no-ext-diff", ...pathArgs]],
+      ["untracked", ["ls-files", "--others", "--exclude-standard", "-z"]],
+    ];
+    for (const [name, args] of commands) {
+      const result = spawnSync("git", args, gitOptions);
+      if (result.error) throw result.error;
+      if (result.status !== 0 && name !== "branch") {
+        throw new Error(String(result.stderr || `git ${args.join(" ")} failed`).trim());
+      }
+      outputs.set(name, typeof result.stdout === "string" ? result.stdout : "");
+    }
+
+    const untrackedPaths = (outputs.get("untracked") || "")
+      .split("\0")
+      .filter(Boolean)
+      .filter((relativePath) => !requestedRelativePath || relativePath === requestedRelativePath);
+    const parts: string[] = [];
+    const staged = (outputs.get("staged") || "").trimEnd();
+    const unstaged = (outputs.get("unstaged") || "").trimEnd();
+
+    if (staged) parts.push(`## Staged changes\n\n${staged}`);
+    if (unstaged) parts.push(`## Working tree changes\n\n${unstaged}`);
+    if (untrackedPaths.length) {
+      const untrackedDiffs: string[] = [];
+      for (const relativePath of untrackedPaths) {
+        const absolutePath = path.resolve(gitRoot, relativePath);
+        try {
+          const stat = fs.statSync(absolutePath);
+          if (!stat.isFile()) continue;
+          if (stat.size > MAX_FILE_CONTENT_BYTES) {
+            untrackedDiffs.push(`diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n[large file]`);
+            continue;
+          }
+          const content = fs.readFileSync(absolutePath, "utf8");
+          if (content.includes("\0")) {
+            untrackedDiffs.push(`diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n[binary file]`);
+            continue;
+          }
+          const lines = content.split(/\r?\n/);
+          if (lines.at(-1) === "") lines.pop();
+          untrackedDiffs.push(
+            [
+              `diff --git a/${relativePath} b/${relativePath}`,
+              "new file mode 100644",
+              "--- /dev/null",
+              `+++ b/${relativePath}`,
+              `@@ -0,0 +1,${lines.length} @@`,
+              ...lines.map((line) => `+${line}`),
+            ].join("\n"),
+          );
+        } catch {}
+      }
+      if (untrackedDiffs.length) parts.push(`## Untracked files\n\n${untrackedDiffs.join("\n\n")}`);
+    }
+
+    return {
+      isRepo: true,
+      branch: (outputs.get("branch") || outputs.get("head") || "").trim() || null,
+      diff: parts.join("\n\n"),
+    };
+  }
+
+  function getFileContent(ctx: ExtensionContext | null, requestedPath: string): FileContentResult {
+    let workspaceDir = path.resolve(process.cwd());
+    if (ctx) {
+      try {
+        const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+        const sessionEntry = entries.find((entry) => entry.type === "session");
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+      } catch {}
+    }
+
+    const absolutePath = path.isAbsolute(requestedPath)
+      ? path.resolve(requestedPath)
+      : path.resolve(workspaceDir, requestedPath);
+    if (absolutePath !== workspaceDir && !absolutePath.startsWith(`${workspaceDir}${path.sep}`)) {
+      throw new Error("path outside workspace");
+    }
+
+    const stat = fs.statSync(absolutePath);
+    if (!stat.isFile()) throw new Error("Not a file");
+    if (stat.size > MAX_FILE_CONTENT_BYTES) throw new Error("File is too large to preview");
+    const content = fs.readFileSync(absolutePath, "utf8");
+    if (content.includes("\0")) throw new Error("Binary file cannot be previewed");
+    const relativePath = path.relative(workspaceDir, absolutePath).replace(/\\/g, "/");
+    return {
+      path: relativePath || path.basename(absolutePath),
+      name: path.basename(absolutePath),
+      size: stat.size,
+      content,
+    };
+  }
 
   function getFileList(dirPath: string) {
     if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
