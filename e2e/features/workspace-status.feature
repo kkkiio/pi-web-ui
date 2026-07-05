@@ -15,3 +15,13 @@ Feature: Workspace status
     When I hide the right panel
     And I open the Changes row
     Then the right panel shows the git diff tab
+
+  Scenario: Open an artifact written outside the git workspace
+    Given a temporary git workspace
+    And the faux response fixture is "external-artifact"
+    When I open Pi Web UI
+    And I ask the agent to update the external skill docs
+    Then the workspace float shows the external Markdown artifact
+
+    When I open the external Markdown artifact
+    Then the right panel shows the external artifact file content

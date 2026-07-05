@@ -172,14 +172,14 @@ Scenarios that need `No git repository` skip git initialization.
 
 ## Current Implementation
 
-The first implemented scenario is `e2e/features/workspace-status.feature`.
+The implemented scenarios live in `e2e/features/workspace-status.feature`.
 
 It starts a real `pi --mode rpc` process, loads:
 
 - `e2e/fixtures/faux-provider-extension.ts`;
 - `extensions/mirror-server.ts`.
 
-The faux provider fixture calls the real Pi `write` tool, modifying a committed Markdown file in a temporary git workspace. The browser then verifies that Workspace Status Float shows branch/diff/artifact state, that the artifact opens in an `artifact-file` Right Panel tab, and that the git diff opens in the singleton `git-diff` tab.
+The faux provider fixtures call the real Pi `write` tool. One scenario modifies a committed Markdown file in a temporary git workspace, then verifies branch/diff/artifact state, `artifact-file`, and `git-diff` tabs. Another scenario writes a Markdown artifact outside the git workspace and verifies that the Right Panel can still open it as a session artifact.
 
 Run it locally with:
 

@@ -27,6 +27,12 @@ When("I ask the agent to update the workspace status docs", async ({ page }) => 
   await expect(page.getByText("Updated the workspace status docs.")).toBeVisible({ timeout: 30_000 });
 });
 
+When("I ask the agent to update the external skill docs", async ({ page }) => {
+  await page.getByPlaceholder("Message Pi...").fill("Update the external skill docs.");
+  await page.getByRole("button", { name: "Submit" }).click();
+  await expect(page.getByText("Updated the external skill docs.")).toBeVisible({ timeout: 30_000 });
+});
+
 Then("the workspace float shows the current branch", async ({ page }) => {
   await expect(page.getByTestId("workspace-status-float").getByTestId("workspace-git-row")).toContainText(/main/);
 });
@@ -45,6 +51,14 @@ Then("the workspace float shows the Markdown artifact", async ({ page }) => {
   ).toBeVisible();
 });
 
+Then("the workspace float shows the external Markdown artifact", async ({ page }) => {
+  await expect(
+    page.getByTestId("workspace-status-float").getByTestId("workspace-artifact-row").filter({
+      hasText: "external-skill.md",
+    }),
+  ).toBeVisible();
+});
+
 When("I open the Markdown artifact", async ({ page }) => {
   await page
     .getByTestId("workspace-status-float")
@@ -53,10 +67,24 @@ When("I open the Markdown artifact", async ({ page }) => {
     .click();
 });
 
+When("I open the external Markdown artifact", async ({ page }) => {
+  await page
+    .getByTestId("workspace-status-float")
+    .getByTestId("workspace-artifact-row")
+    .filter({ hasText: "external-skill.md" })
+    .click();
+});
+
 Then("the right panel shows the artifact file content", async ({ page }) => {
   const panel = page.locator("aside");
   await expect(panel).toContainText("workspace-status-float.md");
   await expect(panel).toContainText("faux provider during a real Pi E2E scenario");
+});
+
+Then("the right panel shows the external artifact file content", async ({ page }) => {
+  const panel = page.locator("aside");
+  await expect(panel).toContainText("external-skill.md");
+  await expect(panel).toContainText("outside the git workspace");
 });
 
 When("I hide the right panel", async ({ page }) => {
@@ -71,8 +99,10 @@ When("I open the Changes row", async ({ page }) => {
 Then("the right panel shows the git diff tab", async ({ page }) => {
   const panel = page.locator("aside");
   await expect(panel).toContainText("Changes");
-  await expect(panel).toContainText("diff --git");
   await expect(panel).toContainText("docs/prd/workspace-status-float.md");
+  await expect(panel).toContainText("+3");
+  await expect(panel).toContainText("-1");
+  await expect(panel).toContainText("The workspace float shows the current git branch");
 });
 
 After(async () => {

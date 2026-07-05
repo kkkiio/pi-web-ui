@@ -21,7 +21,7 @@
 
 ### 显示内容
 
-Workspace Status Float v1 包含两个区域：
+Workspace Status Float 包含两个区域：
 
 - Git：当前 branch、diff 统计、非 git repo 或无变更状态。
 - Artifacts：最近由 `edit` / `write` 工具改动过的 Markdown 文件。

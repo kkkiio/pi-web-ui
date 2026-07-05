@@ -53,7 +53,7 @@ As a developer, I want to jump to the end of an existing branch so I can continu
 - Continue navigates the tree to the selected leaf.
 - Continue refreshes state and focuses the input after navigation.
 - Continue preserves the draft exactly as-is: no confirmation, no clearing, no overwrite.
-- User-message leaves do not show Continue in v1 because navigating to a user message intentionally means Branch-from-before-that-user-message.
+- User-message leaves do not show Continue because navigating to a user message intentionally means Branch-from-before-that-user-message.
 
 ### US-5 — Collapse and search large trees
 

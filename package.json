@@ -37,6 +37,7 @@
     "prepack": "npm run build:web"
   },
   "dependencies": {
+    "@git-diff-view/react": "^0.1.6",
     "ws": "^8.16.0"
   },
   "peerDependencies": {

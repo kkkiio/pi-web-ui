@@ -68,6 +68,8 @@ Examples:
 { "type": "req", "id": "r8", "method": "get_file_content", "params": { "path": "docs/prd/workspace-artifacts.md" } }
 ```
 
+`get_file_content` supports artifact paths produced by the current session's successful Markdown `edit` / `write` tool calls, including paths outside the git workspace. The response method reads the current file content for display in the read-only `artifact-file` tab.
+
 #### Response (server → browser)
 
 ```typescript

@@ -64,6 +64,8 @@ type SessionEntry = {
   message?: {
     role?: string;
     content?: unknown;
+    toolCallId?: string;
+    isError?: boolean;
   };
 };
 
@@ -166,6 +168,8 @@ const HOST = SETTINGS.host;
 const AUTO_START = SETTINGS.autoStart;
 const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
 const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
+const ARTIFACT_TOOL_NAMES = new Set(["edit", "write"]);
+const MARKDOWN_EXTENSIONS = [".md", ".mdx", ".markdown"];
 // @ts-expect-error — __dirname is provided by jiti at runtime
 const STATIC_DIR = process.env.PI_WEB_UI_STATIC_DIR || findStaticDir();
 
@@ -237,6 +241,7 @@ export default function (pi: ExtensionAPI) {
   let archExtensionPresent = false;
   let advancedFeaturesEnabled = false;
   let latestExecuteCtx: ExtensionCommandContext | null = null;
+  const liveArtifactPaths = new Set<string>();
 
   // ═══════════════════════════════════════
   // Helper: send to one client
@@ -376,6 +381,39 @@ export default function (pi: ExtensionAPI) {
       latestCtx = ctx;
       const eventPayload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
 
+      if (eventType === "tool_execution_end" && eventPayload.isError !== true) {
+        let workspaceDir = path.resolve(process.cwd());
+        try {
+          const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+          const sessionEntry = entries.find((entry) => entry.type === "session");
+          if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+        } catch {}
+
+        const toolName = typeof eventPayload.toolName === "string" ? eventPayload.toolName.toLowerCase() : "";
+        const args =
+          eventPayload.args && typeof eventPayload.args === "object" && !Array.isArray(eventPayload.args)
+            ? (eventPayload.args as Record<string, unknown>)
+            : {};
+        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
+          .map((key) => args[key])
+          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+        const normalizedPath = rawPath
+          ?.trim()
+          .replace(/^file:\/\//, "")
+          .replace(/\\/g, "/");
+        const lowerPath = normalizedPath?.toLowerCase() || "";
+        if (
+          ARTIFACT_TOOL_NAMES.has(toolName) &&
+          MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))
+        ) {
+          liveArtifactPaths.add(
+            path.isAbsolute(normalizedPath || "")
+              ? path.resolve(normalizedPath || "")
+              : path.resolve(workspaceDir, normalizedPath || ""),
+          );
+        }
+      }
+
       // Forward event to all connected browser clients
       broadcast({
         type: "event",
@@ -416,6 +454,7 @@ export default function (pi: ExtensionAPI) {
     latestCtx = ctx;
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
+    liveArtifactPaths.clear();
     broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
     turnCount = 0;
     titleSet = false;
@@ -1178,19 +1217,89 @@ export default function (pi: ExtensionAPI) {
 
   function getFileContent(ctx: ExtensionContext | null, requestedPath: string): FileContentResult {
     let workspaceDir = path.resolve(process.cwd());
+    let entries: SessionEntry[] = [];
     if (ctx) {
       try {
-        const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+        entries = ctx.sessionManager.getEntries() as SessionEntry[];
         const sessionEntry = entries.find((entry) => entry.type === "session");
         if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
       } catch {}
     }
 
-    const absolutePath = path.isAbsolute(requestedPath)
-      ? path.resolve(requestedPath)
-      : path.resolve(workspaceDir, requestedPath);
-    if (absolutePath !== workspaceDir && !absolutePath.startsWith(`${workspaceDir}${path.sep}`)) {
-      throw new Error("path outside workspace");
+    const normalizedRequest = requestedPath
+      .trim()
+      .replace(/^file:\/\//, "")
+      .replace(/\\/g, "/");
+    const absolutePath = path.isAbsolute(normalizedRequest)
+      ? path.resolve(normalizedRequest)
+      : path.resolve(workspaceDir, normalizedRequest);
+    const insideWorkspace = absolutePath === workspaceDir || absolutePath.startsWith(`${workspaceDir}${path.sep}`);
+    const artifactPaths = new Set(liveArtifactPaths);
+    const pendingToolCalls = new Map<string, string>();
+
+    for (const entry of entries) {
+      const message = entry.message;
+      if (message?.role === "assistant" && Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+          const record = block as Record<string, unknown>;
+          if (record.type !== "toolCall" || typeof record.id !== "string") continue;
+          const tool = typeof record.name === "string" ? record.name.toLowerCase() : "";
+          const args =
+            record.arguments && typeof record.arguments === "object"
+              ? (record.arguments as Record<string, unknown>)
+              : {};
+          const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
+            .map((key) => args[key])
+            .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+          const normalizedPath = rawPath
+            ?.trim()
+            .replace(/^file:\/\//, "")
+            .replace(/\\/g, "/");
+          const lowerPath = normalizedPath?.toLowerCase() || "";
+          if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
+            pendingToolCalls.set(
+              record.id,
+              path.isAbsolute(normalizedPath || "")
+                ? path.resolve(normalizedPath || "")
+                : path.resolve(workspaceDir, normalizedPath || ""),
+            );
+          }
+        }
+      }
+
+      if (message?.role === "toolResult" && typeof message.toolCallId === "string" && message.isError !== true) {
+        const artifactPath = pendingToolCalls.get(message.toolCallId);
+        if (artifactPath) artifactPaths.add(artifactPath);
+      }
+
+      const entryRecord = entry as SessionEntry & { toolName?: unknown; args?: unknown; isError?: unknown };
+      if (entry.type === "tool_execution_end" && entryRecord.isError !== true) {
+        const tool = typeof entryRecord.toolName === "string" ? entryRecord.toolName.toLowerCase() : "";
+        const args =
+          entryRecord.args && typeof entryRecord.args === "object" && !Array.isArray(entryRecord.args)
+            ? (entryRecord.args as Record<string, unknown>)
+            : {};
+        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
+          .map((key) => args[key])
+          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+        const normalizedPath = rawPath
+          ?.trim()
+          .replace(/^file:\/\//, "")
+          .replace(/\\/g, "/");
+        const lowerPath = normalizedPath?.toLowerCase() || "";
+        if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
+          artifactPaths.add(
+            path.isAbsolute(normalizedPath || "")
+              ? path.resolve(normalizedPath || "")
+              : path.resolve(workspaceDir, normalizedPath || ""),
+          );
+        }
+      }
+    }
+
+    if (!insideWorkspace && !artifactPaths.has(absolutePath)) {
+      throw new Error("file is not a session artifact");
     }
 
     const stat = fs.statSync(absolutePath);
@@ -1395,6 +1504,7 @@ export default function (pi: ExtensionAPI) {
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
     latestCtx = null;
+    liveArtifactPaths.clear();
     stopServer();
   });
 }

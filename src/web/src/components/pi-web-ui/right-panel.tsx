@@ -1,3 +1,4 @@
+import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import {
   CopyIcon,
   FileTextIcon,
@@ -8,17 +9,27 @@ import {
   RotateCwIcon,
   XIcon,
 } from "lucide-react";
-import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useState } from "react";
+import "@git-diff-view/react/styles/diff-view-pure.css";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { MessageResponse } from "@/components/ai-elements/message";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import { copyText } from "../../core/format";
 import type { RightPanelTab } from "../../core/types";
 
 const DEFAULT_WIDTH = 460;
-const MIN_WIDTH = 340;
+const MIN_WIDTH = 420;
 const MAX_WIDTH = 820;
 const MIN_CHAT_WIDTH = 480;
 const STORAGE_KEY = "pi-web-ui-right-panel-width";
@@ -50,7 +61,7 @@ export function RightPanel({
 
   const startResize = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
-      if (event.button !== 0 || !window.matchMedia("(min-width: 768px)").matches) return;
+      if (event.button !== 0 || !window.matchMedia("(min-width: 1280px)").matches) return;
       event.preventDefault();
 
       const previousCursor = document.body.style.cursor;
@@ -106,12 +117,12 @@ export function RightPanel({
 
   return (
     <aside
-      className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-background shadow-xl md:relative md:z-auto md:w-[var(--right-panel-width)] md:shrink-0 md:shadow-none"
+      className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-background shadow-xl xl:relative xl:z-auto xl:w-[var(--right-panel-width)] xl:shrink-0 xl:shadow-none"
       style={{ "--right-panel-width": `${panelWidth}px` } as CSSProperties}
     >
       <button
         aria-label="Resize right panel"
-        className="group absolute inset-y-0 left-0 z-20 hidden w-4 -translate-x-2 cursor-col-resize touch-none appearance-none border-0 bg-transparent p-0 md:block"
+        className="group absolute inset-y-0 left-0 z-20 hidden w-4 -translate-x-2 cursor-col-resize touch-none appearance-none border-0 bg-transparent p-0 xl:block"
         onDoubleClick={() => updateWidth(DEFAULT_WIDTH)}
         onPointerDown={startResize}
         title="Drag to resize"
@@ -192,12 +203,19 @@ function RightPanelTabContent({ tab }: { tab: RightPanelTab }) {
 }
 
 function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }> }) {
+  const diffFiles = useMemo(() => parseDiffFiles(tab.diff || ""), [tab.diff]);
+  const diffTheme =
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light";
+
   if (!tab.isRepo) {
     return <PanelMessage title="No git repository" body="Open a git workspace to view changes." />;
   }
   if (!tab.diff?.trim()) {
     return <PanelMessage title="No changes" body="The current branch has no staged, unstaged, or untracked diff." />;
   }
+
+  const totalAdditions = diffFiles.reduce((sum, file) => sum + file.additions, 0);
+  const totalDeletions = diffFiles.reduce((sum, file) => sum + file.deletions, 0);
 
   return (
     <section className="space-y-3">
@@ -206,19 +224,71 @@ function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }>
           <div className="font-medium text-sm">Changes</div>
           <div className="truncate text-muted-foreground text-xs">{tab.branch || "Detached HEAD"}</div>
         </div>
-        <Button
-          onClick={() => void copyText(tab.diff || "")}
-          size="icon-sm"
-          title="Copy diff"
-          type="button"
-          variant="ghost"
-        >
-          <CopyIcon className="size-4" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {diffFiles.length > 0 && (
+            <>
+              <Badge className="text-emerald-700 dark:text-emerald-300" variant="outline">
+                +{totalAdditions}
+              </Badge>
+              <Badge className="text-destructive" variant="outline">
+                -{totalDeletions}
+              </Badge>
+            </>
+          )}
+          <Button
+            onClick={() => void copyText(tab.diff || "")}
+            size="icon-sm"
+            title="Copy diff"
+            type="button"
+            variant="ghost"
+          >
+            <CopyIcon className="size-4" />
+          </Button>
+        </div>
       </div>
-      <pre className="overflow-x-auto whitespace-pre rounded-md border bg-muted/30 p-3 text-xs leading-5">
-        {tab.diff}
-      </pre>
+      {diffFiles.length > 0 ? (
+        <div className="space-y-3">
+          {diffFiles.map((file) => (
+            <div className="overflow-hidden rounded-md border bg-card" key={file.id}>
+              <div className="flex items-center justify-between gap-3 bg-muted/40 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-xs">{file.newName || file.oldName}</div>
+                  {file.oldName && file.oldName !== file.newName && (
+                    <div className="truncate text-muted-foreground text-[11px]">{file.oldName}</div>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Badge className="text-emerald-700 dark:text-emerald-300" variant="ghost">
+                    +{file.additions}
+                  </Badge>
+                  <Badge className="text-destructive" variant="ghost">
+                    -{file.deletions}
+                  </Badge>
+                </div>
+              </div>
+              <Separator />
+              <div className="overflow-x-auto px-2 py-2 text-xs [&_.diff-view-wrapper]:min-w-full [&_table]:w-full">
+                <DiffView
+                  data={{
+                    oldFile: { fileName: file.oldName },
+                    newFile: { fileName: file.newName },
+                    hunks: [file.patch],
+                  }}
+                  diffViewFontSize={12}
+                  diffViewHighlight
+                  diffViewMode={DiffModeEnum.Unified}
+                  diffViewTheme={diffTheme}
+                  diffViewWrap
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <pre className="overflow-x-auto whitespace-pre rounded-md border bg-muted/30 p-3 text-xs leading-5">
+          {tab.diff}
+        </pre>
+      )}
     </section>
   );
 }
@@ -279,6 +349,64 @@ function PanelMessage({ body, title, tone = "muted" }: { body: string; title: st
 
 function EmptyPanel() {
   return <PanelMessage title="No tab selected" body="Open changes or an artifact from the workspace float." />;
+}
+
+type DiffPanelFile = {
+  id: string;
+  oldName: string;
+  newName: string;
+  patch: string;
+  additions: number;
+  deletions: number;
+};
+
+function parseDiffFiles(diff: string): DiffPanelFile[] {
+  const files: DiffPanelFile[] = [];
+  let current: string[] = [];
+
+  for (const line of diff.replace(/\r\n/g, "\n").split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      if (current.length > 0) files.push(buildDiffFile(current, files.length));
+      current = [line];
+    } else if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) files.push(buildDiffFile(current, files.length));
+  return files.filter((file) => file.patch.trim().length > 0);
+}
+
+function buildDiffFile(lines: string[], index: number): DiffPanelFile {
+  const patch = lines.join("\n").trimEnd();
+  const oldHeader = lines.find((line) => line.startsWith("--- "));
+  const newHeader = lines.find((line) => line.startsWith("+++ "));
+  const diffHeader = lines.find((line) => line.startsWith("diff --git "));
+  const fallbackNames = diffHeader?.match(/^diff --git a\/(.+) b\/(.+)$/);
+  const oldName = cleanDiffFileName(oldHeader?.slice(4).trim() || fallbackNames?.[1] || "");
+  const newName = cleanDiffFileName(newHeader?.slice(4).trim() || fallbackNames?.[2] || oldName);
+  let additions = 0;
+  let deletions = 0;
+
+  for (const line of lines) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("+")) additions++;
+    else if (line.startsWith("-")) deletions++;
+  }
+
+  return {
+    id: `${newName || oldName || "diff"}:${index}`,
+    oldName,
+    newName,
+    patch,
+    additions,
+    deletions,
+  };
+}
+
+function cleanDiffFileName(value: string): string {
+  if (!value || value === "/dev/null") return "";
+  return value.replace(/^a\//, "").replace(/^b\//, "");
 }
 
 function getInitialWidth(): number {

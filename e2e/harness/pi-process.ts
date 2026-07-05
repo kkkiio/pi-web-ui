@@ -15,11 +15,13 @@ export async function startPiWebUi(fixtureName: string): Promise<PiWebUiHarness>
   const repoRoot = path.resolve(__dirname, "../..");
   const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-web-ui-e2e-"));
   const workspaceDir = path.join(tempRoot, "workspace");
+  const externalDir = path.join(tempRoot, "external");
   const agentDir = path.join(tempRoot, "agent");
   const sessionDir = path.join(tempRoot, "sessions");
   const port = await getFreePort();
 
   mkdirSync(workspaceDir, { recursive: true });
+  mkdirSync(externalDir, { recursive: true });
   mkdirSync(agentDir, { recursive: true });
   mkdirSync(sessionDir, { recursive: true });
   prepareGitWorkspace(workspaceDir);
@@ -58,6 +60,7 @@ export async function startPiWebUi(fixtureName: string): Promise<PiWebUiHarness>
         PI_WEB_UI_PORT: String(port),
         PI_WEB_UI_STATIC_DIR: path.join(repoRoot, "dist"),
         PI_WEB_UI_E2E_FIXTURE: fixtureName,
+        PI_WEB_UI_E2E_EXTERNAL_ARTIFACT: path.join(externalDir, "external-skill.md"),
       },
     },
   );

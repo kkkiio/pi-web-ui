@@ -115,13 +115,13 @@ This is optional. It keeps Mirror Server subscription code smaller, but the exte
 
 ## Workspace Features
 
-Workspace features use request/response methods when the browser needs current filesystem state:
+Workspace features use request/response methods when the browser needs current git state or file content:
 
 - Git status is requested by the browser through a WebSocket method.
 - Full git diff is requested when the user opens the `git-diff` right panel tab.
-- Artifact file content is requested when the user opens an `artifact-file` right panel tab.
+- Artifact file content is requested when the user opens an `artifact-file` right panel tab. Artifacts may live inside or outside the git workspace; Mirror Server reads them as session artifacts produced by successful `edit` / `write` tool calls.
 
-These queries are not raw event forwarding. They are explicit browser-driven reads of the current workspace. The browser decides when to refresh them based on connection, sync, tool, and turn events.
+These queries are not raw event forwarding. They are explicit browser-driven reads of current git state or current artifact file content. The browser decides when to refresh them based on connection, sync, tool, and turn events.
 
 ## Recommended Extension Event Design
 
