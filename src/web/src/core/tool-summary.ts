@@ -9,14 +9,30 @@ export function isToolExpandable(tool: ToolItem): boolean {
 }
 
 export function formatToolSummary(tool: ToolItem): string {
-  const input = asRecord(tool.input);
-  const name = tool.name.toLowerCase();
+  return formatToolInvocationSummary(tool.name, tool.input);
+}
 
-  if (name === "read") return formatReadSummary(input);
-  if (name === "bash") return formatBashSummary(input);
-  if (EDIT_TOOL_NAMES.has(name)) return formatEditSummary(name, input);
+export function formatToolInvocationTitle(name: string | undefined): string {
+  if (!name) return "Tool";
+  return name
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
 
-  return input ? formatRecordSummary(input) : formatPrimitive(tool.input);
+export function formatToolInvocationSummary(name: string | undefined, input: unknown): string {
+  const record = asRecord(input);
+  const normalizedName = (name || "").toLowerCase();
+
+  if (normalizedName === "read") return formatReadSummary(record);
+  if (normalizedName === "bash") return formatBashSummary(record);
+  if (normalizedName === "agent") return formatAgentSummary(record);
+  if (EDIT_TOOL_NAMES.has(normalizedName)) return formatEditSummary(normalizedName, record);
+
+  return record ? formatRecordSummary(record) : formatPrimitive(input);
 }
 
 function formatReadSummary(input: Record<string, unknown> | null): string {
@@ -33,7 +49,19 @@ function formatReadSummary(input: Record<string, unknown> | null): string {
 function formatBashSummary(input: Record<string, unknown> | null): string {
   if (!input) return "";
   const command = firstString(input, ["command", "cmd", "script"]);
-  return command ? truncate(command, 220) : formatRecordSummary(input);
+  const description = firstString(input, ["description"]);
+  const timeout = input.timeout_ms ?? input.timeoutMs ?? input.timeout;
+  const parts = [command ? truncate(command, 220) : "", description ? truncate(description, 80) : ""];
+  if (timeout !== undefined) parts.push(`timeout ${String(timeout)}`);
+  return parts.filter(Boolean).join(" · ") || formatRecordSummary(input);
+}
+
+function formatAgentSummary(input: Record<string, unknown> | null): string {
+  if (!input) return "";
+  const description = firstString(input, ["description"]);
+  const prompt = firstString(input, ["prompt", "message"]);
+  if (description) return truncate(description, 120);
+  return prompt ? truncate(prompt.replace(/\s+/g, " "), 180) : formatRecordSummary(input);
 }
 
 function formatEditSummary(name: string, input: Record<string, unknown> | null): string {

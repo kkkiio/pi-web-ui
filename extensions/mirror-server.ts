@@ -10,10 +10,11 @@
  * - Sends full state snapshot on client connect (messages, model, etc.)
  */
 
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { WebSocket, WebSocketServer } from "ws";
 
 type SettingsData = {
@@ -27,27 +28,18 @@ type BrowserImage = {
   mimeType?: string;
 };
 
-type BrowserCommand = {
-  id?: string;
-  type?: string;
-  message?: string;
-  images?: BrowserImage[];
-  streamingBehavior?: string;
-  provider?: string;
-  modelId?: string;
-  level?: "off" | "minimal" | "low" | "medium" | "high";
-  name?: string;
-  entryId?: string;
-  outputPath?: string;
-  enabled?: boolean;
+type WsRequest = {
+  type: "req";
+  id: string;
+  method: string;
+  params?: Record<string, unknown>;
 };
 
-type BrowserResponse = {
-  type: "response";
-  command: string;
-  success: boolean;
-  id?: string;
-  data?: unknown;
+type WsResponse = {
+  type: "res";
+  id: string;
+  ok: boolean;
+  result?: unknown;
   error?: string;
 };
 
@@ -65,34 +57,23 @@ type ImageContentBlock = {
 type SessionEntry = {
   type?: string;
   id?: string;
+  parentId?: string | null;
   timestamp?: string;
   cwd?: string;
   name?: string;
   message?: {
     role?: string;
     content?: unknown;
+    toolCallId?: string;
+    isError?: boolean;
   };
 };
 
-type ParsedSession = {
-  id: string;
-  timestamp: string;
-  name: string | null;
-  firstMessage: string | null;
-  cwd: string | null;
-};
-
-type SessionListItem = ParsedSession & {
-  file: string;
-  filePath: string;
-  mtime: number;
-  tmux?: true;
-};
-
-type ProjectSessionGroup = {
-  path: string;
-  dirName: string;
-  sessions: SessionListItem[];
+type SessionTreeNode = {
+  entry: SessionEntry;
+  children: SessionTreeNode[];
+  label?: string;
+  labelTimestamp?: string;
 };
 
 type FileListItem = {
@@ -103,19 +84,26 @@ type FileListItem = {
   mtime: number;
 };
 
-type SearchMatch = {
-  role: string;
-  snippet: string;
+type GitStatusResult = {
+  isRepo: boolean;
+  branch: string | null;
+  hasChanges: boolean;
+  additions: number;
+  deletions: number;
+  untracked: number;
 };
 
-type SearchResult = {
-  filePath: string;
-  project: string;
-  sessionId: string;
-  sessionName: string;
-  sessionTimestamp: string;
-  firstMessage: string;
-  matches: SearchMatch[];
+type GitDiffResult = {
+  isRepo: boolean;
+  branch: string | null;
+  diff: string;
+};
+
+type FileContentResult = {
+  path: string;
+  name: string;
+  size: number;
+  content: string;
 };
 
 type ModelCandidate = {
@@ -126,6 +114,7 @@ type ModelCandidate = {
 type ExtensionAPIWithEvents = ExtensionAPI & {
   events?: {
     on?: (eventType: string, listener: (payload: unknown) => void) => void;
+    emit?: (eventType: string, payload: unknown) => void;
   };
 };
 
@@ -145,11 +134,6 @@ const AGENT_DIR = path.resolve(
     process.env.HOME || "~",
   ),
 );
-const CUSTOM_SESSIONS_DIR = process.env.PI_CODING_AGENT_SESSION_DIR
-  ? path.resolve(process.env.PI_CODING_AGENT_SESSION_DIR.replace(/^~(?=$|\/)/, process.env.HOME || "~"))
-  : null;
-const SESSIONS_DIR = CUSTOM_SESSIONS_DIR || path.join(AGENT_DIR, "sessions");
-const CUSTOM_SESSIONS_GROUP = "__custom__";
 
 // Load pi-web-ui settings from the Pi agent directory (falls back to env vars)
 function loadSettings(): {
@@ -182,6 +166,10 @@ const SETTINGS = loadSettings();
 const PORT = SETTINGS.port;
 const HOST = SETTINGS.host;
 const AUTO_START = SETTINGS.autoStart;
+const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
+const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
+const ARTIFACT_TOOL_NAMES = new Set(["edit", "write"]);
+const MARKDOWN_EXTENSIONS = [".md", ".mdx", ".markdown"];
 // @ts-expect-error — __dirname is provided by jiti at runtime
 const STATIC_DIR = process.env.PI_WEB_UI_STATIC_DIR || findStaticDir();
 
@@ -250,7 +238,10 @@ export default function (pi: ExtensionAPI) {
 
   // Store latest context reference for use in command handlers
   let latestCtx: ExtensionContext | null = null;
-  let latestNavigateTree: ((targetId: string) => Promise<{ cancelled: boolean; editorText?: string }>) | null = null;
+  let archExtensionPresent = false;
+  let advancedFeaturesEnabled = false;
+  let latestExecuteCtx: ExtensionCommandContext | null = null;
+  const liveArtifactPaths = new Set<string>();
 
   // ═══════════════════════════════════════
   // Helper: send to one client
@@ -356,9 +347,11 @@ export default function (pi: ExtensionAPI) {
       const { exec } = require("node:child_process");
       exec(`open "${mirrorUrl}"`);
       ctx.ui.notify(`Opened ${mirrorUrl}`, "info");
-      // Capture navigateTree for use by WebSocket handler (ADR 0003)
-      latestNavigateTree = (targetId) => ctx.navigateTree(targetId);
-      broadcast({ type: "state", advancedFeatures: true });
+      advancedFeaturesEnabled = true;
+      // Capture full ExtensionCommandContext for session-control methods (navigateTree, fork, etc.).
+      // Cleared on session_start/session_shutdown; user must re-run /webui after session replacement.
+      latestExecuteCtx = ctx;
+      broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: true } });
     },
   });
 
@@ -388,34 +381,68 @@ export default function (pi: ExtensionAPI) {
       latestCtx = ctx;
       const eventPayload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
 
+      if (eventType === "tool_execution_end" && eventPayload.isError !== true) {
+        let workspaceDir = path.resolve(process.cwd());
+        try {
+          const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+          const sessionEntry = entries.find((entry) => entry.type === "session");
+          if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+        } catch {}
+
+        const toolName = typeof eventPayload.toolName === "string" ? eventPayload.toolName.toLowerCase() : "";
+        const args =
+          eventPayload.args && typeof eventPayload.args === "object" && !Array.isArray(eventPayload.args)
+            ? (eventPayload.args as Record<string, unknown>)
+            : {};
+        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
+          .map((key) => args[key])
+          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+        const normalizedPath = rawPath
+          ?.trim()
+          .replace(/^file:\/\//, "")
+          .replace(/\\/g, "/");
+        const lowerPath = normalizedPath?.toLowerCase() || "";
+        if (
+          ARTIFACT_TOOL_NAMES.has(toolName) &&
+          MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))
+        ) {
+          liveArtifactPaths.add(
+            path.isAbsolute(normalizedPath || "")
+              ? path.resolve(normalizedPath || "")
+              : path.resolve(workspaceDir, normalizedPath || ""),
+          );
+        }
+      }
+
       // Forward event to all connected browser clients
-      // Wrap in { type: "event", event: ... } to match the existing frontend protocol
       broadcast({
         type: "event",
-        event: { type: eventType, ...eventPayload },
+        event: eventType,
+        payload: eventPayload,
       });
     });
   }
 
-  const subagentEventTypes = [
-    "subagents:ready",
-    "subagents:created",
-    "subagents:started",
-    "subagents:completed",
-    "subagents:failed",
-    "subagents:steered",
-    "subagents:compacted",
-    "subagents:scheduled",
-    "subagents:scheduler_ready",
-    "subagents:settings_loaded",
-    "subagents:settings_changed",
-  ] as const;
+  pi.on("session_tree", async (event: unknown, ctx: ExtensionContext) => {
+    latestCtx = ctx;
+    const payload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
+    broadcast({ type: "event", event: "session_tree", payload });
+  });
 
-  for (const eventType of subagentEventTypes) {
-    (pi as ExtensionAPIWithEvents).events?.on?.(eventType, (payload: unknown) => {
-      broadcast({ type: "event", event: { type: eventType, payload } });
+  // Forward arch-mode state changes from other extensions to browser clients
+  (pi as ExtensionAPIWithEvents).events?.on?.("arch:state-changed", (payload: unknown) => {
+    broadcast({
+      type: "event",
+      event: "arch:state-changed",
+      payload: typeof payload === "object" && payload !== null ? payload : {},
     });
-  }
+  });
+
+  // Listen for arch-mode extension presence announcement
+  (pi as ExtensionAPIWithEvents).events?.on?.("arch:ready", () => {
+    archExtensionPresent = true;
+    broadcast({ type: "event", event: "webui_state", payload: { archAvailable: true } });
+  });
 
   // Also capture context from session events
   // Auto-title: collect user messages and generate a title after a few turns
@@ -425,8 +452,10 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     latestCtx = ctx;
-    latestNavigateTree = null;
-    broadcast({ type: "state", advancedFeatures: false });
+    advancedFeaturesEnabled = false;
+    latestExecuteCtx = null;
+    liveArtifactPaths.clear();
+    broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
     turnCount = 0;
     titleSet = false;
     userMessages = [];
@@ -474,7 +503,8 @@ export default function (pi: ExtensionAPI) {
       // Broadcast to connected clients
       broadcast({
         type: "event",
-        event: { type: "session_name", name: title },
+        event: "session_name",
+        payload: { name: title },
       });
     }
   });
@@ -533,6 +563,8 @@ export default function (pi: ExtensionAPI) {
   async function buildStateSnapshot(ctx: ExtensionContext) {
     // Get session entries for message history
     const entries = ctx.sessionManager.getBranch();
+    const tree = ctx.sessionManager.getTree() as SessionTreeNode[];
+    const leafId = ctx.sessionManager.getLeafId();
 
     // Get model info
     const model = ctx.model;
@@ -544,247 +576,222 @@ export default function (pi: ExtensionAPI) {
     const contextUsage = ctx.getContextUsage();
 
     return {
-      type: "mirror_sync",
-      entries,
-      model,
-      thinkingLevel,
-      sessionName,
-      sessionFile,
-      isStreaming: !ctx.isIdle(),
-      contextUsage,
+      type: "event",
+      event: "state_sync",
+      payload: {
+        entries,
+        tree,
+        leafId,
+        model,
+        thinkingLevel,
+        sessionName,
+        sessionFile,
+        isStreaming: !ctx.isIdle(),
+        contextUsage,
+      },
     };
   }
 
   // ═══════════════════════════════════════
   // Handle commands from browser clients
   // ═══════════════════════════════════════
-  async function handleCommand(ws: WritableSocket, command: BrowserCommand) {
-    const id = command.id;
+  async function handleRequest(ws: WritableSocket, request: WsRequest) {
     const ctx = latestCtx;
+    const params = request.params ?? {};
 
-    const success = (cmd: string, data?: unknown) => {
-      const resp: BrowserResponse = {
-        type: "response",
-        command: cmd,
-        success: true,
-        id,
-      };
-      if (data !== undefined) resp.data = data;
-      return resp;
+    const success = (result?: unknown): WsResponse => {
+      const response: WsResponse = { type: "res", id: request.id, ok: true };
+      if (result !== undefined) response.result = result;
+      return response;
     };
 
-    const error = (cmd: string, message: string) => {
-      return {
-        type: "response",
-        command: cmd,
-        success: false,
-        error: message,
-        id,
-      };
-    };
+    const error = (message: string): WsResponse => ({
+      type: "res",
+      id: request.id,
+      ok: false,
+      error: message,
+    });
 
     try {
-      switch (command.type) {
-        // ─── Prompting ───
+      switch (request.method) {
         case "prompt": {
-          const message = command.message || "";
+          const message = typeof params.message === "string" ? params.message : "";
           if (ctx && !ctx.isIdle()) {
-            const behavior = command.streamingBehavior || "steer";
-            if (behavior === "steer") {
-              pi.sendUserMessage(message, { deliverAs: "steer" });
-            } else {
-              pi.sendUserMessage(message, { deliverAs: "followUp" });
-            }
+            const behavior = typeof params.streamingBehavior === "string" ? params.streamingBehavior : "steer";
+            pi.sendUserMessage(message, { deliverAs: behavior === "followUp" ? "followUp" : "steer" });
           } else {
-            // Build content with optional images
-            const images = Array.isArray(command.images) ? command.images : [];
+            const images = Array.isArray(params.images) ? (params.images as BrowserImage[]) : [];
             if (images.length) {
               const validMimes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
               const content: Array<TextContentBlock | ImageContentBlock> = [
                 { type: "text", text: message || "(see attached image)" },
               ];
               for (const img of images) {
-                if (!img.data || typeof img.data !== "string") {
-                  continue;
-                }
-                // Strip data URL prefix if accidentally included
+                if (!img.data || typeof img.data !== "string") continue;
                 const data = img.data.includes(",") ? img.data.split(",")[1] : img.data;
                 const mimeType = (validMimes.includes(img.mimeType) ? img.mimeType : "image/png") as
                   | "image/png"
                   | "image/jpeg"
                   | "image/gif"
                   | "image/webp";
-                const imageBlock = {
-                  type: "image" as const,
-                  data: data,
-                  mimeType: mimeType,
-                };
-                if (!imageBlock.mimeType) {
-                  imageBlock.mimeType = "image/png";
-                }
-                content.push(imageBlock);
+                content.push({ type: "image", data, mimeType });
               }
-              // Only send content array if we actually have images, otherwise just text
-              const hasImages = content.some((c) => c.type === "image");
-              if (hasImages) {
-                pi.sendUserMessage(content);
-              } else {
-                pi.sendUserMessage(message);
-              }
+              pi.sendUserMessage(content.some((block) => block.type === "image") ? content : message);
             } else {
               pi.sendUserMessage(message);
             }
           }
-          sendTo(ws, success("prompt"));
+          sendTo(ws, success());
           break;
         }
 
         case "steer": {
-          pi.sendUserMessage(command.message || "", { deliverAs: "steer" });
-          sendTo(ws, success("steer"));
+          pi.sendUserMessage(typeof params.message === "string" ? params.message : "", { deliverAs: "steer" });
+          sendTo(ws, success());
           break;
         }
 
         case "follow_up": {
-          pi.sendUserMessage(command.message || "", { deliverAs: "followUp" });
-          sendTo(ws, success("follow_up"));
+          pi.sendUserMessage(typeof params.message === "string" ? params.message : "", { deliverAs: "followUp" });
+          sendTo(ws, success());
           break;
         }
 
         case "abort": {
-          if (ctx) ctx.abort();
-          sendTo(ws, success("abort"));
+          ctx?.abort();
+          sendTo(ws, success());
           break;
         }
 
-        // ─── State ───
+        case "enter_arch_mode": {
+          (pi as ExtensionAPIWithEvents).events?.emit?.("cmd:arch:enter", {});
+          sendTo(ws, success());
+          break;
+        }
+
+        case "exit_arch_mode": {
+          (pi as ExtensionAPIWithEvents).events?.emit?.("cmd:arch:exit", {});
+          sendTo(ws, success());
+          break;
+        }
+
         case "get_state": {
           if (!ctx) {
-            sendTo(ws, error("get_state", "No context available"));
+            sendTo(ws, error("No context available"));
             break;
           }
-          const model = ctx.model;
-          const state = {
-            model,
-            thinkingLevel: pi.getThinkingLevel(),
-            isStreaming: !ctx.isIdle(),
-            sessionFile: ctx.sessionManager.getSessionFile(),
-            sessionName: pi.getSessionName(),
-            autoCompactionEnabled: true, // Extension can't easily check this
-          };
-          sendTo(ws, success("get_state", state));
-          break;
-        }
-
-        case "get_messages": {
-          if (!ctx) {
-            sendTo(ws, error("get_messages", "No context available"));
-            break;
-          }
-          const entries = ctx.sessionManager.getEntries();
-          sendTo(ws, success("get_messages", { entries }));
-          break;
-        }
-
-        // ─── Model ───
-        case "get_available_models": {
-          if (!ctx) {
-            sendTo(ws, error("get_available_models", "No context available"));
-            break;
-          }
-          const models = await ctx.modelRegistry.getAvailable();
-          sendTo(ws, success("get_available_models", { models }));
-          break;
-        }
-
-        case "set_model": {
-          if (!ctx) {
-            sendTo(ws, error("set_model", "No context available"));
-            break;
-          }
-          const models = await ctx.modelRegistry.getAvailable();
-          const model = (models as ModelCandidate[]).find(
-            (m) => m.provider === command.provider && m.id === command.modelId,
-          );
-          if (!model) {
-            sendTo(ws, error("set_model", `Model not found: ${command.provider}/${command.modelId}`));
-            break;
-          }
-          const ok = await pi.setModel(model);
-          if (!ok) {
-            sendTo(ws, error("set_model", "No API key for this model"));
-            break;
-          }
-          sendTo(ws, success("set_model", model));
-          break;
-        }
-
-        case "cycle_model": {
-          // Extension API doesn't have cycleModel directly
-          // Workaround: get available models, find current, pick next
-          if (!ctx) {
-            sendTo(ws, success("cycle_model", null));
-            break;
-          }
-          const availModels = await ctx.modelRegistry.getAvailable();
-          const currentModel = ctx.model;
-          if (!currentModel || availModels.length <= 1) {
-            sendTo(ws, success("cycle_model", null));
-            break;
-          }
-          const idx = (availModels as ModelCandidate[]).findIndex(
-            (m) => m.provider === currentModel.provider && m.id === currentModel.id,
-          );
-          const nextModel = availModels[(idx + 1) % availModels.length];
-          await pi.setModel(nextModel);
           sendTo(
             ws,
-            success("cycle_model", {
-              model: nextModel,
+            success({
+              model: ctx.model,
               thinkingLevel: pi.getThinkingLevel(),
+              isStreaming: !ctx.isIdle(),
+              sessionFile: ctx.sessionManager.getSessionFile(),
+              sessionName: pi.getSessionName(),
+              autoCompactionEnabled: true,
             }),
           );
           break;
         }
 
-        // ─── Thinking ───
+        case "get_messages": {
+          if (!ctx) {
+            sendTo(ws, error("No context available"));
+            break;
+          }
+          sendTo(ws, success({ entries: ctx.sessionManager.getEntries() }));
+          break;
+        }
+
+        case "get_available_models": {
+          if (!ctx) {
+            sendTo(ws, error("No context available"));
+            break;
+          }
+          sendTo(ws, success({ models: await ctx.modelRegistry.getAvailable() }));
+          break;
+        }
+
+        case "set_model": {
+          if (!ctx) {
+            sendTo(ws, error("No context available"));
+            break;
+          }
+          const models = await ctx.modelRegistry.getAvailable();
+          const model = (models as ModelCandidate[]).find(
+            (candidate) => candidate.provider === params.provider && candidate.id === params.modelId,
+          );
+          if (!model) {
+            sendTo(ws, error(`Model not found: ${params.provider}/${params.modelId}`));
+            break;
+          }
+          if (!(await pi.setModel(model))) {
+            sendTo(ws, error("No API key for this model"));
+            break;
+          }
+          sendTo(ws, success(model));
+          break;
+        }
+
+        case "cycle_model": {
+          if (!ctx) {
+            sendTo(ws, success(null));
+            break;
+          }
+          const availModels = await ctx.modelRegistry.getAvailable();
+          const currentModel = ctx.model;
+          if (!currentModel || availModels.length <= 1) {
+            sendTo(ws, success(null));
+            break;
+          }
+          const idx = (availModels as ModelCandidate[]).findIndex(
+            (candidate) => candidate.provider === currentModel.provider && candidate.id === currentModel.id,
+          );
+          const nextModel = availModels[(idx + 1) % availModels.length];
+          await pi.setModel(nextModel);
+          sendTo(ws, success({ model: nextModel, thinkingLevel: pi.getThinkingLevel() }));
+          break;
+        }
+
         case "cycle_thinking_level": {
           const levels = ["off", "minimal", "low", "medium", "high"];
           const current = pi.getThinkingLevel();
-          const idx = levels.indexOf(current);
-          const next = levels[(idx + 1) % levels.length];
-          pi.setThinkingLevel(next as BrowserCommand["level"]);
-          sendTo(ws, success("cycle_thinking_level", { level: next }));
+          const next = levels[(levels.indexOf(current) + 1) % levels.length] as
+            | "off"
+            | "minimal"
+            | "low"
+            | "medium"
+            | "high";
+          pi.setThinkingLevel(next);
+          sendTo(ws, success({ level: next }));
           break;
         }
 
         case "set_thinking_level": {
-          pi.setThinkingLevel(command.level);
-          sendTo(ws, success("set_thinking_level"));
+          pi.setThinkingLevel(params.level as "off" | "minimal" | "low" | "medium" | "high" | undefined);
+          sendTo(ws, success());
           break;
         }
 
-        // ─── Session ───
         case "get_session_stats": {
           if (!ctx) {
-            sendTo(ws, error("get_session_stats", "No context available"));
+            sendTo(ws, error("No context available"));
             break;
           }
           const usage = ctx.getContextUsage();
           const entries = ctx.sessionManager.getEntries();
-          let userMessages = 0,
-            assistantMessages = 0,
-            toolCalls = 0;
-          for (const e of entries) {
-            if (e.type === "message") {
-              if (e.message?.role === "user") userMessages++;
-              else if (e.message?.role === "assistant") assistantMessages++;
-              else if (e.message?.role === "toolResult") toolCalls++;
-            }
+          let userMessages = 0;
+          let assistantMessages = 0;
+          let toolCalls = 0;
+          for (const entry of entries) {
+            if (entry.type !== "message") continue;
+            if (entry.message?.role === "user") userMessages++;
+            else if (entry.message?.role === "assistant") assistantMessages++;
+            else if (entry.message?.role === "toolResult") toolCalls++;
           }
           sendTo(
             ws,
-            success("get_session_stats", {
+            success({
               sessionFile: ctx.sessionManager.getSessionFile(),
               userMessages,
               assistantMessages,
@@ -797,96 +804,125 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "set_session_name": {
-          const name = command.name?.trim();
+          const name = typeof params.name === "string" ? params.name.trim() : "";
           if (!name) {
-            sendTo(ws, error("set_session_name", "Name cannot be empty"));
+            sendTo(ws, error("Name cannot be empty"));
             break;
           }
           pi.setSessionName(name);
-          sendTo(ws, success("set_session_name"));
+          sendTo(ws, success());
           break;
         }
 
         case "set_auto_compaction": {
-          // Extension can't easily toggle auto-compaction
-          // Just acknowledge
-          sendTo(ws, success("set_auto_compaction"));
+          sendTo(ws, success());
           break;
         }
 
         case "compact": {
           if (ctx) {
-            // Broadcast compaction start to all clients
-            broadcast({
-              type: "event",
-              event: { type: "auto_compaction_start" },
-            });
+            broadcast({ type: "event", event: "auto_compaction_start", payload: {} });
             ctx.compact({
-              customInstructions: command.customInstructions,
+              customInstructions: typeof params.customInstructions === "string" ? params.customInstructions : undefined,
               onComplete: (result: { summary?: unknown }) => {
-                broadcast({
-                  type: "event",
-                  event: {
-                    type: "auto_compaction_end",
-                    summary: result?.summary,
-                  },
-                });
+                broadcast({ type: "event", event: "auto_compaction_end", payload: { summary: result?.summary } });
               },
               onError: (err: Error) => {
                 broadcast({
                   type: "event",
-                  event: {
-                    type: "auto_compaction_end",
-                    summary: `Error: ${err.message}`,
-                  },
+                  event: "auto_compaction_end",
+                  payload: { summary: `Error: ${err.message}` },
                 });
               },
             });
           }
-          sendTo(ws, success("compact"));
+          sendTo(ws, success());
           break;
         }
 
         case "export_html": {
           if (!ctx) {
-            sendTo(ws, error("export_html", "No context available"));
+            sendTo(ws, error("No context available"));
             break;
           }
           try {
             const sessionFile = ctx.sessionManager.getSessionFile();
             if (!sessionFile) throw new Error("No session file to export");
             const { execSync } = require("node:child_process");
-            const args = command.outputPath ? `"${sessionFile}" "${command.outputPath}"` : `"${sessionFile}"`;
-            const output = execSync(`pi --export ${args}`, {
-              cwd: process.cwd(),
-              timeout: 30000,
-              encoding: "utf-8",
-            });
-            // pi prints the output path
-            const result = output.trim().split("\n").pop() || sessionFile.replace(".jsonl", ".html");
-            sendTo(ws, success("export_html", { path: result }));
+            const outputPath = typeof params.outputPath === "string" ? params.outputPath : "";
+            const args = outputPath ? `"${sessionFile}" "${outputPath}"` : `"${sessionFile}"`;
+            const output = execSync(`pi --export ${args}`, { cwd: process.cwd(), timeout: 30000, encoding: "utf-8" });
+            sendTo(ws, success({ path: output.trim().split("\n").pop() || sessionFile.replace(".jsonl", ".html") }));
           } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : String(e);
-            sendTo(ws, error("export_html", message));
+            sendTo(ws, error(e instanceof Error ? e.message : String(e)));
           }
           break;
         }
 
-        // ─── Commands & Files ───
-        // ─── Sync ───
-        case "mirror_sync_request": {
-          if (ctx) {
-            const snapshot = await buildStateSnapshot(ctx);
-            sendTo(ws, snapshot);
-          } else {
-            sendTo(ws, { type: "mirror_sync", entries: [], model: null });
-          }
+        case "sync_request": {
+          const snapshot = ctx
+            ? await buildStateSnapshot(ctx)
+            : { type: "event", event: "state_sync", payload: { entries: [], tree: [], leafId: null, model: null } };
+          sendTo(ws, success(snapshot.payload));
           break;
         }
 
-        // ─── Auth ───
+        case "health": {
+          sendTo(ws, success({ status: "ok", mode: "webui", mirrorUrl }));
+          break;
+        }
+
+        case "get_files": {
+          const explicitPath = typeof params.path === "string" ? params.path : "";
+          let dirPath = explicitPath || process.cwd();
+          if (!explicitPath && latestCtx) {
+            try {
+              const entries = latestCtx.sessionManager.getEntries() as SessionEntry[];
+              const sessionEntry = entries.find((entry) => entry.type === "session");
+              if (typeof sessionEntry?.cwd === "string") dirPath = sessionEntry.cwd;
+            } catch {}
+          }
+          sendTo(ws, success(getFileList(dirPath)));
+          break;
+        }
+
+        case "get_git_status": {
+          sendTo(ws, success(getGitStatus(ctx)));
+          break;
+        }
+
+        case "get_git_diff": {
+          const filePath = typeof params.path === "string" ? params.path : undefined;
+          sendTo(ws, success(getGitDiff(ctx, filePath)));
+          break;
+        }
+
+        case "get_file_content": {
+          const filePath = typeof params.path === "string" ? params.path : "";
+          if (!filePath) {
+            sendTo(ws, error("path required"));
+            break;
+          }
+          sendTo(ws, success(getFileContent(ctx, filePath)));
+          break;
+        }
+
+        case "open_file": {
+          const filePath = typeof params.filePath === "string" ? params.filePath : "";
+          if (!filePath) {
+            sendTo(ws, error("filePath required"));
+            break;
+          }
+          const { execFile } = await import("node:child_process");
+          execFile("open", [filePath], (err) => {
+            if (err) latestCtx?.ui.notify(`Failed to open file: ${err.message}`, "warning");
+          });
+          sendTo(ws, success({ ok: true }));
+          break;
+        }
+
         case "get_auth": {
-          sendTo(ws, success("get_auth", { configured: false, enabled: false }));
+          sendTo(ws, success({ configured: false, enabled: false }));
           break;
         }
 
@@ -894,7 +930,6 @@ export default function (pi: ExtensionAPI) {
           sendTo(
             ws,
             error(
-              "set_auth",
               "Authentication is not supported. Use tailscale serve or a reverse proxy with TLS for remote access.",
             ),
           );
@@ -902,43 +937,43 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "navigate_tree": {
-          if (!latestNavigateTree) {
-            sendTo(ws, error("navigate_tree", "Run /webui first to enable editing"));
+          if (!advancedFeaturesEnabled || !latestExecuteCtx) {
+            sendTo(ws, error("Run /webui first to enable editing"));
             break;
           }
           if (!latestCtx?.isIdle()) {
-            sendTo(ws, error("navigate_tree", "Agent is busy"));
+            sendTo(ws, error("Agent is busy"));
             break;
           }
-          const entry = latestCtx.sessionManager.getEntry(command.entryId);
+          const entryId = typeof params.entryId === "string" ? params.entryId : "";
+          const entry = latestCtx.sessionManager.getEntry(entryId);
           if (!entry) {
-            sendTo(ws, error("navigate_tree", "Entry not found"));
+            sendTo(ws, error("Entry not found"));
             break;
           }
           if (!latestCtx.model) {
-            sendTo(ws, error("navigate_tree", "No model selected"));
+            sendTo(ws, error("No model selected"));
             break;
           }
-          const result = await latestNavigateTree(entry.id);
+          const result = await latestExecuteCtx.navigateTree(entryId);
           if (result.cancelled) {
-            sendTo(ws, error("navigate_tree", "Navigation cancelled"));
+            sendTo(ws, success({ cancelled: true }));
             break;
           }
-          // Send success before snapshot so RPC promise resolves correctly
-          sendTo(ws, success("navigate_tree"));
-          // Broadcast updated state to all connected clients
-          const snapshot = await buildStateSnapshot(latestCtx);
-          broadcast(snapshot);
+          sendTo(ws, success({ editorText: result.editorText, cancelled: false }));
           break;
         }
 
-        default: {
-          sendTo(ws, error(command.type, `Unknown command: ${command.type}`));
+        case "extension_ui_response": {
+          sendTo(ws, success());
+          break;
         }
+
+        default:
+          sendTo(ws, error(`Unknown method: ${request.method}`));
       }
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      sendTo(ws, error(command.type || "unknown", message));
+      sendTo(ws, error(e instanceof Error ? e.message : String(e)));
     }
   }
 
@@ -947,12 +982,6 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   function serveStaticFile(req: http.IncomingMessage, res: http.ServerResponse) {
     let urlPath = req.url || "/";
-
-    // Handle API routes
-    if (urlPath.startsWith("/api/")) {
-      handleApiRoute(req, res, urlPath);
-      return;
-    }
 
     // Strip query params
     urlPath = urlPath.split("?")[0];
@@ -986,490 +1015,6 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ═══════════════════════════════════════
-  // API routes (sessions list, etc.)
-  // ═══════════════════════════════════════
-  function handleApiRoute(req: http.IncomingMessage, res: http.ServerResponse, urlPath: string) {
-    // CORS headers
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-    if (req.method === "OPTIONS") {
-      res.writeHead(200);
-      res.end();
-      return;
-    }
-
-    if (urlPath === "/api/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          status: "ok",
-          mode: "webui",
-          mirrorUrl,
-        }),
-      );
-      return;
-    }
-
-    if (urlPath === "/api/projects" && req.method === "GET") {
-      serveProjectsList(res);
-      return;
-    }
-
-    if (urlPath === "/api/projects/launch" && req.method === "POST") {
-      let body = "";
-      req.on("data", (chunk: Buffer) => {
-        body += chunk.toString();
-      });
-      req.on("end", () => {
-        try {
-          const { path: projectPath } = JSON.parse(body);
-          if (!projectPath || typeof projectPath !== "string") {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "path required" }));
-            return;
-          }
-          // Resolve ~ in path
-          const resolved = projectPath.startsWith("~")
-            ? path.join(process.env.HOME || "", projectPath.slice(1))
-            : projectPath;
-          if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Directory not found" }));
-            return;
-          }
-          const { execSync } = require("node:child_process");
-          const escaped = resolved.replace(/'/g, "'\\''");
-          execSync(
-            `osascript -e 'tell app "iTerm2" to create window with default profile command "cd '"'"'${escaped}'"'"' && pi"'`,
-          );
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: true }));
-        } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : String(e);
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: message }));
-        }
-      });
-      return;
-    }
-
-    if (urlPath === "/api/sessions" && req.method === "GET") {
-      serveSessionsList(res);
-      return;
-    }
-
-    // Full-text search across sessions
-    if (urlPath.startsWith("/api/search") && req.method === "GET") {
-      const searchUrl = new URL(`http://localhost${req.url}`);
-      const q = searchUrl.searchParams.get("q") || "";
-      serveSearch(res, q);
-      return;
-    }
-
-    // File browser: list directory
-    if (urlPath === "/api/files" || urlPath.startsWith("/api/files?")) {
-      if (req.method !== "GET") {
-        res.writeHead(405);
-        res.end();
-        return;
-      }
-      try {
-        const filesUrl = new URL(`http://localhost${req.url}`);
-        const explicitPath = filesUrl.searchParams.get("path");
-        let dirPath = explicitPath || process.cwd();
-        if (!explicitPath && latestCtx) {
-          try {
-            const entries = latestCtx.sessionManager.getEntries() as SessionEntry[];
-            const sessionEntry = entries.find((e) => e.type === "session");
-            if (typeof sessionEntry?.cwd === "string") dirPath = sessionEntry.cwd;
-          } catch {}
-        }
-        serveFileList(res, dirPath);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: message }));
-      }
-      return;
-    }
-
-    // File browser: open file natively
-    if (urlPath === "/api/open" && req.method === "POST") {
-      let body = "";
-      req.on("data", (chunk: Buffer) => {
-        body += chunk.toString();
-      });
-      req.on("end", async () => {
-        try {
-          const { filePath: fp } = JSON.parse(body);
-          if (!fp || typeof fp !== "string") {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "filePath required" }));
-            return;
-          }
-          const { execFile } = await import("node:child_process");
-          execFile("open", [fp], (err) => {
-            if (err) latestCtx?.ui.notify(`Failed to open file: ${err.message}`, "warning");
-          });
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: true }));
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: message }));
-        }
-      });
-      return;
-    }
-
-    // Session file endpoint: /api/sessions/:dirName/:file
-    const sessionMatch = urlPath.match(/^\/api\/sessions\/([^/]+)\/([^/]+)$/);
-    if (sessionMatch && req.method === "GET") {
-      serveSessionFile(res, sessionMatch[1], sessionMatch[2]);
-      return;
-    }
-
-    // RPC proxy — handle via WebSocket command handler
-    if (urlPath === "/api/rpc" && req.method === "POST") {
-      let body = "";
-      req.on("data", (chunk: Buffer) => {
-        body += chunk.toString();
-      });
-      req.on("end", async () => {
-        try {
-          const command = JSON.parse(body) as BrowserCommand;
-          // Create a fake WebSocket-like object to capture the response
-          const responsePromise = new Promise<unknown>((resolve) => {
-            const fakeWs: WritableSocket = {
-              readyState: WebSocket.OPEN,
-              send: (data: string | Buffer | ArrayBuffer | Buffer[]) => resolve(JSON.parse(data.toString())),
-            };
-            handleCommand(fakeWs, command);
-          });
-          const response = await responsePromise;
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(response));
-        } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : String(e);
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: message }));
-        }
-      });
-      return;
-    }
-
-    // Session switch — in mirror mode, this is a no-op (session is controlled by TUI)
-    if (urlPath === "/api/sessions/switch" && req.method === "POST") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          success: true,
-          mirror: true,
-          note: "Session switching is controlled by the TUI in mirror mode",
-        }),
-      );
-      return;
-    }
-
-    // Memoryd check
-    res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Not found" }));
-  }
-
-  // ═══════════════════════════════════════
-  // Sessions list endpoint
-  // ═══════════════════════════════════════
-  function getTmuxSessionFiles(): Set<string> {
-    try {
-      const { execSync } = require("node:child_process");
-      // Get tmux pane PIDs
-      const paneOutput = execSync("tmux list-panes -a -F '#{pane_pid}' 2>/dev/null", {
-        encoding: "utf8",
-      });
-      const tmuxFiles = new Set<string>();
-
-      for (const shellPid of paneOutput.trim().split("\n").filter(Boolean)) {
-        try {
-          // Find Pi (node) processes that are children of tmux shells
-          const children = execSync(`pgrep -P ${shellPid} 2>/dev/null`, {
-            encoding: "utf8",
-          });
-          for (const pid of children.trim().split("\n").filter(Boolean)) {
-            // Check what .jsonl files this process has open
-            const lsofOut = execSync(`lsof -p ${pid} 2>/dev/null | grep '\\.jsonl'`, {
-              encoding: "utf8",
-            });
-            for (const line of lsofOut.trim().split("\n").filter(Boolean)) {
-              const match = line.match(/\/.+\.jsonl$/);
-              if (match) tmuxFiles.add(match[0]);
-            }
-          }
-        } catch {
-          /* no match */
-        }
-      }
-      return tmuxFiles;
-    } catch {
-      return new Set();
-    }
-  }
-
-  function serveProjectsList(res: http.ServerResponse) {
-    const projectsDir = process.env.PI_WEB_UI_PROJECTS_DIR;
-    if (!projectsDir) {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ projects: [] }));
-      return;
-    }
-
-    const resolved = projectsDir.startsWith("~")
-      ? path.join(process.env.HOME || "", projectsDir.slice(1))
-      : projectsDir;
-
-    if (!fs.existsSync(resolved)) {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ projects: [], error: "Directory not found" }));
-      return;
-    }
-
-    try {
-      const entries = fs.readdirSync(resolved, { withFileTypes: true });
-      // Build session count + recency map from session history
-      const sessionInfo = new Map<string, { count: number; lastActive: number }>();
-      if (fs.existsSync(SESSIONS_DIR)) {
-        for (const dir of fs.readdirSync(SESSIONS_DIR, {
-          withFileTypes: true,
-        })) {
-          if (!dir.isDirectory()) continue;
-          const decodedPath = dir.name.replace(/^--/, "/").replace(/--$/, "").replace(/-/g, "/");
-          // Check if this session dir maps to a subdirectory of the projects folder
-          if (!decodedPath.startsWith(`${resolved}/`) && !decodedPath.startsWith(resolved)) continue;
-
-          const sessionDir = path.join(SESSIONS_DIR, dir.name);
-          const files = fs.readdirSync(sessionDir).filter((f) => f.endsWith(".jsonl"));
-          let lastMtime = 0;
-          for (const f of files) {
-            try {
-              const stat = fs.statSync(path.join(sessionDir, f));
-              if (stat.mtimeMs > lastMtime) lastMtime = stat.mtimeMs;
-            } catch {}
-          }
-          sessionInfo.set(decodedPath, {
-            count: files.length,
-            lastActive: lastMtime,
-          });
-        }
-      }
-
-      const projects = entries
-        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-        .map((e) => {
-          const fullPath = path.join(resolved, e.name);
-          const info = sessionInfo.get(fullPath) || { count: 0, lastActive: 0 };
-          return {
-            name: e.name,
-            path: fullPath,
-            sessionCount: info.count,
-            lastActive: info.lastActive || null,
-          };
-        });
-
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ projects }));
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: message }));
-    }
-  }
-
-  async function serveSessionsList(res: http.ServerResponse) {
-    try {
-      if (!fs.existsSync(SESSIONS_DIR)) {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ projects: [] }));
-        return;
-      }
-
-      const tmuxFiles = getTmuxSessionFiles();
-      const readline = await import("node:readline");
-      const dirEntries = CUSTOM_SESSIONS_DIR
-        ? [{ name: CUSTOM_SESSIONS_GROUP, isDirectory: () => true }]
-        : fs.readdirSync(SESSIONS_DIR, { withFileTypes: true });
-      const projects: ProjectSessionGroup[] = [];
-
-      for (const dir of dirEntries) {
-        if (!dir.isDirectory()) continue;
-
-        const projectDir = CUSTOM_SESSIONS_DIR || path.join(SESSIONS_DIR, dir.name);
-        const files = fs.readdirSync(projectDir).filter((f) => f.endsWith(".jsonl"));
-        const decodedPath = CUSTOM_SESSIONS_DIR
-          ? CUSTOM_SESSIONS_DIR
-          : dir.name.replace(/^--/, "/").replace(/--$/, "").replace(/-/g, "/");
-
-        const sessions: SessionListItem[] = [];
-
-        for (const file of files) {
-          try {
-            const filePath = path.join(projectDir, file);
-            const parsed = await parseSessionFile(filePath, readline);
-            if (parsed) {
-              const stat = fs.statSync(filePath);
-              const isTmux = tmuxFiles.has(filePath);
-              sessions.push({
-                ...parsed,
-                file,
-                filePath,
-                projectPath: decodedPath,
-                mtime: stat.mtimeMs,
-                ...(isTmux && { tmux: true }),
-              });
-            }
-          } catch {
-            /* skip */
-          }
-        }
-
-        sessions.sort((a, b) => b.mtime - a.mtime);
-
-        if (sessions.length > 0) {
-          projects.push({ path: decodedPath, dirName: dir.name, sessions });
-        }
-      }
-
-      projects.sort((a, b) => {
-        const aTime = a.sessions[0]?.mtime || 0;
-        const bTime = b.sessions[0]?.mtime || 0;
-        return bTime - aTime;
-      });
-
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ projects }));
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: message }));
-    }
-  }
-
-  // ═══════════════════════════════════════
-  // Session file endpoint
-  // ═══════════════════════════════════════
-  function serveSessionFile(res: http.ServerResponse, dirName: string, file: string) {
-    const filePath =
-      CUSTOM_SESSIONS_DIR && dirName === CUSTOM_SESSIONS_GROUP
-        ? path.join(CUSTOM_SESSIONS_DIR, file)
-        : path.join(SESSIONS_DIR, dirName, file);
-
-    if (!fs.existsSync(filePath)) {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Session not found" }));
-      return;
-    }
-
-    const entries: unknown[] = [];
-    const stream = fs.createReadStream(filePath, { encoding: "utf8" });
-    let buffer = "";
-
-    stream.on("data", (chunk: string) => {
-      buffer += chunk;
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-      for (const line of lines) {
-        if (line.trim()) {
-          try {
-            entries.push(JSON.parse(line));
-          } catch {
-            /* skip */
-          }
-        }
-      }
-    });
-
-    stream.on("end", () => {
-      if (buffer.trim()) {
-        try {
-          entries.push(JSON.parse(buffer));
-        } catch {
-          /* skip */
-        }
-      }
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ entries }));
-    });
-
-    stream.on("error", (e: Error) => {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: e.message }));
-    });
-  }
-
-  // ═══════════════════════════════════════
-  // Parse session file header
-  // ═══════════════════════════════════════
-  async function parseSessionFile(
-    filePath: string,
-    readline: typeof import("node:readline"),
-  ): Promise<ParsedSession | null> {
-    const stream = fs.createReadStream(filePath, { encoding: "utf8" });
-    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-
-    let header: SessionEntry | null = null;
-    let firstMessage: string | null = null;
-    let sessionName: string | null = null;
-    let userMessageCount = 0;
-    let lineCount = 0;
-
-    for await (const line of rl) {
-      if (!line.trim()) continue;
-      lineCount++;
-
-      try {
-        const entry = JSON.parse(line) as SessionEntry;
-        if (entry.type === "session") header = entry;
-        else if (entry.type === "session_info" && entry.name) sessionName = entry.name;
-        else if (entry.type === "message" && entry.message?.role === "user") {
-          userMessageCount++;
-          if (!firstMessage) {
-            const content = entry.message.content;
-            if (typeof content === "string") firstMessage = content.substring(0, 120);
-            else if (Array.isArray(content)) {
-              const tb = content.find(
-                (b): b is TextContentBlock =>
-                  typeof b === "object" &&
-                  b !== null &&
-                  (b as { type?: unknown }).type === "text" &&
-                  typeof (b as { text?: unknown }).text === "string",
-              );
-              if (tb) firstMessage = tb.text.substring(0, 120);
-            }
-          }
-        }
-      } catch {
-        /* skip */
-      }
-
-      if (lineCount > 50 && firstMessage) break;
-    }
-
-    rl.close();
-    stream.destroy();
-
-    if (!header?.id) return null;
-    if (userMessageCount <= 1 && lineCount <= 8) return null; // pipe mode
-
-    return {
-      id: header.id,
-      timestamp: header.timestamp || "",
-      name: sessionName,
-      firstMessage,
-      cwd: header.cwd || null,
-    };
-  }
-
-  // ═══════════════════════════════════════
   // File browser
   // ═══════════════════════════════════════
 
@@ -1495,187 +1040,315 @@ export default function (pi: ExtensionAPI) {
     ".parcel-cache",
   ]);
 
-  function serveFileList(res: http.ServerResponse, dirPath: string) {
-    try {
-      if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Not a directory" }));
-        return;
-      }
-
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      const items: FileListItem[] = [];
-
-      for (const entry of entries) {
-        if (entry.name.startsWith(".") && entry.name !== ".env") continue;
-        if (IGNORED_NAMES.has(entry.name)) continue;
-
-        try {
-          const fullPath = path.join(dirPath, entry.name);
-          const stat = fs.statSync(fullPath);
-
-          items.push({
-            name: entry.name,
-            path: fullPath,
-            isDirectory: entry.isDirectory(),
-            size: entry.isDirectory() ? null : stat.size,
-            mtime: stat.mtimeMs,
-          });
-        } catch {
-          /* skip inaccessible */
-        }
-      }
-
-      // Directories first, then files, both alphabetical
-      items.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ path: dirPath, items }));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: message }));
+  function getGitStatus(ctx: ExtensionContext | null): GitStatusResult {
+    let workspaceDir = path.resolve(process.cwd());
+    if (ctx) {
+      try {
+        const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+        const sessionEntry = entries.find((entry) => entry.type === "session");
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+      } catch {}
     }
+
+    const rootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: workspaceDir,
+      encoding: "utf8",
+      maxBuffer: MAX_GIT_OUTPUT_BYTES,
+    });
+    if (rootResult.error || rootResult.status !== 0 || typeof rootResult.stdout !== "string") {
+      return { isRepo: false, branch: null, hasChanges: false, additions: 0, deletions: 0, untracked: 0 };
+    }
+    const gitRoot = path.resolve(rootResult.stdout.trim());
+
+    const gitOptions = { cwd: gitRoot, encoding: "utf8" as const, maxBuffer: MAX_GIT_OUTPUT_BYTES };
+    const outputs = new Map<string, string>();
+    const commands: Array<[string, string[]]> = [
+      ["branch", ["branch", "--show-current"]],
+      ["head", ["rev-parse", "--short", "HEAD"]],
+      ["porcelain", ["status", "--porcelain=v1", "--untracked-files=all"]],
+      ["unstagedStat", ["diff", "--numstat"]],
+      ["stagedStat", ["diff", "--cached", "--numstat"]],
+      ["untracked", ["ls-files", "--others", "--exclude-standard", "-z"]],
+    ];
+    for (const [name, args] of commands) {
+      const result = spawnSync("git", args, gitOptions);
+      if (result.error) throw result.error;
+      if (result.status !== 0 && name !== "branch") {
+        throw new Error(String(result.stderr || `git ${args.join(" ")} failed`).trim());
+      }
+      outputs.set(name, typeof result.stdout === "string" ? result.stdout : "");
+    }
+
+    let additions = 0;
+    let deletions = 0;
+    for (const line of `${outputs.get("unstagedStat") || ""}\n${outputs.get("stagedStat") || ""}`.split(/\r?\n/)) {
+      const [added, deleted] = line.split("\t");
+      const addedCount = Number(added);
+      const deletedCount = Number(deleted);
+      if (Number.isFinite(addedCount)) additions += addedCount;
+      if (Number.isFinite(deletedCount)) deletions += deletedCount;
+    }
+
+    const untrackedPaths = (outputs.get("untracked") || "").split("\0").filter(Boolean);
+    let untrackedAdditions = 0;
+
+    for (const relativePath of untrackedPaths) {
+      const absolutePath = path.resolve(gitRoot, relativePath);
+      try {
+        const stat = fs.statSync(absolutePath);
+        if (!stat.isFile() || stat.size > MAX_FILE_CONTENT_BYTES) continue;
+        const content = fs.readFileSync(absolutePath, "utf8");
+        if (content.includes("\0")) continue;
+        untrackedAdditions += content ? (content.match(/\n/g)?.length ?? 0) + (content.endsWith("\n") ? 0 : 1) : 0;
+      } catch {}
+    }
+
+    return {
+      isRepo: true,
+      branch: (outputs.get("branch") || outputs.get("head") || "").trim() || null,
+      hasChanges: (outputs.get("porcelain") || "").trim().length > 0,
+      additions: additions + untrackedAdditions,
+      deletions,
+      untracked: untrackedPaths.length,
+    };
   }
 
-  // ═══════════════════════════════════════
-  // Full-text search
-  // ═══════════════════════════════════════
+  function getGitDiff(ctx: ExtensionContext | null, requestedPath?: string): GitDiffResult {
+    let workspaceDir = path.resolve(process.cwd());
+    if (ctx) {
+      try {
+        const entries = ctx.sessionManager.getEntries() as SessionEntry[];
+        const sessionEntry = entries.find((entry) => entry.type === "session");
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+      } catch {}
+    }
 
-  async function serveSearch(res: http.ServerResponse, query: string) {
-    try {
-      if (!query || query.length < 2) {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ results: [] }));
-        return;
+    const rootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: workspaceDir,
+      encoding: "utf8",
+      maxBuffer: MAX_GIT_OUTPUT_BYTES,
+    });
+    if (rootResult.error || rootResult.status !== 0 || typeof rootResult.stdout !== "string") {
+      return { isRepo: false, branch: null, diff: "" };
+    }
+    const gitRoot = path.resolve(rootResult.stdout.trim());
+    let requestedRelativePath: string | null = null;
+    if (requestedPath) {
+      const absolutePath = path.isAbsolute(requestedPath)
+        ? path.resolve(requestedPath)
+        : path.resolve(workspaceDir, requestedPath);
+      if (absolutePath !== workspaceDir && !absolutePath.startsWith(`${workspaceDir}${path.sep}`)) {
+        throw new Error("path outside workspace");
       }
-
-      const q = query.toLowerCase();
-      const readline = await import("node:readline");
-      const results: SearchResult[] = [];
-      const MAX_RESULTS = 30;
-
-      if (!fs.existsSync(SESSIONS_DIR)) {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ results: [] }));
-        return;
+      requestedRelativePath = path.relative(gitRoot, absolutePath).replace(/\\/g, "/");
+      if (requestedRelativePath.startsWith("..") || path.isAbsolute(requestedRelativePath)) {
+        throw new Error("path outside git repository");
       }
+    }
 
-      const dirEntries = CUSTOM_SESSIONS_DIR
-        ? [{ name: CUSTOM_SESSIONS_GROUP, isDirectory: () => true }]
-        : fs.readdirSync(SESSIONS_DIR, { withFileTypes: true });
+    const gitOptions = { cwd: gitRoot, encoding: "utf8" as const, maxBuffer: MAX_GIT_OUTPUT_BYTES };
+    const pathArgs = requestedRelativePath ? ["--", requestedRelativePath] : [];
+    const outputs = new Map<string, string>();
+    const commands: Array<[string, string[]]> = [
+      ["branch", ["branch", "--show-current"]],
+      ["head", ["rev-parse", "--short", "HEAD"]],
+      ["staged", ["diff", "--cached", "--no-ext-diff", ...pathArgs]],
+      ["unstaged", ["diff", "--no-ext-diff", ...pathArgs]],
+      ["untracked", ["ls-files", "--others", "--exclude-standard", "-z"]],
+    ];
+    for (const [name, args] of commands) {
+      const result = spawnSync("git", args, gitOptions);
+      if (result.error) throw result.error;
+      if (result.status !== 0 && name !== "branch") {
+        throw new Error(String(result.stderr || `git ${args.join(" ")} failed`).trim());
+      }
+      outputs.set(name, typeof result.stdout === "string" ? result.stdout : "");
+    }
 
-      for (const dir of dirEntries) {
-        if (!dir.isDirectory()) continue;
-        if (results.length >= MAX_RESULTS) break;
+    const untrackedPaths = (outputs.get("untracked") || "")
+      .split("\0")
+      .filter(Boolean)
+      .filter((relativePath) => !requestedRelativePath || relativePath === requestedRelativePath);
+    const parts: string[] = [];
+    const staged = (outputs.get("staged") || "").trimEnd();
+    const unstaged = (outputs.get("unstaged") || "").trimEnd();
 
-        const projectDir = CUSTOM_SESSIONS_DIR || path.join(SESSIONS_DIR, dir.name);
-        const decodedPath = CUSTOM_SESSIONS_DIR
-          ? CUSTOM_SESSIONS_DIR
-          : dir.name.replace(/^--/, "/").replace(/--$/, "").replace(/-/g, "/");
-        const files = fs.readdirSync(projectDir).filter((f) => f.endsWith(".jsonl"));
+    if (staged) parts.push(`## Staged changes\n\n${staged}`);
+    if (unstaged) parts.push(`## Working tree changes\n\n${unstaged}`);
+    if (untrackedPaths.length) {
+      const untrackedDiffs: string[] = [];
+      for (const relativePath of untrackedPaths) {
+        const absolutePath = path.resolve(gitRoot, relativePath);
+        try {
+          const stat = fs.statSync(absolutePath);
+          if (!stat.isFile()) continue;
+          if (stat.size > MAX_FILE_CONTENT_BYTES) {
+            untrackedDiffs.push(`diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n[large file]`);
+            continue;
+          }
+          const content = fs.readFileSync(absolutePath, "utf8");
+          if (content.includes("\0")) {
+            untrackedDiffs.push(`diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n[binary file]`);
+            continue;
+          }
+          const lines = content.split(/\r?\n/);
+          if (lines.at(-1) === "") lines.pop();
+          untrackedDiffs.push(
+            [
+              `diff --git a/${relativePath} b/${relativePath}`,
+              "new file mode 100644",
+              "--- /dev/null",
+              `+++ b/${relativePath}`,
+              `@@ -0,0 +1,${lines.length} @@`,
+              ...lines.map((line) => `+${line}`),
+            ].join("\n"),
+          );
+        } catch {}
+      }
+      if (untrackedDiffs.length) parts.push(`## Untracked files\n\n${untrackedDiffs.join("\n\n")}`);
+    }
 
-        for (const file of files) {
-          if (results.length >= MAX_RESULTS) break;
+    return {
+      isRepo: true,
+      branch: (outputs.get("branch") || outputs.get("head") || "").trim() || null,
+      diff: parts.join("\n\n"),
+    };
+  }
 
-          try {
-            const filePath = path.join(projectDir, file);
-            const stream = fs.createReadStream(filePath, { encoding: "utf8" });
-            const rl = readline.createInterface({
-              input: stream,
-              crlfDelay: Infinity,
-            });
+  function getFileContent(ctx: ExtensionContext | null, requestedPath: string): FileContentResult {
+    let workspaceDir = path.resolve(process.cwd());
+    let entries: SessionEntry[] = [];
+    if (ctx) {
+      try {
+        entries = ctx.sessionManager.getEntries() as SessionEntry[];
+        const sessionEntry = entries.find((entry) => entry.type === "session");
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+      } catch {}
+    }
 
-            let sessionId = "";
-            let sessionName = "";
-            let sessionTimestamp = "";
-            let firstMessage = "";
-            const matches: SearchMatch[] = [];
+    const normalizedRequest = requestedPath
+      .trim()
+      .replace(/^file:\/\//, "")
+      .replace(/\\/g, "/");
+    const absolutePath = path.isAbsolute(normalizedRequest)
+      ? path.resolve(normalizedRequest)
+      : path.resolve(workspaceDir, normalizedRequest);
+    const insideWorkspace = absolutePath === workspaceDir || absolutePath.startsWith(`${workspaceDir}${path.sep}`);
+    const artifactPaths = new Set(liveArtifactPaths);
+    const pendingToolCalls = new Map<string, string>();
 
-            for await (const line of rl) {
-              if (!line.trim()) continue;
-              try {
-                const entry = JSON.parse(line) as SessionEntry;
-
-                if (entry.type === "session") {
-                  sessionId = entry.id;
-                  sessionTimestamp = entry.timestamp || "";
-                }
-                if (entry.type === "session_info" && entry.name) {
-                  sessionName = entry.name;
-                }
-                if (entry.type === "message") {
-                  const content = entry.message?.content;
-                  let text = "";
-                  if (typeof content === "string") text = content;
-                  else if (Array.isArray(content)) {
-                    text = content
-                      .filter(
-                        (b): b is TextContentBlock =>
-                          typeof b === "object" &&
-                          b !== null &&
-                          (b as { type?: unknown }).type === "text" &&
-                          typeof (b as { text?: unknown }).text === "string",
-                      )
-                      .map((b) => b.text)
-                      .join(" ");
-                  }
-
-                  if (!firstMessage && entry.message?.role === "user" && text) {
-                    firstMessage = text.substring(0, 120);
-                  }
-
-                  if (text?.toLowerCase().includes(q)) {
-                    // Extract a snippet around the match
-                    const idx = text.toLowerCase().indexOf(q);
-                    const start = Math.max(0, idx - 60);
-                    const end = Math.min(text.length, idx + q.length + 60);
-                    const snippet =
-                      (start > 0 ? "…" : "") + text.substring(start, end) + (end < text.length ? "…" : "");
-
-                    matches.push({
-                      role: entry.message?.role || "unknown",
-                      snippet: snippet.replace(/\n/g, " "),
-                    });
-
-                    if (matches.length >= 3) break; // max 3 matches per session
-                  }
-                }
-              } catch {
-                /* skip line */
-              }
-            }
-
-            rl.close();
-            stream.destroy();
-
-            if (matches.length > 0) {
-              results.push({
-                filePath,
-                project: decodedPath,
-                sessionId,
-                sessionName,
-                sessionTimestamp,
-                firstMessage,
-                matches,
-              });
-            }
-          } catch {
-            /* skip file */
+    for (const entry of entries) {
+      const message = entry.message;
+      if (message?.role === "assistant" && Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+          const record = block as Record<string, unknown>;
+          if (record.type !== "toolCall" || typeof record.id !== "string") continue;
+          const tool = typeof record.name === "string" ? record.name.toLowerCase() : "";
+          const args =
+            record.arguments && typeof record.arguments === "object"
+              ? (record.arguments as Record<string, unknown>)
+              : {};
+          const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
+            .map((key) => args[key])
+            .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+          const normalizedPath = rawPath
+            ?.trim()
+            .replace(/^file:\/\//, "")
+            .replace(/\\/g, "/");
+          const lowerPath = normalizedPath?.toLowerCase() || "";
+          if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
+            pendingToolCalls.set(
+              record.id,
+              path.isAbsolute(normalizedPath || "")
+                ? path.resolve(normalizedPath || "")
+                : path.resolve(workspaceDir, normalizedPath || ""),
+            );
           }
         }
       }
 
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ results }));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: message }));
+      if (message?.role === "toolResult" && typeof message.toolCallId === "string" && message.isError !== true) {
+        const artifactPath = pendingToolCalls.get(message.toolCallId);
+        if (artifactPath) artifactPaths.add(artifactPath);
+      }
+
+      const entryRecord = entry as SessionEntry & { toolName?: unknown; args?: unknown; isError?: unknown };
+      if (entry.type === "tool_execution_end" && entryRecord.isError !== true) {
+        const tool = typeof entryRecord.toolName === "string" ? entryRecord.toolName.toLowerCase() : "";
+        const args =
+          entryRecord.args && typeof entryRecord.args === "object" && !Array.isArray(entryRecord.args)
+            ? (entryRecord.args as Record<string, unknown>)
+            : {};
+        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
+          .map((key) => args[key])
+          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+        const normalizedPath = rawPath
+          ?.trim()
+          .replace(/^file:\/\//, "")
+          .replace(/\\/g, "/");
+        const lowerPath = normalizedPath?.toLowerCase() || "";
+        if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
+          artifactPaths.add(
+            path.isAbsolute(normalizedPath || "")
+              ? path.resolve(normalizedPath || "")
+              : path.resolve(workspaceDir, normalizedPath || ""),
+          );
+        }
+      }
     }
+
+    if (!insideWorkspace && !artifactPaths.has(absolutePath)) {
+      throw new Error("file is not a session artifact");
+    }
+
+    const stat = fs.statSync(absolutePath);
+    if (!stat.isFile()) throw new Error("Not a file");
+    if (stat.size > MAX_FILE_CONTENT_BYTES) throw new Error("File is too large to preview");
+    const content = fs.readFileSync(absolutePath, "utf8");
+    if (content.includes("\0")) throw new Error("Binary file cannot be previewed");
+    const relativePath = path.relative(workspaceDir, absolutePath).replace(/\\/g, "/");
+    return {
+      path: relativePath || path.basename(absolutePath),
+      name: path.basename(absolutePath),
+      size: stat.size,
+      content,
+    };
+  }
+
+  function getFileList(dirPath: string) {
+    if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
+      throw new Error("Not a directory");
+    }
+
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const items: FileListItem[] = [];
+
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") && entry.name !== ".env") continue;
+      if (IGNORED_NAMES.has(entry.name)) continue;
+
+      try {
+        const fullPath = path.join(dirPath, entry.name);
+        const stat = fs.statSync(fullPath);
+        items.push({
+          name: entry.name,
+          path: fullPath,
+          isDirectory: entry.isDirectory(),
+          size: entry.isDirectory() ? null : stat.size,
+          mtime: stat.mtimeMs,
+        });
+      } catch {
+        /* skip inaccessible */
+      }
+    }
+
+    items.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return { path: dirPath, items };
   }
 
   // ═══════════════════════════════════════
@@ -1712,8 +1385,15 @@ export default function (pi: ExtensionAPI) {
         aliveWs.isAlive = true;
       });
 
-      // Send initial state
-      sendTo(ws, { type: "state", advancedFeatures: !!latestNavigateTree });
+      // Send initial web UI capability state.
+      sendTo(ws, {
+        type: "event",
+        event: "webui_state",
+        payload: {
+          advancedFeatures: advancedFeaturesEnabled && !!latestExecuteCtx,
+          archAvailable: archExtensionPresent,
+        },
+      });
 
       // Immediately send state snapshot
       if (latestCtx) {
@@ -1724,10 +1404,14 @@ export default function (pi: ExtensionAPI) {
 
       ws.on("message", (data) => {
         try {
-          const command = JSON.parse(data.toString());
-          handleCommand(ws, command);
+          const request = JSON.parse(data.toString()) as Partial<WsRequest>;
+          if (request.type !== "req" || typeof request.id !== "string" || typeof request.method !== "string") {
+            sendTo(ws, { type: "error", code: "bad_request", message: "Invalid client request" });
+            return;
+          }
+          handleRequest(ws, request as WsRequest);
         } catch (_e) {
-          sendTo(ws, { type: "error", message: "Invalid client message" });
+          sendTo(ws, { type: "error", code: "invalid_json", message: "Invalid client message" });
         }
       });
 
@@ -1817,7 +1501,10 @@ export default function (pi: ExtensionAPI) {
   // Cleanup on shutdown
   // ═══════════════════════════════════════
   pi.on("session_shutdown", async () => {
+    advancedFeaturesEnabled = false;
+    latestExecuteCtx = null;
     latestCtx = null;
+    liveArtifactPaths.clear();
     stopServer();
   });
 }

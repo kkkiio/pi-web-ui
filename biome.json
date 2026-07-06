@@ -10,6 +10,7 @@
     "ignoreUnknown": true,
     "includes": [
       "components.json",
+      "e2e/**/*.ts",
       "extensions/**/*.ts",
       "package.json",
       "public/**/*.js",
