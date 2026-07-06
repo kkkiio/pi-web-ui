@@ -150,20 +150,36 @@ Then("右侧详情面板显示 workspace 外 artifact 文件内容", async ({ pa
 });
 
 When("我隐藏右侧详情面板", async ({ page }) => {
-  await page.getByTitle("Hide right panel").click();
+  await page.locator("aside").getByTitle("Hide right panel").click();
+  await expect(page.locator("aside")).toHaveCount(0);
   await expect(page.getByTitle("Show right panel")).toBeVisible();
 });
 
 When("我打开 Changes 行", async ({ page }) => {
-  await page.getByTestId("workspace-status-float").getByTestId("workspace-git-row").click();
+  const row = page.getByTestId("workspace-status-float").getByTestId("workspace-git-row");
+  await expect(row).toBeVisible();
+  await expect(row).toBeEnabled();
+  await row.click();
 });
 
 When("我再次打开 Changes 行", async ({ page }) => {
-  if (await page.getByTitle("Hide right panel").isVisible()) {
-    await page.getByTitle("Hide right panel").click();
+  if (await page.locator("aside").getByTitle("Hide right panel").isVisible()) {
+    await page.locator("aside").getByTitle("Hide right panel").click();
+    await expect(page.locator("aside")).toHaveCount(0);
     await expect(page.getByTitle("Show right panel")).toBeVisible();
   }
-  await page.getByTestId("workspace-status-float").getByTestId("workspace-git-row").click();
+  const row = page.getByTestId("workspace-status-float").getByTestId("workspace-git-row");
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await expect(row).toBeVisible();
+    await expect(row).toBeEnabled();
+    try {
+      await row.click({ timeout: 2_000 });
+      break;
+    } catch (error) {
+      if (attempt === 5 || !String(error).includes("detached from the DOM")) throw error;
+      await page.waitForTimeout(150);
+    }
+  }
 });
 
 Then("右侧详情面板显示 git diff tab", async ({ page }) => {
@@ -208,6 +224,50 @@ Then("输入框恢复可提交状态", async ({ page }) => {
   const submit = page.getByRole("button", { name: "Submit" });
   await expect(submit).toBeVisible();
   await expect(submit).toBeEnabled();
+});
+
+When("我收起左侧边栏", async ({ page }) => {
+  const leftSidebar = page.locator('[data-slot="sidebar"][data-side="left"]');
+  const trigger = leftSidebar.getByRole("button", { exact: true, name: "Toggle left sidebar" });
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(leftSidebar).toHaveAttribute("data-state", "collapsed");
+});
+
+When("我展开左侧边栏", async ({ page }) => {
+  const leftSidebar = page.locator('[data-slot="sidebar"][data-side="left"]');
+  const trigger = leftSidebar.getByRole("button", { exact: true, name: "Toggle left sidebar" });
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+  await expect(leftSidebar).toHaveAttribute("data-state", "expanded");
+});
+
+Then("左侧边栏只显示图标列", async ({ page }) => {
+  const leftSidebar = page.locator('[data-slot="sidebar"][data-side="left"]');
+  await expect
+    .poll(async () => {
+      return leftSidebar.locator('[data-slot="sidebar-container"]').evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        return Math.round(rect.width);
+      });
+    })
+    .toBeLessThanOrEqual(64);
+});
+
+Then("左侧边栏不显示会话搜索框", async ({ page }) => {
+  await expect(page.getByPlaceholder("Search conversation...")).toBeHidden();
+});
+
+Then("左侧边栏显示会话搜索框", async ({ page }) => {
+  await expect(page.getByPlaceholder("Search conversation...")).toBeVisible();
+});
+
+Then("聊天输入框仍然完整可见", async ({ page }) => {
+  const input = page.getByPlaceholder("Message Pi...");
+  await expect(input).toBeVisible();
+  await expect(input).toBeEnabled();
+  const box = await input.boundingBox();
+  expect(box?.width ?? 0).toBeGreaterThan(300);
 });
 
 After(async () => {

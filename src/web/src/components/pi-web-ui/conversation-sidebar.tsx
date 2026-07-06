@@ -95,20 +95,22 @@ export function ConversationSidebar({
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex h-10 items-center gap-2">
-          <TerminalIcon className="size-4 shrink-0 text-muted-foreground" />
-          <ConnectionDot state={connection} />
-          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-            <div className="truncate font-medium text-sm">Pi Web UI</div>
-            <div className="truncate text-muted-foreground text-xs">Browser interface for Pi</div>
+        <div className="flex h-10 items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2 group-data-[collapsible=icon]:hidden">
+            <TerminalIcon className="size-4 shrink-0 text-muted-foreground" />
+            <ConnectionDot state={connection} />
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium text-sm">Pi Web UI</div>
+              <div className="truncate text-muted-foreground text-xs">Browser interface for Pi</div>
+            </div>
           </div>
-          <SidebarTrigger className="group-data-[collapsible=icon]:hidden" />
+          <SidebarTrigger aria-label="Toggle left sidebar" title="Toggle left sidebar" />
         </div>
       </SidebarHeader>
 
-      <SidebarSeparator />
+      <SidebarSeparator className="group-data-[collapsible=icon]:hidden" />
 
-      <SidebarContent>
+      <SidebarContent className="group-data-[collapsible=icon]:hidden">
         <ConversationSidebarTree
           branchEnabled={branchEnabled}
           leafId={leafId}
@@ -136,7 +138,7 @@ export function ConversationSidebar({
         </Button>
       </SidebarFooter>
       <SidebarRail
-        aria-label="Resize or toggle sidebar"
+        aria-label="Resize or toggle left sidebar"
         onClick={handleRailClick}
         onPointerDown={startSidebarResize}
         title="Drag to resize, click to toggle"
