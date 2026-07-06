@@ -38,7 +38,8 @@
   },
   "dependencies": {
     "@git-diff-view/react": "^0.1.6",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "zustand": "^5.0.14"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"

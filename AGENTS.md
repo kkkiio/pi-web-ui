@@ -71,15 +71,17 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree
 │   ├── index.css                # Global styles (Tailwind)
 │   ├── src/
 │   │   ├── main.tsx             # React entry point
-│   │   ├── app.tsx              # Root App component
+│   │   ├── app.tsx              # Root layout + local UI state
 │   │   ├── core/
-│   │   │   ├── ws.ts            # WebSocket client for browser ↔ extension
+│   │   │   ├── pi-client.ts     # WebSocket transport, reconnect, req/res queue
+│   │   │   ├── ws.ts            # WebSocket URL helper
 │   │   │   ├── types.ts         # TypeScript types for WebSocket protocol
 │   │   │   ├── chat-conversion.ts # Converts raw events → UI message models
 │   │   │   ├── format.ts        # Display formatting utilities
 │   │   │   ├── workspace-artifacts.ts # Markdown artifact recovery from tool events/session entries
 │   │   │   ├── tool-summary.ts  # Tool call summary rendering
-│   │   │   └── constants.ts     # Shared constants
+│   │   │   ├── constants.ts     # Shared constants
+│   │   │   └── store/           # Zustand slices + event dispatcher
 │   │   └── components/
 │   │       ├── pi-web-ui/       # Pi Web UI components
 │   │       │   ├── chat-item-view.tsx    # Main chat message renderer
@@ -93,8 +95,9 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree
 │   │       │   ├── workspace-status-float.tsx
 │   │       │   ├── user-message-view.tsx # User message with Branch button
 │   │       │   └── ...
-│   │       ├── ai-elements/     # AI Elements components (conversation, message, tool, reasoning, etc.)
-│   │       └── ui/              # shadcn/ui primitives (button, dialog, input, etc.)
+│   ├── components/
+│   │   ├── ai-elements/         # AI Elements components (conversation, message, tool, reasoning, etc.)
+│   │   └── ui/                  # shadcn/ui primitives (button, dialog, input, etc.)
 │   └── lib/
 │       └── utils.ts             # shadcn/ui utility (cn helper)
 ├── public/                      # Static assets copied by Vite (icons, manifest, sw.js)
@@ -119,7 +122,7 @@ graph LR
 ```
 
 - **Extension (`mirror-server.ts`)**: subscribes to Pi events via `pi.on(...)`, forwards them to browser WebSocket clients. Accepts commands from browser, executes via extension API.
-- **Frontend (`src/web/`)**: React + Vite + Tailwind. Connects to extension via WebSocket. Converts raw events to UI models in `chat-conversion.ts`.
+- **Frontend (`src/web/`)**: React + Vite + Tailwind. `PiClient` connects to the extension WebSocket, `event-dispatch.ts` routes raw events into Zustand slices, and React components render store state.
 - **Dev proxy**: `vite dev` on `:4444` proxies `/api` → `:3001` and `/ws` → `ws://localhost:3001`.
 
 #### Event envelope
@@ -247,14 +250,17 @@ When adding a new WebSocket event type from the extension to the browser:
 
 1. `extensions/mirror-server.ts` — emit the event
 2. `src/web/src/core/types.ts` — add the TypeScript type
-3. `src/web/src/core/chat-conversion.ts` — add conversion logic if it affects chat display
-4. Corresponding React component in `src/web/src/components/pi-web-ui/`
+3. `src/web/src/core/store/event-dispatch.ts` — route the event to a store action
+4. Relevant `src/web/src/core/store/*-slice.ts` file — update domain state
+5. `src/web/src/core/chat-conversion.ts` — add conversion logic if it affects chat display
+6. Corresponding React component in `src/web/src/components/pi-web-ui/`
 
 When adding a new browser → extension command:
 
-1. `src/web/src/core/ws.ts` — add the send function
-2. `extensions/mirror-server.ts` — add the command handler (use `latestCtx`)
-3. `src/web/src/core/types.ts` — add the type
+1. `extensions/mirror-server.ts` — add the command handler (use `latestCtx`)
+2. `src/web/src/core/types.ts` — add the request/response type
+3. `src/web/src/core/store/*-slice.ts` — add an intent-level store action that calls `send(...)`
+4. React components — call the store action instead of invoking transport directly
 
 When changing Workspace Status Float, Right Panel, or Artifacts:
 
@@ -262,7 +268,8 @@ When changing Workspace Status Float, Right Panel, or Artifacts:
 2. `docs/prd/right-panel.md` — update tab, toggle, and panel lifecycle behavior
 3. `docs/prd/workspace-artifacts.md` — update Markdown artifact source and display rules
 4. `docs/adr/0008-unified-websocket-protocol.md` — update WebSocket methods if data access changes
-5. `src/web/src/components/pi-web-ui/workspace-status-float.tsx` and related right-panel components — keep UI behavior aligned with the PRDs
+5. `src/web/src/core/store/workspace-slice.ts` and `src/web/src/core/store/right-panel-slice.ts` — update shared state and tab lifecycle
+6. `src/web/src/components/pi-web-ui/workspace-status-float.tsx` and related right-panel components — keep UI behavior aligned with the PRDs
 
 When changing real Pi E2E behavior:
 

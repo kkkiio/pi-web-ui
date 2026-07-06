@@ -10,7 +10,7 @@ export default [
           "",
           "The workspace float shows the current git branch, diff status, and Markdown artifacts.",
           "",
-          "This content was written by the faux provider during a real Pi E2E scenario.",
+          "The workspace float shows the current git branch and readable diff status.",
         ].join("\n"),
       }),
     ],

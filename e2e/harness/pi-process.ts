@@ -11,7 +11,11 @@ export type PiWebUiHarness = {
   stop: () => Promise<void>;
 };
 
-export async function startPiWebUi(fixtureName: string): Promise<PiWebUiHarness> {
+export type PiWebUiHarnessOptions = {
+  git?: boolean;
+};
+
+export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessOptions = {}): Promise<PiWebUiHarness> {
   const repoRoot = path.resolve(__dirname, "../..");
   const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-web-ui-e2e-"));
   const workspaceDir = path.join(tempRoot, "workspace");
@@ -24,7 +28,7 @@ export async function startPiWebUi(fixtureName: string): Promise<PiWebUiHarness>
   mkdirSync(externalDir, { recursive: true });
   mkdirSync(agentDir, { recursive: true });
   mkdirSync(sessionDir, { recursive: true });
-  prepareGitWorkspace(workspaceDir);
+  if (options.git !== false) prepareGitWorkspace(workspaceDir);
 
   const processOutput: string[] = [];
   const piProcess = spawn(

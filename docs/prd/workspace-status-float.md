@@ -2,77 +2,131 @@
 
 ## Problem Statement
 
-在 Pi Web UI 双列模式下，聊天区域右上角有空间可以承载当前 workspace 的轻量状态。用户需要快速看到当前 git branch、当前 diff 规模，以及本轮 agent 产出的 Markdown artifacts。现在这些信息分散在聊天工具卡片、文件系统和终端状态中，用户需要额外操作才能确认当前 workspace 发生了什么。
+Pi Web UI needs a lightweight workspace surface that answers two questions without forcing the user to inspect tool cards or switch to a terminal:
+
+1. What git branch and diff state is the current workspace in?
+2. Which Markdown files did the agent produce or modify during the current session?
+
+The float is a compact status and entry surface. Full git diffs and full file contents belong in the Right Panel.
 
 ## Solution
 
-在聊天区域右上角增加 Codex 风格的 Workspace Status Float。浮窗展示 git 状态和 Markdown Artifacts 摘要；点击 git diff 或 artifact 会打开 Right Panel 对应 tab。浮窗是入口和摘要，不负责展示完整 diff 或完整文件内容。
+Add a Codex-style Workspace Status Float in the chat area. It shows:
+
+- the current git branch and diff summary
+- Markdown artifacts produced by successful `edit` / `write` tool calls
+
+Clicking the git row opens a `git-diff` tab in the Right Panel. Clicking an artifact opens an `artifact-file` tab in the Right Panel.
 
 ## User Stories
 
-1. 作为 Pi Web UI 桌面用户，我希望在聊天区域右上角看到当前 git branch，这样我能确认当前工作分支。
-2. 作为 Pi Web UI 桌面用户，我希望看到当前 git diff 统计，例如 `+251 -414`，这样我能快速判断变更规模。
-3. 作为 Pi Web UI 用户，我希望点击 git diff 状态后在右侧 panel 查看完整 diff。
-4. 作为 Pi Web UI 用户，我希望看到 agent 修改过的 Markdown artifacts，并能点击查看文件内容。
-5. 作为 Pi Web UI 用户，即使当前没有变更或 artifact，浮窗也应显示紧凑空状态，而不是完全消失。
-6. 作为移动端用户，我不希望大浮窗覆盖聊天内容，而是通过紧凑入口打开同样的状态内容。
+1. As a desktop user, I can see the current branch so I know which workspace branch I am editing.
+2. As a desktop user, I can see additions/deletions so I can judge change size quickly.
+3. As a user, I can click the git row and inspect the full diff in the Right Panel.
+4. As a user, I can see Markdown files touched by the agent and open their content from the Right Panel.
+5. As a user, I can open Markdown artifacts written outside the git workspace when they were created by this Pi session.
+6. As a mobile user, I get a compact workspace entry that does not cover the chat surface.
 
-## Implementation Decisions
+## Display Content
 
-### 显示内容
+The float contains two sections:
 
-Workspace Status Float 包含两个区域：
+| Section | Content |
+|---------|---------|
+| Git | branch, diff summary, clean state, or non-repo state |
+| Artifacts | recent Markdown artifacts from successful `edit` / `write` tool calls |
 
-- Git：当前 branch、diff 统计、非 git repo 或无变更状态。
-- Artifacts：最近由 `edit` / `write` 工具改动过的 Markdown 文件。
+Do not display workspace name, workspace path source, or a `Local` row.
 
-不显示 workspace 名称、路径来源或 `Local` 行。
+## Git Status
 
-### Git 状态
+The frontend actively requests git status from the extension. Git status is not part of `state_sync` or `get_state`.
 
-前端主动查询 git 状态。Git 状态不放入 `state_sync` / `get_state`。前端在 WebSocket 连接、重连、session sync、工具结束和 turn 结束后 debounce 请求最新状态。
+Refresh triggers:
 
-Git 区域展示：
+- WebSocket connection and reconnection
+- session sync completion
+- tool execution end
+- turn end
 
-- 当前 branch，例如 `main`。
-- 有变更时显示 additions/deletions，例如 `+251 -414`。
-- 没有变更时显示 `No changes`。
-- 不在 git repo 时显示 `No git repository`。
+Refresh should be debounced so streaming/tool bursts do not spam git commands.
 
-点击 diff 统计或 `No changes` 行打开 Right Panel 的 `git-diff` tab。无 git repo 时该行不可打开。
+Git row behavior:
 
-### Artifacts 摘要
+- Git repository with changes: show branch plus `+N -N`.
+- Git repository without changes: show branch plus `No changes`.
+- Non-git workspace: show `No git repository` and keep the row disabled.
+- Unknown/unavailable state: show an unavailable state until the next successful refresh.
 
-Artifacts 区域展示最近 Markdown artifacts，来源规则见 `docs/prd/workspace-artifacts.md`。每行点击后打开 Right Panel 的 `artifact-file` tab。重复点击同一 artifact 激活已有 tab。
+Clicking a git repository row opens the Right Panel `git-diff` tab. The tab loads diff content through `get_git_diff`.
 
-### 与 Right Panel 的关系
+## Git Diff Details
 
-Workspace Status Float 只负责打开 tab：
+The Right Panel renders git diff content with `@git-diff-view/react` so additions, deletions, file names, and hunks are readable. The panel also shows branch and aggregate additions/deletions.
 
-- Git diff 行打开 `git-diff` tab。
-- Artifact 行打开 `artifact-file` tab。
+The diff reader includes staged, unstaged, and untracked Markdown/text file changes when available from the extension command.
 
-Right Panel 打开时，浮窗隐藏。Right Panel 隐藏或关闭后，浮窗恢复。
+The float does not render full diff content inline.
 
-### 移动端适配
+## Artifacts
 
-移动端不显示大型浮窗。移动端使用紧凑触发按钮或 sheet 入口，内容结构保持与桌面浮窗一致。
+Artifacts are Markdown files touched by successful Pi `edit` or `write` tool calls. Supported extensions:
 
-## Out of Scope
+- `.md`
+- `.mdx`
+- `.markdown`
 
-- 不展示完整 git diff。
-- 不在浮窗内展示完整 artifact 内容。
-- 不执行 commit、push、checkout 或其他 git 操作。
-- 不在浮窗内编辑文件。
-- 不展示外部 agent 状态。
-- 不将浮窗设计成通用 context item 渲染器。
+Artifact behavior:
+
+- Include workspace files and workspace-external files when the current Pi session successfully wrote or edited that exact path.
+- Deduplicate by normalized path.
+- Sort newest first.
+- Show at most the recent set that fits comfortably in the float.
+- Clicking an artifact opens or focuses the matching `artifact-file` Right Panel tab.
+
+Workspace-external artifact content is available only when the current session produced it. Arbitrary absolute path reads are not part of the artifact model.
+
+## Right Panel Relationship
+
+The float is an entry surface for Right Panel tabs:
+
+- Git row opens `git-diff`.
+- Artifact row opens `artifact-file`.
+- Re-clicking an already-open target focuses the existing tab.
+- When the Right Panel is visible, the float hides.
+- When the Right Panel is hidden, the float returns.
+- Closing the last tab hides the Right Panel while preserving the restore affordance.
+
+## Mobile Behavior
+
+Mobile does not show the large desktop float. It uses a compact workspace button that opens the appropriate Right Panel surface:
+
+- If git diff is available, open `git-diff`.
+- Otherwise, if artifacts exist, open the most recent artifact.
+- If neither is available, keep the button disabled.
+
+The Right Panel should behave as a full-width sheet-like surface on mobile.
+
+## Out Of Scope
+
+- Commit, push, checkout, stash, or other git mutations
+- Editing files from the float or Right Panel
+- Rendering full diff content inside the float
+- Rendering full artifact file content inside the float
+- Showing non-Markdown artifacts
+- Showing external agent/subagent state
 
 ## Acceptance Criteria
 
-1. 桌面双列模式下浮窗默认可见。
-2. 浮窗展示当前 branch 和 diff additions/deletions。
-3. 无变更时显示 `No changes`，非 git repo 时显示 `No git repository`。
-4. 点击 git diff 打开 Right Panel 的 `git-diff` tab。
-5. `edit` / `write` 修改 Markdown 文件后，Artifacts 区域出现对应文件。
-6. 点击 Artifact 打开 Right Panel 的 `artifact-file` tab。
-7. Right Panel 打开时浮窗隐藏；Right Panel 关闭后浮窗恢复。
+1. Desktop float shows current git branch.
+2. Git repository with changes shows additions and deletions.
+3. Clean git repository shows `No changes`.
+4. Non-git workspace shows `No git repository`.
+5. Clicking the git row opens one `git-diff` tab in the Right Panel.
+6. Re-clicking the git row focuses the existing `git-diff` tab instead of creating duplicates.
+7. Successful Markdown `edit` / `write` tool calls appear in the artifact list.
+8. Duplicate writes to the same Markdown path show one artifact row.
+9. Clicking an artifact opens one `artifact-file` tab with readable Markdown content.
+10. Workspace-external Markdown artifacts written by the current session can be opened from the artifact list.
+11. Right Panel visibility and restore button behavior match `docs/prd/right-panel.md`.
+12. Mobile uses the compact workspace entry and does not display the desktop float.

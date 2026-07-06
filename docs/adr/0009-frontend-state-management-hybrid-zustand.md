@@ -1,171 +1,145 @@
-# ADR 0009: Frontend State Management — Hybrid Zustand + Local State
+# ADR 0009: Frontend State Management — Zustand Slices + Local UI State
 
 ## Status
 
-Proposed
+Accepted and implemented
 
 ## Context
 
-`app.tsx` 目前超过 1300 行，持有 40+ 个 state/ref 变量，所有 WebSocket 事件处理集中在一个 200 行级别的 `handleEvent` switch 中。当前架构有三个明确问题：
+The original `app.tsx` owned too many responsibilities at once:
 
-1. **组件过大** — 单一文件承载 transport、事件路由、状态管理、UI 布局
-2. **不可拆分** — 所有 handler 通过 `useCallback` 闭包捕获 setter，无法按 feature 独立
-3. **不可扩展** — 新增 feature 必须修改 `handleEvent` switch 和状态声明
+1. WebSocket connection, reconnect, pending requests, and request/response matching
+2. `state_sync` snapshot application
+3. streaming assistant message and tool execution updates
+4. workspace git status and Markdown artifact recovery
+5. right panel tabs and file/diff loading
+6. model, thinking, theme, auth, dialog, and session settings
+7. page layout plus local interface state
 
-项目具有以下特征，直接影响架构选择：
-
-- **单一 WebSocket 连接**推送高频 streaming 事件（`message_update` delta、`tool_execution_update` 等）
-- **大部分状态来自同一条事件流**，权威源是 `state_sync` snapshot + 增量事件
-- **6-8 个 UI feature**（chat、conversation tree、workspace status、right panel、model picker、settings、command palette、arch mode）共享 session state
-- **小团队**，需要平缓的学习曲线和清晰的 ownership
+That shape made cross-boundary features expensive. A small Workspace Status Float change could require touching transport code, session event code, UI state, and right panel state in one component.
 
 ## Decision
 
-采用 **Hybrid Zustand + Local State** 模式，共享 session state 按 domain 切片组织。
+Use Zustand as the frontend domain-state owner, with local React state reserved for short-lived interface controls.
 
-核心原则：**集中处理事件，不集中存放一切状态。**
+The implemented shape is:
 
-### 分层架构
-
-```
-WebSocket 事件流
-       │
-       ▼
-  PiClient (transport)        ← send/重连/请求队列
-       │
-       ▼
-  Event Dispatch              ← 事件 → action 路由
-       │
-       ▼
-  Zustand Store (domain slices)
-  ├── connectionSlice         ← WebSocket 状态
-  ├── sessionSlice            ← state_sync snapshot, tree, leafId
-  ├── streamSlice             ← streaming assistant message, tool calls
-  ├── workspaceSlice          ← git status + artifacts
-  ├── rightPanelSlice         ← tabs + active tab + visible state
-  └── settingsSlice           ← model, thinkingLevel, theme, sessionName
-       │
-       ▼
-  Feature UI Components
-  ├── features/chat/          ← 读 store + 局部 UI state
-  ├── features/conversation-tree/
-  ├── features/settings/
-  └── ...
+```text
+WebSocket / RPC
+  -> PiClient
+  -> event-dispatch
+  -> Zustand store slices
+  -> React layout and UI components
 ```
 
-### 什么进 Zustand，什么不进
+`PiClient` owns browser transport behavior:
 
-**进 Zustand（跨 feature 共享的领域状态）：**
+- WebSocket connect/reconnect
+- queued requests before connection is open
+- pending request map for `req` / `res`
+- event forwarding into the store dispatcher
+- prompt response notification so submitted chat state can return to ready
 
-| Slice | 状态 | 说明 |
-|-------|------|------|
-| connection | `connectionState`, `error` | WebSocket 连接状态，多个组件需要展示 |
-| session | `items`, `tree`, `leafId`, `lastUsage`, `chatStatus` | 来自 `state_sync` 的权威会话数据 |
-| stream | `streamingId`, `streamingHasToolCall` | 流式增量更新状态 |
-| workspace | `gitStatus`, `artifacts` | Workspace Status Float + Right Panel 都需要 |
-| rightPanel | `tabs`, `activeTabId`, `visible` | Git diff 和 artifact-file tab 容器状态 |
-| settings | `model`, `thinkingLevel`, `sessionName`, `themeMode` | header + settings panel 都需要 |
+`event-dispatch.ts` owns protocol event routing. It receives raw `WsEvent` values and calls store actions. The extension still forwards Pi events unchanged; the browser remains responsible for product interpretation.
 
-**不进 Zustand（组件局部 UI 状态）：**
+## Store Slices
 
-- modal/panel 开关（modelOpen, settingsOpen, commandOpen, contextOpen）
-- 输入框草稿（draftText）
-- 搜索词（modelSearch）
-- hover/highlight（highlightedEntryId）
-- 选中态（selectedTreeEntryId）
-- 加载态（loadingTreeEntryId, conversationSyncing）
-- 队列（queuedMessages）
+Zustand lives under `src/web/src/core/store/`.
 
-### Action 设计原则
+| Slice | Owns |
+|-------|------|
+| `connection-slice.ts` | `PiClient`, connection state, top-level errors, advanced feature flags, `send()` |
+| `session-slice.ts` | chat items, chat status, session tree, selected/loading tree entry, sync state, usage, streaming assistant/tool events |
+| `workspace-slice.ts` | git status, git loading state, Markdown artifacts, debounced git refresh |
+| `right-panel-slice.ts` | tab list, active tab, visibility, restore affordance, git diff loading, artifact file loading |
+| `settings-slice.ts` | available/current model, thinking level, session name, theme, auth, arch mode, remote settings commands |
+| `dialog-slice.ts` | extension UI request dialog and response command |
 
-**不暴露裸 setter**。Store 只暴露事件级 action：
+`src/web/src/core/store/index.ts` composes the slices into `usePiWebUiStore`.
 
-```typescript
-// ✅ 事件级 action — ownership 清楚
-applyStateSync(payload: StateSyncPayload)
-applyMessageStart(event: MessageStartEvent)
-applyMessageDelta(event: MessageUpdateEvent)
-applyToolExecutionEnd(event: ToolExecutionEndEvent)
-applySessionTree(event: SessionTreeEvent)
+## Local UI State
 
-// ❌ 裸 setter — 很快失控
-setItems, setTree, setChatStatus, setLastUsage
+`app.tsx` still owns local state when the state is ephemeral and not a product-level domain source:
+
+- left sidebar width and open state
+- system dark-mode media query result
+- current input draft and queued prompt drafts
+- model/settings/command/context popover open state
+- model search text
+- highlighted entry id and focus refs
+- DOM refs used for scroll/focus behavior
+
+This keeps global state from absorbing transient view mechanics while still moving WebSocket, session, workspace, right-panel, settings, and dialog state into one coherent store.
+
+## Action Design
+
+Protocol and domain updates should go through intent-level actions:
+
+```ts
+applyStateSync(sync)
+applyMessageStart(event)
+applyMessageUpdate(event)
+applyToolExecutionEnd(event)
+openGitDiff()
+openArtifact(artifact)
+refreshSettingsState()
+sendPrompt(command)
 ```
 
-### Feature 目录结构
+Small setters are acceptable for simple fields that have no protocol interpretation, such as selected tree entry, theme mode, or dialog value. Event handlers should avoid rebuilding state transitions inline in React components.
 
+## Implemented Files
+
+```text
+src/web/src/core/pi-client.ts
+src/web/src/core/store/
+src/web/src/core/store/event-dispatch.ts
+src/web/src/app.tsx
 ```
-src/web/src/
-├── core/
-│   ├── pi-client.ts          # WebSocket + RPC 请求/响应
-│   ├── store/                # Zustand store
-│   │   ├── index.ts          # 组合所有 slice
-│   │   ├── connection-slice.ts
-│   │   ├── session-slice.ts
-│   │   ├── stream-slice.ts
-│   │   ├── workspace-slice.ts
-│   │   ├── right-panel-slice.ts
-│   │   └── settings-slice.ts
-│   └── types.ts              # 共享类型
-│
-├── features/
-│   ├── chat/                 # 聊天消息面板
-│   │   ├── chat-panel.tsx
-│   │   ├── chat-input-container.tsx
-│   │   └── chat-selectors.ts # 派生 selector
-│   ├── conversation-tree/    # 对话树侧边栏
-│   ├── workspace-status/     # Workspace Float + Artifacts
-│   └── right-panel/          # Tabbed details panel
-│
-└── app.tsx                   # 布局组合 + 局部 UI state
+
+The UI component directories remain:
+
+```text
+src/web/src/components/pi-web-ui/
+src/web/components/ai-elements/
+src/web/components/ui/
 ```
 
 ## Consequences
 
-### 正向
+Positive:
 
-- **State ownership 清晰** — 每个 slice 只拥有一个 domain 的状态，写入只能通过 action
-- **Feature 可独立开发** — 新增 To-Do List 只需新建 `features/todo/`，加载 `todoSlice`，不改现有代码
-- **可测试** — Store 和 action 是纯逻辑，不依赖 React 组件，可直接单测
-- **流式性能可控** — 高频 delta 事件只在 stream slice 内处理，Zustand selector 确保只有订阅该字段的组件重渲染
-- **组件 mental model 简单** — 只读自己关心的，局部 UI 状态直接用 `useState`
+- `state_sync` applies session state, tree state, model state, usage, and artifacts atomically.
+- Streaming text, tool call state, and tool result state update through store actions rather than React component setters.
+- Workspace Status Float and Right Panel share the same artifact/git state.
+- Right Panel tab lifecycle is centralized, including hidden/restored behavior.
+- Real Pi E2E can exercise the same browser state path used in normal sessions.
 
-### 负向
+Costs:
 
-- **引入新依赖** — Zustand（~1KB gzipped），需要团队熟悉其 API
-- **迁移成本** — 需要从 `useState` 分散状态迁移到 store slices，state_sync 的 applySync 逻辑需要重写
-- **Slice 边界需要纪律** — 如果团队在没有 review 的情况下随意添加跨 slice 的写操作，会退化回 monolithic store
-
-### 中性
-
-- `app.tsx` 缩减到 ~200 行（只做布局组合 + 局部 UI state）
-- 新增 feature 需要同时新增 slice（如果需要新领域状态）或仅新增 UI 组件（如果只用已有状态）
+- Zustand is now a runtime dependency.
+- Slice boundaries require discipline during review.
+- `app.tsx` still coordinates layout and local view interactions; further component extraction should preserve the domain boundaries defined here.
 
 ## Alternatives Considered
 
-| 方案 | 判定 |
-|------|------|
-| Monolithic Zustand/Redux（单个大 store） | ❌ 容易导致状态膨胀和 ownership 模糊，正是我们要避免的 |
-| Jotai / Atomic State | ❌ 单 WS 事件需要同时更新多个 atom，跨 atom 一致性和时序复杂 |
-| 纯 EventBus Pub-Sub（模块级 singleton） | ❌ React StrictMode 双重挂载、HMR 幽灵监听、隐式依赖追踪困难 |
-| Event Sourcing / CQRS | ❌ 实现复杂度高，6-8 个 feature 的项目不需要 replay/debug 能力，过度设计 |
-| 纯组件 local state（不抽 store） | ❌ 高频 streaming 状态分布在多个组件中，`state_sync` 替换无法原子执行 |
+| Option | Decision |
+|--------|----------|
+| One monolithic Zustand store file | Rejected because ownership would blur as features grow |
+| Jotai / atom state | Rejected because one Pi event often needs atomic multi-field updates |
+| EventBus singleton | Rejected because ownership and lifecycle would be implicit |
+| Keep all state in React local state | Rejected because `state_sync`, streaming events, workspace artifacts, and right-panel state cross feature boundaries |
 
-## Migration Strategy（增量，不 big bang）
+## Verification
 
-1. **引入 Zustand** — 安装依赖，创建空 store 骨架
-2. **抽 PiClient** — 把 `send`、pending requests、WS connect/reconnect 从 App 移出
-3. **建 store slices** — 按 domain 拆：connect → session → stream → workspace → rightPanel → settings
-4. **迁事件处理** — 把 `handleEvent` switch 的每个 case 迁到对应 slice action
-5. **迁 state_sync** — `applySync` 改造成 store action，原子替换 session state
-6. **迁 UI** — 各 feature 组件改用 store selector 读状态，局部 UI state 留在组件内
-7. **清理 App** — 删除已迁移的 state 声明和 handler，只保留布局组合
+The implemented migration is covered by:
 
-迁移期间 `state_sync` 只由一个 slice 处理，保证 snapshot 和增量事件之间的顺序一致性。
+- `npx tsc --noEmit`
+- `npm run check`
+- `npm run e2e`
+- `$webui-visual-check` screenshots for Workspace Status Float and Right Panel on desktop and mobile viewports
 
 ## References
 
 - [Zustand — Bear necessities for state management](https://github.com/pmndrs/zustand)
 - [Zustand slices pattern](https://docs.pmnd.rs/zustand/guides/slices-pattern)
-- [TkDodo: State management for React apps in 2025](https://tkdodo.eu/blog/state-management-in-react-apps-in-2025)
-- Codex (gpt-5.4) architecture evaluation, 2026-06-16

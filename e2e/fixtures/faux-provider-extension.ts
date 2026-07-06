@@ -1,12 +1,16 @@
 import { registerFauxProvider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
+import duplicateArtifactResponses from "./responses/duplicate-artifact.ts";
 import externalArtifactResponses from "./responses/external-artifact.ts";
+import toolFailureResponses from "./responses/tool-failure.ts";
 import workspaceArtifactResponses from "./responses/workspace-artifact.ts";
 
 const responsesByName = {
   "chat-lifecycle": chatLifecycleResponses,
+  "duplicate-artifact": duplicateArtifactResponses,
   "external-artifact": externalArtifactResponses,
+  "tool-failure": toolFailureResponses,
   "workspace-artifact": workspaceArtifactResponses,
 };
 
