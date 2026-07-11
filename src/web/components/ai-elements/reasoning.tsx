@@ -3,13 +3,13 @@
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { mathPlugin, normalizeMarkdownMath } from "@/lib/markdown-math";
 import { cn } from "@/lib/utils";
 
 import { Shimmer } from "./shimmer";
@@ -172,7 +172,7 @@ export type ReasoningContentProps = ComponentProps<typeof CollapsibleContent> & 
   children: string;
 };
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+const streamdownPlugins = { cjk, code, math: mathPlugin, mermaid };
 
 export const ReasoningContent = memo(({ className, children, ...props }: ReasoningContentProps) => (
   <CollapsibleContent
@@ -184,7 +184,7 @@ export const ReasoningContent = memo(({ className, children, ...props }: Reasoni
     {...props}
   >
     <Streamdown controls={false} plugins={streamdownPlugins}>
-      {children}
+      {normalizeMarkdownMath(children)}
     </Streamdown>
   </CollapsibleContent>
 ));
