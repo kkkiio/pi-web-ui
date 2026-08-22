@@ -1,9 +1,11 @@
 node_modules/
 dist/
+dist-hub/
 .DS_Store
 e2e/.features-gen/
 playwright-report/
 test-results/
+.tmp/
 
 # Pi session exports
 pi-session-*.html

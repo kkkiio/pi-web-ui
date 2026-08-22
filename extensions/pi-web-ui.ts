@@ -1,46 +1,36 @@
 /**
- * pi-web-ui Mirror Server Extension
+ * pi-web-ui Extension (connect-out architecture, ADR 0012)
  *
- * Starts a WebSocket + HTTP server inside the running Pi process,
- * allowing a browser to connect and mirror the TUI session in real-time.
+ * Connects outward to a standalone pi-web-ui hub over WebSocket, allowing
+ * one hub to serve many Pi processes:
  *
- * - Forwards all Pi events to connected browser clients
- * - Accepts commands from the browser and executes them via the extension API
- * - Serves static files for the pi-web-ui frontend
- * - Sends full state snapshot on client connect (messages, model, etc.)
+ * - Forwards all Pi events to the hub (which fans out to attached browsers)
+ * - Accepts commands relayed by the hub and executes them via the extension API
+ * - Reconnects with backoff; the TUI is unaffected when the hub is down
+ * - Updates its session identity in place after session replacement
+ *
+ * Connect manually with /webui:connect [url], or automatically by setting
+ * PI_WEB_UI_HUB (e.g. ws://127.0.0.1:3001/ws/extension) or the "hub" key in
+ * the pi-web-ui section of ~/.pi/agent/settings.json.
  */
 
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
-import * as http from "node:http";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { WebSocket, WebSocketServer } from "ws";
+import { WebSocket } from "ws";
+import type { AgentSessionInfo, WsEvent, WsRequest, WsResponse } from "../src/protocol/index";
+import { PROTOCOL_VERSION } from "../src/protocol/index";
 
 type SettingsData = {
-  port?: string | number;
-  host?: string;
+  hub?: string;
   disabled?: boolean;
 };
 
 type BrowserImage = {
   data?: string;
   mimeType?: string;
-};
-
-type WsRequest = {
-  type: "req";
-  id: string;
-  method: string;
-  params?: Record<string, unknown>;
-};
-
-type WsResponse = {
-  type: "res";
-  id: string;
-  ok: boolean;
-  result?: unknown;
-  error?: string;
 };
 
 type TextContentBlock = {
@@ -106,26 +96,11 @@ type FileContentResult = {
   content: string;
 };
 
-type ModelCandidate = {
-  provider?: string;
-  id?: string;
-};
-
 type ExtensionAPIWithEvents = ExtensionAPI & {
   events?: {
     on?: (eventType: string, listener: (payload: unknown) => void) => void;
     emit?: (eventType: string, payload: unknown) => void;
   };
-};
-
-type AliveWebSocket = WebSocket & {
-  isAlive?: boolean;
-};
-
-type WritableSocket = Pick<WebSocket, "readyState" | "send">;
-
-type NodeError = Error & {
-  code?: string;
 };
 
 const AGENT_DIR = path.resolve(
@@ -135,12 +110,15 @@ const AGENT_DIR = path.resolve(
   ),
 );
 
-// Load pi-web-ui settings from the Pi agent directory (falls back to env vars)
-function loadSettings(): {
-  port: number;
-  host: string;
-  autoStart: boolean;
-} {
+const DEFAULT_HUB_URL = "ws://127.0.0.1:3001/ws/extension";
+const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
+const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
+const ARTIFACT_TOOL_NAMES = new Set(["edit", "write"]);
+const MARKDOWN_EXTENSIONS = [".md", ".mdx", ".markdown"];
+const RECONNECT_MIN_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+
+function loadSettings(): { hubUrl: string | null; disabled: boolean } {
   let settings: SettingsData = {};
   try {
     const settingsPath = path.join(AGENT_DIR, "settings.json");
@@ -152,89 +130,21 @@ function loadSettings(): {
       )["pi-web-ui"] || {};
   } catch {}
   return {
-    port: parseInt(String(process.env.PI_WEB_UI_PORT || settings.port || "3001"), 10),
-    host: process.env.PI_WEB_UI_HOST || settings.host || "127.0.0.1",
-    autoStart: !(
-      process.env.PI_WEB_UI_DISABLED === "1" ||
-      process.env.PI_WEB_UI_DISABLED === "true" ||
-      settings.disabled === true
-    ),
+    hubUrl: process.env.PI_WEB_UI_HUB || settings.hub || null,
+    disabled:
+      process.env.PI_WEB_UI_DISABLED === "1" || process.env.PI_WEB_UI_DISABLED === "true" || settings.disabled === true,
   };
 }
-
-const SETTINGS = loadSettings();
-const PORT = SETTINGS.port;
-const HOST = SETTINGS.host;
-const AUTO_START = SETTINGS.autoStart;
-const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
-const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
-const ARTIFACT_TOOL_NAMES = new Set(["edit", "write"]);
-const MARKDOWN_EXTENSIONS = [".md", ".mdx", ".markdown"];
-// @ts-expect-error — __dirname is provided by jiti at runtime
-const STATIC_DIR = process.env.PI_WEB_UI_STATIC_DIR || findStaticDir();
-
-function findStaticDir(): string {
-  const candidates: string[] = [];
-  const seen = new Set<string>();
-  const addCandidate = (dir: string) => {
-    const normalized = path.resolve(dir);
-    if (seen.has(normalized)) return;
-    seen.add(normalized);
-    candidates.push(normalized);
-  };
-
-  // 1) Bundled React build output, then legacy public fallback.
-  addCandidate(path.resolve(__dirname, "dist"));
-  addCandidate(path.resolve(__dirname, "../dist"));
-  addCandidate(path.resolve(__dirname, "public"));
-  addCandidate(path.resolve(__dirname, "../public"));
-
-  // 2) Installed package path (for npm-installed extension execution)
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pkgPath = require.resolve("@kkkiio/pi-web-ui/package.json");
-    const pkgDir = path.dirname(pkgPath);
-    addCandidate(path.join(pkgDir, "dist"));
-    addCandidate(path.join(pkgDir, "public"));
-  } catch {}
-
-  // 3) Development fallback from current working directory
-  addCandidate(path.resolve(process.cwd(), "dist"));
-  addCandidate(path.resolve(process.cwd(), "public"));
-  addCandidate(path.resolve(process.cwd(), "node_modules/@kkkiio/pi-web-ui/dist"));
-  addCandidate(path.resolve(process.cwd(), "node_modules/@kkkiio/pi-web-ui/public"));
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(candidate, "index.html"))) return candidate;
-  }
-
-  return path.resolve(process.cwd(), "dist");
-}
-
-// MIME types for static file serving
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".css": "text/css",
-  ".js": "application/javascript",
-  ".json": "application/json",
-  ".map": "application/json",
-  ".webmanifest": "application/manifest+json",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-};
 
 export default function (pi: ExtensionAPI) {
-  let server: http.Server | null = null;
-  let wss: WebSocketServer | null = null;
-  let heartbeatTimer: NodeJS.Timeout | null = null;
-  const clients = new Set<WebSocket>();
+  const settings = loadSettings();
+  const agentId = randomUUID();
+
+  let hubSocket: WebSocket | null = null;
+  let hubUrl: string | null = null;
+  let wantConnection = false;
+  let reconnectTimer: NodeJS.Timeout | null = null;
+  let reconnectDelay = RECONNECT_MIN_MS;
 
   // Store latest context reference for use in command handlers
   let latestCtx: ExtensionContext | null = null;
@@ -244,114 +154,173 @@ export default function (pi: ExtensionAPI) {
   const liveArtifactPaths = new Set<string>();
 
   // ═══════════════════════════════════════
-  // Helper: send to one client
+  // Hub connection
   // ═══════════════════════════════════════
-  function sendTo(ws: WritableSocket, data: unknown) {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(data));
+
+  function sendToHub(data: WsResponse | WsEvent | Record<string, unknown>) {
+    if (hubSocket && hubSocket.readyState === WebSocket.OPEN) {
+      hubSocket.send(JSON.stringify(data));
     }
   }
 
-  // ═══════════════════════════════════════
-  // Helper: broadcast to all clients
-  // ═══════════════════════════════════════
-  function broadcast(data: unknown) {
-    const json = JSON.stringify(data);
-    for (const client of clients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(json);
-      }
-    }
+  function isConnected(): boolean {
+    return !!hubSocket && hubSocket.readyState === WebSocket.OPEN;
   }
 
-  let mirrorUrl = "";
-  let mirrorStatusBase = "";
+  function buildAgentInfo(overrides?: Partial<AgentSessionInfo>): AgentSessionInfo {
+    const sessionFile = latestCtx?.sessionManager.getSessionFile() ?? null;
+    return {
+      agentId,
+      sessionId: sessionFile ? path.basename(sessionFile).replace(/\.jsonl$/, "") : null,
+      sessionName: pi.getSessionName() ?? null,
+      sessionFile,
+      cwd: workspaceDir(),
+      pid: process.pid,
+      isStreaming: latestCtx ? !latestCtx.isIdle() : false,
+      ...overrides,
+    };
+  }
 
-  function updateMirrorStatus() {
-    if (!mirrorStatusBase) {
+  function workspaceDir(): string {
+    try {
+      const entries = latestCtx?.sessionManager.getEntries() as SessionEntry[] | undefined;
+      const sessionEntry = entries?.find((entry) => entry.type === "session");
+      if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) return path.resolve(sessionEntry.cwd);
+    } catch {}
+    return path.resolve(process.cwd());
+  }
+
+  function updateHubStatus() {
+    if (!wantConnection) {
       latestCtx?.ui.setStatus("webui", "");
       return;
     }
-    const clientCount = clients.size;
-    const clientText = clientCount > 0 ? ` • ${clientCount} web ${clientCount === 1 ? "client" : "clients"}` : "";
-    latestCtx?.ui.setStatus("webui", `${mirrorStatusBase}${clientText}`);
+    latestCtx?.ui.setStatus("webui", isConnected() ? `pi-web-ui: ${hubUrl}` : "pi-web-ui: reconnecting…");
+  }
+
+  function connectToHub(url: string) {
+    hubUrl = url;
+    wantConnection = true;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (hubSocket) {
+      try {
+        hubSocket.close();
+      } catch {}
+      hubSocket = null;
+    }
+    openSocket();
+  }
+
+  function disconnectFromHub() {
+    wantConnection = false;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (hubSocket) {
+      try {
+        hubSocket.close();
+      } catch {}
+      hubSocket = null;
+    }
+    updateHubStatus();
+  }
+
+  function openSocket() {
+    if (!hubUrl || !wantConnection) return;
+    const ws = new WebSocket(hubUrl);
+    hubSocket = ws;
+
+    ws.on("open", () => {
+      if (hubSocket !== ws) return;
+      reconnectDelay = RECONNECT_MIN_MS;
+      sendToHub({ type: "hello", protocolVersion: PROTOCOL_VERSION, agent: buildAgentInfo() });
+      sendToHub({
+        type: "event",
+        event: "webui_state",
+        payload: {
+          advancedFeatures: advancedFeaturesEnabled && !!latestExecuteCtx,
+          archAvailable: archExtensionPresent,
+        },
+      });
+      updateHubStatus();
+    });
+
+    ws.on("message", (data) => {
+      if (hubSocket !== ws) return;
+      try {
+        const request = JSON.parse(data.toString()) as Partial<WsRequest>;
+        if (request.type !== "req" || typeof request.id !== "string" || typeof request.method !== "string") return;
+        void handleRequest(request as WsRequest);
+      } catch {
+        // Malformed hub message; ignore.
+      }
+    });
+
+    const onGone = () => {
+      if (hubSocket !== ws) return;
+      hubSocket = null;
+      updateHubStatus();
+      if (wantConnection) scheduleReconnect();
+    };
+    ws.on("close", onGone);
+    ws.on("error", () => {
+      try {
+        ws.close();
+      } catch {}
+    });
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS);
+      openSocket();
+    }, reconnectDelay);
   }
 
   // ═══════════════════════════════════════
-  // Helper: stop the server
+  // /webui:connect and /webui:disconnect
   // ═══════════════════════════════════════
-  function stopServer() {
-    if (heartbeatTimer) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-    if (wss) {
-      for (const client of clients) {
-        client.close();
-      }
-      clients.clear();
-      try {
-        wss.close();
-      } catch {}
-      wss = null;
-    }
-    if (server) {
-      try {
-        server.close();
-      } catch {}
-      server = null;
-    }
-    mirrorUrl = "";
-    mirrorStatusBase = "";
-  }
 
-  // ═══════════════════════════════════════
-  // /webui-stop and /webui-start commands
-  // ═══════════════════════════════════════
-  pi.registerCommand("webui-stop", {
-    description: "Stop the pi-web-ui server",
-    handler: async (_args, ctx) => {
-      if (!server) {
-        ctx.ui.notify("pi-web-ui is not running", "warning");
-        return;
-      }
-      stopServer();
-      ctx.ui.setStatus("webui", "");
-      ctx.ui.notify("pi-web-ui server stopped", "info");
-    },
-  });
-
-  pi.registerCommand("webui-start", {
-    description: "Start the pi-web-ui server",
-    handler: async (_args, ctx) => {
-      if (server) {
-        ctx.ui.notify(`pi-web-ui is already running at ${mirrorUrl}`, "warning");
+  pi.registerCommand("webui:connect", {
+    description: "Connect this Pi session to a pi-web-ui hub",
+    handler: async (args, ctx) => {
+      if (settings.disabled) {
+        ctx.ui.notify("pi-web-ui is disabled (PI_WEB_UI_DISABLED)", "warning");
         return;
       }
       latestCtx = ctx;
-      startServer();
-      ctx.ui.notify("pi-web-ui server starting...", "info");
+      // Capture full ExtensionCommandContext for session-control methods
+      // (navigateTree, fork, etc.). Cleared on session_start/session_shutdown;
+      // re-run /webui:connect after session replacement.
+      latestExecuteCtx = ctx;
+      advancedFeaturesEnabled = true;
+
+      const url = args.trim() || settings.hubUrl || DEFAULT_HUB_URL;
+      connectToHub(url);
+      sendToHub({
+        type: "event",
+        event: "webui_state",
+        payload: { advancedFeatures: true, archAvailable: archExtensionPresent },
+      });
+      ctx.ui.notify(`pi-web-ui connecting to ${url}`, "info");
     },
   });
 
-  // ═══════════════════════════════════════
-  // /webui command — open Pi Web UI in browser
-  // ═══════════════════════════════════════
-  pi.registerCommand("webui", {
-    description: "Open Pi Web UI in browser",
+  pi.registerCommand("webui:disconnect", {
+    description: "Disconnect this Pi session from the pi-web-ui hub",
     handler: async (_args, ctx) => {
-      if (!mirrorUrl) {
-        ctx.ui.notify("pi-web-ui server not running yet", "warning");
+      if (!wantConnection) {
+        ctx.ui.notify("pi-web-ui is not connected", "warning");
         return;
       }
-      const { exec } = require("node:child_process");
-      exec(`open "${mirrorUrl}"`);
-      ctx.ui.notify(`Opened ${mirrorUrl}`, "info");
-      advancedFeaturesEnabled = true;
-      // Capture full ExtensionCommandContext for session-control methods (navigateTree, fork, etc.).
-      // Cleared on session_start/session_shutdown; user must re-run /webui after session replacement.
-      latestExecuteCtx = ctx;
-      broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: true } });
+      disconnectFromHub();
+      ctx.ui.notify("pi-web-ui disconnected", "info");
     },
   });
 
@@ -382,13 +351,6 @@ export default function (pi: ExtensionAPI) {
       const eventPayload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
 
       if (eventType === "tool_execution_end" && eventPayload.isError !== true) {
-        let workspaceDir = path.resolve(process.cwd());
-        try {
-          const entries = ctx.sessionManager.getEntries() as SessionEntry[];
-          const sessionEntry = entries.find((entry) => entry.type === "session");
-          if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
-        } catch {}
-
         const toolName = typeof eventPayload.toolName === "string" ? eventPayload.toolName.toLowerCase() : "";
         const args =
           eventPayload.args && typeof eventPayload.args === "object" && !Array.isArray(eventPayload.args)
@@ -409,13 +371,13 @@ export default function (pi: ExtensionAPI) {
           liveArtifactPaths.add(
             path.isAbsolute(normalizedPath || "")
               ? path.resolve(normalizedPath || "")
-              : path.resolve(workspaceDir, normalizedPath || ""),
+              : path.resolve(workspaceDir(), normalizedPath || ""),
           );
         }
       }
 
-      // Forward event to all connected browser clients
-      broadcast({
+      // Forward event to the hub (which fans out to attached browsers)
+      sendToHub({
         type: "event",
         event: eventType,
         payload: eventPayload,
@@ -426,12 +388,12 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_tree", async (event: unknown, ctx: ExtensionContext) => {
     latestCtx = ctx;
     const payload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
-    broadcast({ type: "event", event: "session_tree", payload });
+    sendToHub({ type: "event", event: "session_tree", payload });
   });
 
-  // Forward arch-mode state changes from other extensions to browser clients
+  // Forward arch-mode state changes from other extensions to the hub
   (pi as ExtensionAPIWithEvents).events?.on?.("arch:state-changed", (payload: unknown) => {
-    broadcast({
+    sendToHub({
       type: "event",
       event: "arch:state-changed",
       payload: typeof payload === "object" && payload !== null ? payload : {},
@@ -441,7 +403,7 @@ export default function (pi: ExtensionAPI) {
   // Listen for arch-mode extension presence announcement
   (pi as ExtensionAPIWithEvents).events?.on?.("arch:ready", () => {
     archExtensionPresent = true;
-    broadcast({ type: "event", event: "webui_state", payload: { archAvailable: true } });
+    sendToHub({ type: "event", event: "webui_state", payload: { archAvailable: true } });
   });
 
   // Also capture context from session events
@@ -455,14 +417,41 @@ export default function (pi: ExtensionAPI) {
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
     liveArtifactPaths.clear();
-    broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
+    sendToHub({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
     turnCount = 0;
     titleSet = false;
     userMessages = [];
+
+    // Session replacement: update identity in place on the same connection
+    if (isConnected()) {
+      sendToHub({ type: "session_update", agent: buildAgentInfo() });
+    } else if (settings.hubUrl && !settings.disabled && !wantConnection) {
+      // Auto-connect when a hub URL is configured via env/settings
+      connectToHub(settings.hubUrl);
+    }
   });
 
   pi.on("turn_start", async (_event, _ctx) => {
     turnCount++;
+  });
+
+  // Keep the hub's live-agent registry in sync with the agent lifecycle so
+  // browsers see the streaming indicator change in real time. The hub
+  // rebroadcasts hub:sessions on every session_update (ADR 0012).
+  // Boundaries: agent_start = busy; agent_settled = fully idle (agent_end can
+  // still run before the session flips back to idle, so it is not a reliable
+  // idle boundary). The flag is stated explicitly because ctx.isIdle() is not
+  // yet updated when these events fire.
+  pi.on("agent_start", async (_event, ctx) => {
+    latestCtx = ctx;
+    sendToHub({ type: "session_update", agent: buildAgentInfo({ isStreaming: true }) });
+  });
+
+  // agent_settled is not yet in the published ExtensionAPI typings (it exists
+  // in pi >= 0.84), so register it through the same cast as the generic loop.
+  pi.on("agent_settled" as Parameters<ExtensionAPI["on"]>[0], async (_event: unknown, ctx: ExtensionContext) => {
+    latestCtx = ctx;
+    sendToHub({ type: "session_update", agent: buildAgentInfo({ isStreaming: false }) });
   });
 
   // Capture user messages for title generation via message_start
@@ -500,8 +489,7 @@ export default function (pi: ExtensionAPI) {
     if (title) {
       pi.setSessionName(title);
       titleSet = true;
-      // Broadcast to connected clients
-      broadcast({
+      sendToHub({
         type: "event",
         event: "session_name",
         payload: { name: title },
@@ -535,7 +523,7 @@ export default function (pi: ExtensionAPI) {
 
     // Extract a clean title: first sentence or clause, max ~60 chars
     let title = bestMessage
-      .replace(/^(ok |okay |so |actually |hey |please |can you |could you |i want(ed)? to |i wanna |let'?s )/i, "")
+      .replace(/^(ok |okay |so |actually |hey |please|can you |could you |i want(ed)? to |i wanna |let'?s )/i, "")
       .replace(/\n.*/s, "") // first line only
       .trim();
 
@@ -593,9 +581,9 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ═══════════════════════════════════════
-  // Handle commands from browser clients
+  // Handle commands relayed by the hub
   // ═══════════════════════════════════════
-  async function handleRequest(ws: WritableSocket, request: WsRequest) {
+  async function handleRequest(request: WsRequest) {
     const ctx = latestCtx;
     const params = request.params ?? {};
 
@@ -629,7 +617,7 @@ export default function (pi: ExtensionAPI) {
               for (const img of images) {
                 if (!img.data || typeof img.data !== "string") continue;
                 const data = img.data.includes(",") ? img.data.split(",")[1] : img.data;
-                const mimeType = (validMimes.includes(img.mimeType) ? img.mimeType : "image/png") as
+                const mimeType = (img.mimeType && validMimes.includes(img.mimeType) ? img.mimeType : "image/png") as
                   | "image/png"
                   | "image/jpeg"
                   | "image/gif"
@@ -641,47 +629,46 @@ export default function (pi: ExtensionAPI) {
               pi.sendUserMessage(message);
             }
           }
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "steer": {
           pi.sendUserMessage(typeof params.message === "string" ? params.message : "", { deliverAs: "steer" });
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "follow_up": {
           pi.sendUserMessage(typeof params.message === "string" ? params.message : "", { deliverAs: "followUp" });
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "abort": {
           ctx?.abort();
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "enter_arch_mode": {
           (pi as ExtensionAPIWithEvents).events?.emit?.("cmd:arch:enter", {});
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "exit_arch_mode": {
           (pi as ExtensionAPIWithEvents).events?.emit?.("cmd:arch:exit", {});
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "get_state": {
           if (!ctx) {
-            sendTo(ws, error("No context available"));
+            sendToHub(error("No context available"));
             break;
           }
-          sendTo(
-            ws,
+          sendToHub(
             success({
               model: ctx.model,
               thinkingLevel: pi.getThinkingLevel(),
@@ -696,60 +683,60 @@ export default function (pi: ExtensionAPI) {
 
         case "get_messages": {
           if (!ctx) {
-            sendTo(ws, error("No context available"));
+            sendToHub(error("No context available"));
             break;
           }
-          sendTo(ws, success({ entries: ctx.sessionManager.getEntries() }));
+          sendToHub(success({ entries: ctx.sessionManager.getEntries() }));
           break;
         }
 
         case "get_available_models": {
           if (!ctx) {
-            sendTo(ws, error("No context available"));
+            sendToHub(error("No context available"));
             break;
           }
-          sendTo(ws, success({ models: await ctx.modelRegistry.getAvailable() }));
+          sendToHub(success({ models: await ctx.modelRegistry.getAvailable() }));
           break;
         }
 
         case "set_model": {
           if (!ctx) {
-            sendTo(ws, error("No context available"));
+            sendToHub(error("No context available"));
             break;
           }
           const models = await ctx.modelRegistry.getAvailable();
-          const model = (models as ModelCandidate[]).find(
+          const model = models.find(
             (candidate) => candidate.provider === params.provider && candidate.id === params.modelId,
           );
           if (!model) {
-            sendTo(ws, error(`Model not found: ${params.provider}/${params.modelId}`));
+            sendToHub(error(`Model not found: ${params.provider}/${params.modelId}`));
             break;
           }
           if (!(await pi.setModel(model))) {
-            sendTo(ws, error("No API key for this model"));
+            sendToHub(error("No API key for this model"));
             break;
           }
-          sendTo(ws, success(model));
+          sendToHub(success(model));
           break;
         }
 
         case "cycle_model": {
           if (!ctx) {
-            sendTo(ws, success(null));
+            sendToHub(success(null));
             break;
           }
           const availModels = await ctx.modelRegistry.getAvailable();
           const currentModel = ctx.model;
           if (!currentModel || availModels.length <= 1) {
-            sendTo(ws, success(null));
+            sendToHub(success(null));
             break;
           }
-          const idx = (availModels as ModelCandidate[]).findIndex(
+          const idx = availModels.findIndex(
             (candidate) => candidate.provider === currentModel.provider && candidate.id === currentModel.id,
           );
           const nextModel = availModels[(idx + 1) % availModels.length];
           await pi.setModel(nextModel);
-          sendTo(ws, success({ model: nextModel, thinkingLevel: pi.getThinkingLevel() }));
+          sendToHub(success({ model: nextModel, thinkingLevel: pi.getThinkingLevel() }));
           break;
         }
 
@@ -763,19 +750,19 @@ export default function (pi: ExtensionAPI) {
             | "medium"
             | "high";
           pi.setThinkingLevel(next);
-          sendTo(ws, success({ level: next }));
+          sendToHub(success({ level: next }));
           break;
         }
 
         case "set_thinking_level": {
-          pi.setThinkingLevel(params.level as "off" | "minimal" | "low" | "medium" | "high" | undefined);
-          sendTo(ws, success());
+          pi.setThinkingLevel(params.level as Parameters<typeof pi.setThinkingLevel>[0]);
+          sendToHub(success());
           break;
         }
 
         case "get_session_stats": {
           if (!ctx) {
-            sendTo(ws, error("No context available"));
+            sendToHub(error("No context available"));
             break;
           }
           const usage = ctx.getContextUsage();
@@ -789,8 +776,7 @@ export default function (pi: ExtensionAPI) {
             else if (entry.message?.role === "assistant") assistantMessages++;
             else if (entry.message?.role === "toolResult") toolCalls++;
           }
-          sendTo(
-            ws,
+          sendToHub(
             success({
               sessionFile: ctx.sessionManager.getSessionFile(),
               userMessages,
@@ -806,29 +792,29 @@ export default function (pi: ExtensionAPI) {
         case "set_session_name": {
           const name = typeof params.name === "string" ? params.name.trim() : "";
           if (!name) {
-            sendTo(ws, error("Name cannot be empty"));
+            sendToHub(error("Name cannot be empty"));
             break;
           }
           pi.setSessionName(name);
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "set_auto_compaction": {
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "compact": {
           if (ctx) {
-            broadcast({ type: "event", event: "auto_compaction_start", payload: {} });
+            sendToHub({ type: "event", event: "auto_compaction_start", payload: {} });
             ctx.compact({
               customInstructions: typeof params.customInstructions === "string" ? params.customInstructions : undefined,
               onComplete: (result: { summary?: unknown }) => {
-                broadcast({ type: "event", event: "auto_compaction_end", payload: { summary: result?.summary } });
+                sendToHub({ type: "event", event: "auto_compaction_end", payload: { summary: result?.summary } });
               },
               onError: (err: Error) => {
-                broadcast({
+                sendToHub({
                   type: "event",
                   event: "auto_compaction_end",
                   payload: { summary: `Error: ${err.message}` },
@@ -836,13 +822,13 @@ export default function (pi: ExtensionAPI) {
               },
             });
           }
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         case "export_html": {
           if (!ctx) {
-            sendTo(ws, error("No context available"));
+            sendToHub(error("No context available"));
             break;
           }
           try {
@@ -850,11 +836,15 @@ export default function (pi: ExtensionAPI) {
             if (!sessionFile) throw new Error("No session file to export");
             const { execSync } = require("node:child_process");
             const outputPath = typeof params.outputPath === "string" ? params.outputPath : "";
-            const args = outputPath ? `"${sessionFile}" "${outputPath}"` : `"${sessionFile}"`;
-            const output = execSync(`pi --export ${args}`, { cwd: process.cwd(), timeout: 30000, encoding: "utf-8" });
-            sendTo(ws, success({ path: output.trim().split("\n").pop() || sessionFile.replace(".jsonl", ".html") }));
+            const exportArgs = outputPath ? `"${sessionFile}" "${outputPath}"` : `"${sessionFile}"`;
+            const output = execSync(`pi --export ${exportArgs}`, {
+              cwd: process.cwd(),
+              timeout: 30000,
+              encoding: "utf-8",
+            });
+            sendToHub(success({ path: output.trim().split("\n").pop() || sessionFile.replace(".jsonl", ".html") }));
           } catch (e: unknown) {
-            sendTo(ws, error(e instanceof Error ? e.message : String(e)));
+            sendToHub(error(e instanceof Error ? e.message : String(e)));
           }
           break;
         }
@@ -863,72 +853,64 @@ export default function (pi: ExtensionAPI) {
           const snapshot = ctx
             ? await buildStateSnapshot(ctx)
             : { type: "event", event: "state_sync", payload: { entries: [], tree: [], leafId: null, model: null } };
-          sendTo(ws, success(snapshot.payload));
+          sendToHub(success(snapshot.payload));
           break;
         }
 
         case "health": {
-          sendTo(ws, success({ status: "ok", mode: "webui", mirrorUrl }));
+          sendToHub(success({ status: "ok", mode: "extension", agentId }));
           break;
         }
 
         case "get_files": {
           const explicitPath = typeof params.path === "string" ? params.path : "";
-          let dirPath = explicitPath || process.cwd();
-          if (!explicitPath && latestCtx) {
-            try {
-              const entries = latestCtx.sessionManager.getEntries() as SessionEntry[];
-              const sessionEntry = entries.find((entry) => entry.type === "session");
-              if (typeof sessionEntry?.cwd === "string") dirPath = sessionEntry.cwd;
-            } catch {}
-          }
-          sendTo(ws, success(getFileList(dirPath)));
+          const dirPath = explicitPath || workspaceDir();
+          sendToHub(success(getFileList(dirPath)));
           break;
         }
 
         case "get_git_status": {
-          sendTo(ws, success(getGitStatus(ctx)));
+          sendToHub(success(getGitStatus(ctx)));
           break;
         }
 
         case "get_git_diff": {
           const filePath = typeof params.path === "string" ? params.path : undefined;
-          sendTo(ws, success(getGitDiff(ctx, filePath)));
+          sendToHub(success(getGitDiff(ctx, filePath)));
           break;
         }
 
         case "get_file_content": {
           const filePath = typeof params.path === "string" ? params.path : "";
           if (!filePath) {
-            sendTo(ws, error("path required"));
+            sendToHub(error("path required"));
             break;
           }
-          sendTo(ws, success(getFileContent(ctx, filePath)));
+          sendToHub(success(getFileContent(ctx, filePath)));
           break;
         }
 
         case "open_file": {
           const filePath = typeof params.filePath === "string" ? params.filePath : "";
           if (!filePath) {
-            sendTo(ws, error("filePath required"));
+            sendToHub(error("filePath required"));
             break;
           }
           const { execFile } = await import("node:child_process");
           execFile("open", [filePath], (err) => {
             if (err) latestCtx?.ui.notify(`Failed to open file: ${err.message}`, "warning");
           });
-          sendTo(ws, success({ ok: true }));
+          sendToHub(success({ ok: true }));
           break;
         }
 
         case "get_auth": {
-          sendTo(ws, success({ configured: false, enabled: false }));
+          sendToHub(success({ configured: false, enabled: false }));
           break;
         }
 
         case "set_auth": {
-          sendTo(
-            ws,
+          sendToHub(
             error(
               "Authentication is not supported. Use tailscale serve or a reverse proxy with TLS for remote access.",
             ),
@@ -938,84 +920,50 @@ export default function (pi: ExtensionAPI) {
 
         case "navigate_tree": {
           if (!advancedFeaturesEnabled || !latestExecuteCtx) {
-            sendTo(ws, error("Run /webui first to enable editing"));
+            sendToHub(error("Run /webui:connect first to enable editing"));
             break;
           }
           if (!latestCtx?.isIdle()) {
-            sendTo(ws, error("Agent is busy"));
+            sendToHub(error("Agent is busy"));
             break;
           }
           const entryId = typeof params.entryId === "string" ? params.entryId : "";
           const entry = latestCtx.sessionManager.getEntry(entryId);
           if (!entry) {
-            sendTo(ws, error("Entry not found"));
+            sendToHub(error("Entry not found"));
             break;
           }
           if (!latestCtx.model) {
-            sendTo(ws, error("No model selected"));
+            sendToHub(error("No model selected"));
             break;
           }
-          const result = await latestExecuteCtx.navigateTree(entryId);
+          const result = (await latestExecuteCtx.navigateTree(entryId)) as {
+            cancelled: boolean;
+            editorText?: string;
+          };
           if (result.cancelled) {
-            sendTo(ws, success({ cancelled: true }));
+            sendToHub(success({ cancelled: true }));
             break;
           }
-          sendTo(ws, success({ editorText: result.editorText, cancelled: false }));
+          sendToHub(success({ editorText: result.editorText, cancelled: false }));
           break;
         }
 
         case "extension_ui_response": {
-          sendTo(ws, success());
+          sendToHub(success());
           break;
         }
 
         default:
-          sendTo(ws, error(`Unknown method: ${request.method}`));
+          sendToHub(error(`Unknown method: ${request.method}`));
       }
     } catch (e: unknown) {
-      sendTo(ws, error(e instanceof Error ? e.message : String(e)));
+      sendToHub(error(e instanceof Error ? e.message : String(e)));
     }
   }
 
   // ═══════════════════════════════════════
-  // Static file server
-  // ═══════════════════════════════════════
-  function serveStaticFile(req: http.IncomingMessage, res: http.ServerResponse) {
-    let urlPath = req.url || "/";
-
-    // Strip query params
-    urlPath = urlPath.split("?")[0];
-
-    // Default to index.html
-    if (urlPath === "/") urlPath = "/index.html";
-
-    const filePath = path.join(STATIC_DIR, urlPath);
-
-    // Security: prevent directory traversal
-    if (!filePath.startsWith(STATIC_DIR)) {
-      res.writeHead(403);
-      res.end("Forbidden");
-      return;
-    }
-
-    // Check file exists
-    fs.stat(filePath, (err, stats) => {
-      if (err || !stats.isFile()) {
-        res.writeHead(404);
-        res.end("Not Found");
-        return;
-      }
-
-      const ext = path.extname(filePath).toLowerCase();
-      const contentType = MIME_TYPES[ext] || "application/octet-stream";
-
-      res.writeHead(200, { "Content-Type": contentType });
-      fs.createReadStream(filePath).pipe(res);
-    });
-  }
-
-  // ═══════════════════════════════════════
-  // File browser
+  // File browser / git helpers
   // ═══════════════════════════════════════
 
   const IGNORED_NAMES = new Set([
@@ -1041,17 +989,17 @@ export default function (pi: ExtensionAPI) {
   ]);
 
   function getGitStatus(ctx: ExtensionContext | null): GitStatusResult {
-    let workspaceDir = path.resolve(process.cwd());
+    let workspace = path.resolve(process.cwd());
     if (ctx) {
       try {
         const entries = ctx.sessionManager.getEntries() as SessionEntry[];
         const sessionEntry = entries.find((entry) => entry.type === "session");
-        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspace = path.resolve(sessionEntry.cwd);
       } catch {}
     }
 
     const rootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd: workspaceDir,
+      cwd: workspace,
       encoding: "utf8",
       maxBuffer: MAX_GIT_OUTPUT_BYTES,
     });
@@ -1114,17 +1062,17 @@ export default function (pi: ExtensionAPI) {
   }
 
   function getGitDiff(ctx: ExtensionContext | null, requestedPath?: string): GitDiffResult {
-    let workspaceDir = path.resolve(process.cwd());
+    let workspace = path.resolve(process.cwd());
     if (ctx) {
       try {
         const entries = ctx.sessionManager.getEntries() as SessionEntry[];
         const sessionEntry = entries.find((entry) => entry.type === "session");
-        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspace = path.resolve(sessionEntry.cwd);
       } catch {}
     }
 
     const rootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd: workspaceDir,
+      cwd: workspace,
       encoding: "utf8",
       maxBuffer: MAX_GIT_OUTPUT_BYTES,
     });
@@ -1136,8 +1084,8 @@ export default function (pi: ExtensionAPI) {
     if (requestedPath) {
       const absolutePath = path.isAbsolute(requestedPath)
         ? path.resolve(requestedPath)
-        : path.resolve(workspaceDir, requestedPath);
-      if (absolutePath !== workspaceDir && !absolutePath.startsWith(`${workspaceDir}${path.sep}`)) {
+        : path.resolve(workspace, requestedPath);
+      if (absolutePath !== workspace && !absolutePath.startsWith(`${workspace}${path.sep}`)) {
         throw new Error("path outside workspace");
       }
       requestedRelativePath = path.relative(gitRoot, absolutePath).replace(/\\/g, "/");
@@ -1216,13 +1164,13 @@ export default function (pi: ExtensionAPI) {
   }
 
   function getFileContent(ctx: ExtensionContext | null, requestedPath: string): FileContentResult {
-    let workspaceDir = path.resolve(process.cwd());
+    let workspace = path.resolve(process.cwd());
     let entries: SessionEntry[] = [];
     if (ctx) {
       try {
         entries = ctx.sessionManager.getEntries() as SessionEntry[];
         const sessionEntry = entries.find((entry) => entry.type === "session");
-        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
+        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspace = path.resolve(sessionEntry.cwd);
       } catch {}
     }
 
@@ -1232,8 +1180,8 @@ export default function (pi: ExtensionAPI) {
       .replace(/\\/g, "/");
     const absolutePath = path.isAbsolute(normalizedRequest)
       ? path.resolve(normalizedRequest)
-      : path.resolve(workspaceDir, normalizedRequest);
-    const insideWorkspace = absolutePath === workspaceDir || absolutePath.startsWith(`${workspaceDir}${path.sep}`);
+      : path.resolve(workspace, normalizedRequest);
+    const insideWorkspace = absolutePath === workspace || absolutePath.startsWith(`${workspace}${path.sep}`);
     const artifactPaths = new Set(liveArtifactPaths);
     const pendingToolCalls = new Map<string, string>();
 
@@ -1262,7 +1210,7 @@ export default function (pi: ExtensionAPI) {
               record.id,
               path.isAbsolute(normalizedPath || "")
                 ? path.resolve(normalizedPath || "")
-                : path.resolve(workspaceDir, normalizedPath || ""),
+                : path.resolve(workspace, normalizedPath || ""),
             );
           }
         }
@@ -1292,7 +1240,7 @@ export default function (pi: ExtensionAPI) {
           artifactPaths.add(
             path.isAbsolute(normalizedPath || "")
               ? path.resolve(normalizedPath || "")
-              : path.resolve(workspaceDir, normalizedPath || ""),
+              : path.resolve(workspace, normalizedPath || ""),
           );
         }
       }
@@ -1307,7 +1255,7 @@ export default function (pi: ExtensionAPI) {
     if (stat.size > MAX_FILE_CONTENT_BYTES) throw new Error("File is too large to preview");
     const content = fs.readFileSync(absolutePath, "utf8");
     if (content.includes("\0")) throw new Error("Binary file cannot be previewed");
-    const relativePath = path.relative(workspaceDir, absolutePath).replace(/\\/g, "/");
+    const relativePath = path.relative(workspace, absolutePath).replace(/\\/g, "/");
     return {
       path: relativePath || path.basename(absolutePath),
       name: path.basename(absolutePath),
@@ -1352,152 +1300,6 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ═══════════════════════════════════════
-  // Start server function (reusable)
-  // ═══════════════════════════════════════
-  function startServer() {
-    if (server) return; // Already running
-
-    server = http.createServer(serveStaticFile);
-    wss = new WebSocketServer({ noServer: true });
-
-    server.on("upgrade", (request, socket, head) => {
-      if (request.url === "/ws") {
-        const activeWss = wss;
-        if (!activeWss) {
-          socket.destroy();
-          return;
-        }
-        activeWss.handleUpgrade(request, socket, head, (ws) => {
-          activeWss.emit("connection", ws, request);
-        });
-      } else {
-        socket.destroy();
-      }
-    });
-
-    wss.on("connection", (ws) => {
-      clients.add(ws);
-      updateMirrorStatus();
-      const aliveWs = ws as AliveWebSocket;
-      aliveWs.isAlive = true;
-
-      ws.on("pong", () => {
-        aliveWs.isAlive = true;
-      });
-
-      // Send initial web UI capability state.
-      sendTo(ws, {
-        type: "event",
-        event: "webui_state",
-        payload: {
-          advancedFeatures: advancedFeaturesEnabled && !!latestExecuteCtx,
-          archAvailable: archExtensionPresent,
-        },
-      });
-
-      // Immediately send state snapshot
-      if (latestCtx) {
-        buildStateSnapshot(latestCtx).then((snapshot) => {
-          sendTo(ws, snapshot);
-        });
-      }
-
-      ws.on("message", (data) => {
-        try {
-          const request = JSON.parse(data.toString()) as Partial<WsRequest>;
-          if (request.type !== "req" || typeof request.id !== "string" || typeof request.method !== "string") {
-            sendTo(ws, { type: "error", code: "bad_request", message: "Invalid client request" });
-            return;
-          }
-          handleRequest(ws, request as WsRequest);
-        } catch (_e) {
-          sendTo(ws, { type: "error", code: "invalid_json", message: "Invalid client message" });
-        }
-      });
-
-      ws.on("close", () => {
-        clients.delete(ws);
-        updateMirrorStatus();
-      });
-
-      ws.on("error", () => {
-        clients.delete(ws);
-        updateMirrorStatus();
-      });
-    });
-
-    // Heartbeat keeps mobile/Tailscale sessions alive and removes stale clients.
-    heartbeatTimer = setInterval(() => {
-      let changed = false;
-      for (const client of clients) {
-        if (client.readyState !== WebSocket.OPEN) {
-          clients.delete(client);
-          changed = true;
-          continue;
-        }
-
-        const aliveClient = client as AliveWebSocket;
-        if (!aliveClient.isAlive) {
-          try {
-            client.terminate();
-          } catch {}
-          clients.delete(client);
-          changed = true;
-          continue;
-        }
-
-        aliveClient.isAlive = false;
-        try {
-          client.ping();
-        } catch {}
-      }
-      if (changed) updateMirrorStatus();
-    }, 20000);
-
-    const tryListen = (port: number, maxAttempts = 10) => {
-      const activeServer = server;
-      if (!activeServer) return;
-      activeServer.listen(port, HOST, () => {
-        onListening(port);
-      });
-      activeServer.once("error", (err: NodeError) => {
-        if (err.code === "EADDRINUSE" && port < PORT + maxAttempts) {
-          latestCtx?.ui.setStatus("webui", `pi-web-ui: trying port ${port + 1}`);
-          activeServer.removeAllListeners("error");
-          tryListen(port + 1, maxAttempts);
-        } else {
-          latestCtx?.ui.setStatus("webui", "");
-          latestCtx?.ui.notify(`pi-web-ui failed to start: ${err.message}`, "error");
-          stopServer();
-        }
-      });
-    };
-
-    const onListening = (port: number) => {
-      mirrorUrl = `http://${HOST}:${port}`;
-      mirrorStatusBase = `pi-web-ui: ${HOST}:${port}`;
-      updateMirrorStatus();
-
-      latestCtx?.ui.notify(`pi-web-ui: ${mirrorUrl}`, "info");
-    };
-
-    tryListen(PORT);
-  }
-
-  // ═══════════════════════════════════════
-  // Auto-start on session begin
-  // ═══════════════════════════════════════
-  pi.on("session_start", async (_event, ctx) => {
-    latestCtx = ctx;
-
-    if (!AUTO_START) {
-      return;
-    }
-
-    startServer();
-  });
-
-  // ═══════════════════════════════════════
   // Cleanup on shutdown
   // ═══════════════════════════════════════
   pi.on("session_shutdown", async () => {
@@ -1505,6 +1307,6 @@ export default function (pi: ExtensionAPI) {
     latestExecuteCtx = null;
     latestCtx = null;
     liveArtifactPaths.clear();
-    stopServer();
+    disconnectFromHub();
   });
 }
