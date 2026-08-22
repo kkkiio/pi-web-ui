@@ -26,10 +26,6 @@ function nextId(prefix: string) {
 export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   items: [],
   chatStatus: "ready",
-  tree: [],
-  leafId: null,
-  selectedTreeEntryId: null,
-  loadingTreeEntryId: null,
   conversationSyncing: false,
   conversationSyncError: null,
   lastUsage: null,
@@ -43,21 +39,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     const entries = sync.entries ?? [];
     const items = syncToItems(entries, nextId);
     const artifacts = artifactsFromEntries(entries);
-    const tree = sync.tree ?? [];
-    const currentSelection = get().selectedTreeEntryId;
-    let selectedTreeEntryId: string | null = sync.leafId ?? null;
-
-    if (currentSelection) {
-      const stack = [...tree];
-      while (stack.length > 0) {
-        const node = stack.pop();
-        if (node?.entry.id === currentSelection) {
-          selectedTreeEntryId = currentSelection;
-          break;
-        }
-        if (node) stack.push(...node.children);
-      }
-    }
 
     set({
       artifacts,
@@ -68,12 +49,9 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       error: null,
       items,
       lastUsage: findLastUsage(entries),
-      leafId: sync.leafId ?? null,
       modelLabel: sync.model?.id ? sync.model.id.split("/").pop() || sync.model.id : "model",
-      selectedTreeEntryId,
       sessionName: sync.sessionName || "Pi Web UI",
       thinkingLevel: sync.thinkingLevel || "off",
-      tree,
     });
     get().requestGitStatusRefresh({ debounce: true });
   },
@@ -116,8 +94,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   },
 
   setChatStatus: (chatStatus) => set({ chatStatus }),
-  setSelectedTreeEntryId: (selectedTreeEntryId) => set({ selectedTreeEntryId }),
-  setLoadingTreeEntryId: (loadingTreeEntryId) => set({ loadingTreeEntryId }),
   setLastUsage: (lastUsage) => set({ lastUsage }),
   setContextWindowSize: (contextWindowSize) => set({ contextWindowSize }),
 

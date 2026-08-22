@@ -12,13 +12,13 @@ import type {
   PromptCommand,
   RightPanelTab,
   RpcEvent,
-  SessionTreeNode,
   StateSyncPayload,
   SystemTone,
   ThemeMode,
   Usage,
   WorkspaceArtifact,
 } from "../types";
+import type { HubSlice } from "./hub-slice";
 
 export type ConnectionSlice = {
   client: PiClient | null;
@@ -36,10 +36,6 @@ export type ConnectionSlice = {
 export type SessionSlice = {
   items: ChatItem[];
   chatStatus: ChatSubmitStatus;
-  tree: SessionTreeNode[];
-  leafId: string | null;
-  selectedTreeEntryId: string | null;
-  loadingTreeEntryId: string | null;
   conversationSyncing: boolean;
   conversationSyncError: string | null;
   lastUsage: Usage | null;
@@ -49,8 +45,6 @@ export type SessionSlice = {
   requestConversationSync: (options?: { debounce?: boolean }) => Promise<void> | void;
   clearConversationTimers: () => void;
   setChatStatus: (status: ChatSubmitStatus) => void;
-  setSelectedTreeEntryId: (entryId: string | null) => void;
-  setLoadingTreeEntryId: (entryId: string | null) => void;
   setLastUsage: (usage: Usage | null) => void;
   setContextWindowSize: (size: number) => void;
   sendPrompt: (command: PromptCommand) => Promise<void>;
@@ -135,7 +129,8 @@ export type PiWebUiStore = ConnectionSlice &
   SettingsSlice &
   WorkspaceSlice &
   RightPanelSlice &
-  DialogSlice;
+  DialogSlice &
+  HubSlice;
 
 export type StoreSlice<T> = StateCreator<PiWebUiStore, [], [], T>;
 

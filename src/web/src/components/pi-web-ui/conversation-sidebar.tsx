@@ -10,42 +10,27 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import type { ConnectionState, SessionTreeNode } from "../../core/types";
+import type { AgentSessionInfo } from "../../../../protocol/index";
+import type { ConnectionState } from "../../core/types";
 import { ConnectionDot } from "./connection-dot";
-import { ConversationSidebarTree } from "./conversation-sidebar-tree";
+import { SessionList } from "./session-list";
 
 interface ConversationSidebarProps {
-  branchEnabled: boolean;
   connection: ConnectionState;
-  tree: SessionTreeNode[];
-  leafId: string | null;
-  selectedEntryId: string | null;
-  loadingEntryId: string | null;
-  syncing: boolean;
-  syncError: string | null;
+  liveSessions: AgentSessionInfo[];
+  attachedAgentId: string | null;
+  onSwitchAgent: (agentId: string) => void;
   onOpenSettings: () => void;
-  onBranchTree: (entryId: string) => void;
-  onContinueTree: (entryId: string) => void;
-  onRefreshTree: () => void;
   onResizeSidebar: (width: number) => void;
-  onSelectTree: (entryId: string) => void;
 }
 
 export function ConversationSidebar({
-  branchEnabled,
   connection,
-  tree,
-  leafId,
-  selectedEntryId,
-  loadingEntryId,
-  syncing,
-  syncError,
+  liveSessions,
+  attachedAgentId,
+  onSwitchAgent,
   onOpenSettings,
-  onBranchTree,
-  onContinueTree,
-  onRefreshTree,
   onResizeSidebar,
-  onSelectTree,
 }: ConversationSidebarProps) {
   const suppressRailClickRef = useRef(false);
   const startSidebarResize = useCallback(
@@ -111,19 +96,7 @@ export function ConversationSidebar({
       <SidebarSeparator className="group-data-[collapsible=icon]:hidden" />
 
       <SidebarContent className="group-data-[collapsible=icon]:hidden">
-        <ConversationSidebarTree
-          branchEnabled={branchEnabled}
-          leafId={leafId}
-          loadingEntryId={loadingEntryId}
-          onBranch={onBranchTree}
-          onContinue={onContinueTree}
-          onRefresh={onRefreshTree}
-          onSelect={onSelectTree}
-          selectedEntryId={selectedEntryId}
-          syncError={syncError}
-          syncing={syncing}
-          tree={tree}
-        />
+        <SessionList attachedAgentId={attachedAgentId} onSwitchAgent={onSwitchAgent} sessions={liveSessions} />
       </SidebarContent>
 
       <SidebarFooter>

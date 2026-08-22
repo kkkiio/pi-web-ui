@@ -1,8 +1,17 @@
+import type { AgentSessionInfo } from "../../../../protocol/index";
 import type { RpcEvent, StateSyncPayload, WsEvent } from "../types";
 import type { PiWebUiStore } from "./types";
 
 export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
   const payload = data.payload ?? {};
+  if (data.event === "hub:sessions") {
+    store.applyHubSessions((payload.sessions as AgentSessionInfo[] | undefined) ?? []);
+    return;
+  }
+  if (data.event === "hub:agent_gone") {
+    if (typeof payload.agentId === "string") store.applyAgentGone(payload.agentId);
+    return;
+  }
   if (data.event === "state_sync") {
     store.applyStateSync(payload as StateSyncPayload);
     return;

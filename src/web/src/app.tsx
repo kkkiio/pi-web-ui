@@ -16,7 +16,6 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
 import {
   AppHeader,
   ChatInput,
@@ -31,12 +30,12 @@ import {
   UserMessageView,
   WorkspaceStatusFloat,
 } from "./components/pi-web-ui";
-import { extractText, processPromptFiles } from "./core/chat-conversion";
-import { copyText, formatTime, formatTokens, isEditableTarget } from "./core/format";
+import { processPromptFiles } from "./core/chat-conversion";
+import { copyText, formatTokens, isEditableTarget } from "./core/format";
 import { PiClient } from "./core/pi-client";
 import { usePiWebUiStore } from "./core/store";
 import { dispatchPiEvent } from "./core/store/event-dispatch";
-import type { ChatItem, PromptCommand } from "./core/types";
+import type { PromptCommand } from "./core/types";
 
 const DEFAULT_LEFT_SIDEBAR_WIDTH = 320;
 const MIN_LEFT_SIDEBAR_WIDTH = 240;
@@ -47,21 +46,16 @@ const LEFT_SIDEBAR_WIDTH_STORAGE_KEY = "pi-web-ui-left-sidebar-width";
 export function App() {
   const items = usePiWebUiStore((state) => state.items);
   const connection = usePiWebUiStore((state) => state.connection);
+  const liveSessions = usePiWebUiStore((state) => state.liveSessions);
+  const attachedAgentId = usePiWebUiStore((state) => state.attachedAgentId);
   const chatStatus = usePiWebUiStore((state) => state.chatStatus);
   const modelLabel = usePiWebUiStore((state) => state.modelLabel);
   const currentModel = usePiWebUiStore((state) => state.currentModel);
   const thinkingLevel = usePiWebUiStore((state) => state.thinkingLevel);
   const sessionName = usePiWebUiStore((state) => state.sessionName);
   const error = usePiWebUiStore((state) => state.error);
-  const advancedFeatures = usePiWebUiStore((state) => state.advancedFeatures);
   const archModeEnabled = usePiWebUiStore((state) => state.archModeEnabled);
   const archAvailable = usePiWebUiStore((state) => state.archAvailable);
-  const tree = usePiWebUiStore((state) => state.tree);
-  const leafId = usePiWebUiStore((state) => state.leafId);
-  const selectedTreeEntryId = usePiWebUiStore((state) => state.selectedTreeEntryId);
-  const loadingTreeEntryId = usePiWebUiStore((state) => state.loadingTreeEntryId);
-  const conversationSyncing = usePiWebUiStore((state) => state.conversationSyncing);
-  const conversationSyncError = usePiWebUiStore((state) => state.conversationSyncError);
   const availableModels = usePiWebUiStore((state) => state.availableModels);
   const showThinking = usePiWebUiStore((state) => state.showThinking);
   const autoCompaction = usePiWebUiStore((state) => state.autoCompaction);
@@ -94,12 +88,11 @@ export function App() {
   const respondDialog = usePiWebUiStore((state) => state.respondDialog);
   const selectModel = usePiWebUiStore((state) => state.selectModel);
   const sendPrompt = usePiWebUiStore((state) => state.sendPrompt);
+  const switchAgent = usePiWebUiStore((state) => state.switchAgent);
   const setActiveRightPanelTabId = usePiWebUiStore((state) => state.setActiveRightPanelTabId);
   const setClient = usePiWebUiStore((state) => state.setClient);
   const setConnection = usePiWebUiStore((state) => state.setConnection);
   const setError = usePiWebUiStore((state) => state.setError);
-  const setLoadingTreeEntryId = usePiWebUiStore((state) => state.setLoadingTreeEntryId);
-  const setSelectedTreeEntryId = usePiWebUiStore((state) => state.setSelectedTreeEntryId);
   const setShowThinking = usePiWebUiStore((state) => state.setShowThinking);
   const setThemeMode = usePiWebUiStore((state) => state.setThemeMode);
   const setThinkingLevel = usePiWebUiStore((state) => state.setThinkingLevel);
@@ -127,7 +120,6 @@ export function App() {
     );
     return Math.min(maxWidth, Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(requestedWidth)));
   });
-  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
 
   const [queuedMessages, setQueuedMessages] = useState<PromptCommand[]>([]);
@@ -138,9 +130,6 @@ export function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
 
-  const itemElementsRef = useRef<Map<string, HTMLElement>>(new Map());
-  const pendingFocusEntryIdRef = useRef<string | null>(null);
-  const highlightTimerRef = useRef<number | null>(null);
   const promptCounterRef = useRef(0);
 
   const resolvedTheme = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
@@ -223,7 +212,6 @@ export function App() {
       setClient(null);
       clearConversationTimers();
       clearWorkspaceTimers();
-      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
     };
   }, [clearConversationTimers, clearWorkspaceTimers, setClient, setConnection, setError]);
 
@@ -332,168 +320,6 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [dialog, respondDialog]);
 
-  const registerItemElement = useCallback((item: ChatItem, node: HTMLElement | null) => {
-    const ids = [item.entryId, ...(item.relatedEntryIds ?? [])].filter((value): value is string => Boolean(value));
-    for (const id of ids) {
-      if (node) itemElementsRef.current.set(id, node);
-      else itemElementsRef.current.delete(id);
-    }
-  }, []);
-
-  const findVisibleEntryId = useCallback(
-    (entryId: string) => {
-      const byId = new Map<string, { parentId?: string | null }>();
-      const stack = [...tree];
-      while (stack.length > 0) {
-        const node = stack.pop();
-        if (!node?.entry.id) continue;
-        byId.set(node.entry.id, { parentId: node.entry.parentId });
-        stack.push(...node.children);
-      }
-
-      let cursor: string | null | undefined = entryId;
-      while (cursor) {
-        if (itemElementsRef.current.has(cursor)) return cursor;
-        cursor = byId.get(cursor)?.parentId ?? null;
-      }
-      return null;
-    },
-    [tree],
-  );
-
-  const focusEntry = useCallback(
-    (entryId: string) => {
-      const visibleEntryId = findVisibleEntryId(entryId);
-      if (!visibleEntryId) return false;
-      const element = itemElementsRef.current.get(visibleEntryId);
-      if (!element) return false;
-      let scrollContainer: HTMLElement | null = null;
-      let ancestor = element.parentElement;
-      while (ancestor && ancestor !== document.body) {
-        const style = window.getComputedStyle(ancestor);
-        if (style.overflowY === "hidden" && ancestor.scrollTop !== 0) ancestor.scrollTop = 0;
-        if (
-          !scrollContainer &&
-          ["auto", "scroll"].includes(style.overflowY) &&
-          ancestor.scrollHeight > ancestor.clientHeight
-        ) {
-          scrollContainer = ancestor;
-        }
-        ancestor = ancestor.parentElement;
-      }
-      if (scrollContainer) {
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const elementRect = element.getBoundingClientRect();
-        const targetTop =
-          scrollContainer.scrollTop +
-          elementRect.top -
-          containerRect.top -
-          (containerRect.height - elementRect.height) / 2;
-        scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
-      }
-      setHighlightedEntryId(visibleEntryId);
-      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
-      highlightTimerRef.current = window.setTimeout(() => setHighlightedEntryId(null), 1200);
-      return true;
-    },
-    [findVisibleEntryId],
-  );
-
-  useEffect(() => {
-    const targetEntryId = pendingFocusEntryIdRef.current;
-    if (!targetEntryId) return;
-    if (focusEntry(targetEntryId)) pendingFocusEntryIdRef.current = null;
-  }, [focusEntry]);
-
-  const selectTreeEntry = useCallback(
-    (entryId: string) => {
-      setSelectedTreeEntryId(entryId);
-      focusEntry(entryId);
-    },
-    [focusEntry, setSelectedTreeEntryId],
-  );
-
-  const branchFromMessage = useCallback(
-    async (entryId: string) => {
-      if (draftText.trim() && !window.confirm("Replace the current draft with this message?")) return;
-      let timestamp = "";
-      let fallbackText = "";
-      const stack = [...tree];
-      while (stack.length > 0) {
-        const node = stack.pop();
-        if (!node) continue;
-        if (node.entry.id === entryId) {
-          timestamp = typeof node.entry.timestamp === "string" ? node.entry.timestamp : "";
-          fallbackText = extractText(node.entry.message?.content);
-          break;
-        }
-        stack.push(...node.children);
-      }
-
-      pendingFocusEntryIdRef.current = entryId;
-      setSelectedTreeEntryId(entryId);
-      setLoadingTreeEntryId(entryId);
-      setError(null);
-      try {
-        const result = (await compactSend("navigate_tree", { entryId })) as
-          | { editorText?: string; cancelled?: boolean }
-          | undefined;
-        if (result?.cancelled) {
-          pendingFocusEntryIdRef.current = null;
-          return;
-        }
-        await requestConversationSync();
-        setDraftText(result?.editorText ?? fallbackText);
-        addSystemMessage(
-          `Branching from ${formatTime(timestamp) || "selected message"}. Previous branch is preserved in this session.`,
-        );
-        requestAnimationFrame(() => {
-          const input = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
-          input?.focus();
-          input?.setSelectionRange(input.value.length, input.value.length);
-        });
-      } catch (err) {
-        pendingFocusEntryIdRef.current = null;
-        setError(err instanceof Error ? err.message : "Branch failed");
-      } finally {
-        setLoadingTreeEntryId(null);
-      }
-    },
-    [
-      addSystemMessage,
-      compactSend,
-      draftText,
-      requestConversationSync,
-      setError,
-      setLoadingTreeEntryId,
-      setSelectedTreeEntryId,
-      tree,
-    ],
-  );
-
-  const continueBranch = useCallback(
-    async (entryId: string) => {
-      setSelectedTreeEntryId(entryId);
-      setLoadingTreeEntryId(entryId);
-      setError(null);
-      try {
-        const result = (await compactSend("navigate_tree", { entryId })) as { cancelled?: boolean } | undefined;
-        if (result?.cancelled) return;
-        await requestConversationSync();
-        requestAnimationFrame(() => {
-          const input = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
-          input?.focus();
-          input?.setSelectionRange(input.value.length, input.value.length);
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Continue branch failed");
-      } finally {
-        setLoadingTreeEntryId(null);
-      }
-    },
-    [compactSend, requestConversationSync, setError, setLoadingTreeEntryId, setSelectedTreeEntryId],
-  );
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
@@ -565,20 +391,12 @@ export function App() {
       style={{ "--sidebar-width": `${leftSidebarWidth}px` } as CSSProperties}
     >
       <ConversationSidebar
-        branchEnabled={advancedFeatures}
+        attachedAgentId={attachedAgentId}
         connection={connection}
-        leafId={leafId}
-        loadingEntryId={loadingTreeEntryId}
-        onBranchTree={branchFromMessage}
-        onContinueTree={continueBranch}
+        liveSessions={liveSessions}
         onOpenSettings={openSettings}
-        onRefreshTree={() => void requestConversationSync()}
         onResizeSidebar={updateLeftSidebarWidth}
-        onSelectTree={selectTreeEntry}
-        selectedEntryId={selectedTreeEntryId}
-        syncError={conversationSyncError}
-        syncing={conversationSyncing}
-        tree={tree}
+        onSwitchAgent={(agentId) => void switchAgent(agentId)}
       />
 
       <SidebarInset className="h-full min-h-0">
@@ -612,37 +430,23 @@ export function App() {
                       title="Pi Web UI"
                     />
                   ) : (
-                    items.map((item) => {
-                      const highlighted = [item.entryId, ...(item.relatedEntryIds ?? [])].includes(
-                        highlightedEntryId ?? "",
-                      );
-                      return (
-                        <div
-                          className={cn(
-                            "rounded-lg transition-[background-color,box-shadow] duration-300",
-                            highlighted && "bg-primary/10 ring-1 ring-primary/40",
-                          )}
+                    items.map((item) =>
+                      item.kind === "message" && item.role === "user" ? (
+                        <UserMessageView
+                          item={item as typeof item & { kind: "message"; role: "user" }}
                           key={item.id}
-                          ref={(node) => registerItemElement(item, node)}
-                        >
-                          {item.kind === "message" && item.role === "user" ? (
-                            <UserMessageView
-                              actionsVisible={highlighted}
-                              item={item as typeof item & { kind: "message"; role: "user" }}
-                              onBranch={advancedFeatures && item.entryId ? branchFromMessage : undefined}
-                              onCopy={(text) => copyText(text)}
-                            />
-                          ) : (
-                            <ChatItemView
-                              item={item}
-                              onCopy={(text) => copyText(text)}
-                              onToggleTool={toggleTool}
-                              showThinking={showThinking}
-                            />
-                          )}
-                        </div>
-                      );
-                    })
+                          onCopy={(text) => copyText(text)}
+                        />
+                      ) : (
+                        <ChatItemView
+                          item={item}
+                          key={item.id}
+                          onCopy={(text) => copyText(text)}
+                          onToggleTool={toggleTool}
+                          showThinking={showThinking}
+                        />
+                      ),
+                    )
                   )}
                 </ConversationContent>
                 <ConversationScrollButton />

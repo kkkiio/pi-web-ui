@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, BrainIcon, ChevronsUpDownIcon, CommandIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import type { ConnectionState } from "../../core/types";
 import { ConnectionDot } from "./connection-dot";
@@ -45,13 +46,16 @@ export function AppHeader({
 }: AppHeaderProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3">
-      <div className="min-w-0">
-        <div className="truncate font-medium text-sm">{title}</div>
-        <div className="flex items-center gap-2 text-muted-foreground text-xs">
-          <ConnectionDot state={connection} />
-          <span>{connection}</span>
-          <span>/</span>
-          <span>{modelLabel}</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <SidebarTrigger aria-label="Toggle left sidebar" className="md:hidden" title="Toggle left sidebar" />
+        <div className="min-w-0">
+          <div className="truncate font-medium text-sm">{title}</div>
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <ConnectionDot state={connection} />
+            <span>{connection}</span>
+            <span>/</span>
+            <span>{modelLabel}</span>
+          </div>
         </div>
       </div>
 

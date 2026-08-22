@@ -30,7 +30,7 @@ export type ChatItem =
       presentation?: "normal" | "activity";
       cost?: number;
       images?: PromptImage[];
-      /** Session entry tree node ID, used for Branch actions via navigate_tree. */
+      /** Session entry ID this chat item was converted from. */
       entryId?: string;
       relatedEntryIds?: string[];
     }
@@ -152,8 +152,6 @@ export type WsError = {
 
 export type StateSyncPayload = {
   entries?: SessionEntry[];
-  tree?: SessionTreeNode[];
-  leafId?: string | null;
   model?: ModelInfo;
   thinkingLevel?: string;
   sessionName?: string;
@@ -180,36 +178,6 @@ export type SessionEntry = {
   thinkingLevel?: string;
   activeToolNames?: string[];
   [key: string]: unknown;
-};
-
-export type SessionTreeNode = {
-  entry: SessionEntry;
-  children: SessionTreeNode[];
-  label?: string;
-  labelTimestamp?: string;
-};
-
-export type ConversationTreeItem = {
-  id: string;
-  parentId: string | null;
-  entry: SessionEntry;
-  entryType: string;
-  isLeaf: boolean;
-  isBranchable: boolean;
-  isContinuable: boolean;
-  continueTargetId?: string;
-  label?: string;
-  text: string;
-  detail?: string;
-  depth: number;
-  connectorColumns: Array<{ key: string; state: "line" | "blank" }>;
-  connectorKind: "none" | "middle" | "last" | "line" | "blank";
-  isExpandable: boolean;
-  isExpanded: boolean;
-  hiddenChildCount: number;
-  childCount: number;
-  isSearchMatch: boolean;
-  order: number;
 };
 
 export type GitStatusResult = {

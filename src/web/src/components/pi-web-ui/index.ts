@@ -6,7 +6,6 @@ export { CommandPalette } from "./command-palette";
 export { ConnectionDot } from "./connection-dot";
 export { ContextPopover } from "./context-popover";
 export { ConversationSidebar } from "./conversation-sidebar";
-export { ConversationSidebarTree } from "./conversation-sidebar-tree";
 export { ExtensionDialogView } from "./extension-dialog";
 export { ImagePreviewStrip } from "./image-preview-strip";
 export { ModelPicker } from "./model-picker";
