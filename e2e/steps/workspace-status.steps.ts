@@ -1,12 +1,12 @@
 import { expect } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { type PiWebUiHarness, startPiWebUi } from "../harness/pi-process";
+import { startPiWebUi } from "../harness/pi-process";
+import { getHarness, setHarness } from "./shared";
 
 const { Given, When, Then, After } = createBdd();
 
 let fixtureName = "chat-lifecycle";
 let workspaceGit = true;
-let harness: PiWebUiHarness | null = null;
 
 Given("当前工作区是 git 仓库", async () => {
   workspaceGit = true;
@@ -38,7 +38,8 @@ Given("agent 会执行失败的 write 工具", async () => {
 });
 
 When("我打开 Pi Web UI", async ({ page }) => {
-  harness = await startPiWebUi(fixtureName, { git: workspaceGit });
+  const harness = await startPiWebUi(fixtureName, { git: workspaceGit });
+  setHarness(harness);
   await page.goto(harness.pageUrl);
   await expect(page.getByPlaceholder("Message Pi...")).toBeVisible();
 });
@@ -254,12 +255,14 @@ Then("左侧边栏只显示图标列", async ({ page }) => {
     .toBeLessThanOrEqual(64);
 });
 
-Then("左侧边栏不显示会话搜索框", async ({ page }) => {
-  await expect(page.getByPlaceholder("Search conversation...")).toBeHidden();
+Then("左侧边栏不显示 session 列表", async ({ page }) => {
+  const leftSidebar = page.locator('[data-slot="sidebar"][data-side="left"]');
+  await expect(leftSidebar.getByText("Agent Alpha", { exact: true })).toBeHidden();
 });
 
-Then("左侧边栏显示会话搜索框", async ({ page }) => {
-  await expect(page.getByPlaceholder("Search conversation...")).toBeVisible();
+Then("左侧边栏显示 agent session 列表", async ({ page }) => {
+  const leftSidebar = page.locator('[data-slot="sidebar"][data-side="left"]');
+  await expect(leftSidebar.getByText("Agent Alpha", { exact: true })).toBeVisible();
 });
 
 Then("聊天输入框仍然完整可见", async ({ page }) => {
@@ -271,7 +274,8 @@ Then("聊天输入框仍然完整可见", async ({ page }) => {
 });
 
 After(async () => {
+  const harness = getHarness();
   await harness?.stop();
-  harness = null;
+  setHarness(null);
   workspaceGit = true;
 });

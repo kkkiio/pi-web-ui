@@ -8,6 +8,8 @@ export type PiWebUiHarness = {
   pageUrl: string;
   port: number;
   workspaceDir: string;
+  /** Spawn an additional Pi agent that connects to the same hub. */
+  addAgent: (name: string) => Promise<void>;
   stop: () => Promise<void>;
 };
 
@@ -30,6 +32,26 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   mkdirSync(sessionDir, { recursive: true });
   if (options.git !== false) prepareGitWorkspace(workspaceDir);
 
+  // ── Hub process (ADR 0012): node dist-hub/hub/cli.js ──────────────────
+  // Explicit --host/--port args; strip legacy PI_WEB_UI_* env so the CLI's
+  // env-overrides-argv behavior cannot pick up stale values.
+  const hubEnv = { ...process.env };
+  delete hubEnv.PI_WEB_UI_HOST;
+  delete hubEnv.PI_WEB_UI_PORT;
+  delete hubEnv.PI_WEB_UI_STATIC_DIR;
+  const hubOutput: string[] = [];
+  const hubProcess = spawn("node", [path.join(repoRoot, "dist-hub/hub/cli.js"), "--host=127.0.0.1", `--port=${port}`], {
+    env: hubEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  captureProcessOutput(hubProcess, hubOutput);
+  await waitForHttp(`http://127.0.0.1:${port}/`, hubProcess, hubOutput, "hub");
+
+  // ── Pi process: rpc + faux provider + connect-out extension ───────────
+  const piEnv = { ...process.env };
+  delete piEnv.PI_WEB_UI_HOST;
+  delete piEnv.PI_WEB_UI_PORT;
+  delete piEnv.PI_WEB_UI_STATIC_DIR;
   const processOutput: string[] = [];
   const piProcess = spawn(
     process.env.PI_E2E_BIN || "pi",
@@ -43,7 +65,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
       "--session-dir",
       sessionDir,
       "--name",
-      "Pi Web UI E2E",
+      "Agent Alpha",
       "--approve",
       "--no-skills",
       "--no-prompt-templates",
@@ -51,18 +73,16 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
       "--extension",
       path.join(repoRoot, "e2e/fixtures/faux-provider-extension.ts"),
       "--extension",
-      path.join(repoRoot, "extensions/mirror-server.ts"),
+      path.join(repoRoot, "extensions/pi-web-ui.ts"),
     ],
     {
       cwd: workspaceDir,
       env: {
-        ...process.env,
+        ...piEnv,
         PI_CODING_AGENT_DIR: agentDir,
         PI_E2E: "1",
         PI_OFFLINE: "1",
-        PI_WEB_UI_HOST: "127.0.0.1",
-        PI_WEB_UI_PORT: String(port),
-        PI_WEB_UI_STATIC_DIR: path.join(repoRoot, "dist"),
+        PI_WEB_UI_HUB: `ws://127.0.0.1:${port}/ws/extension`,
         PI_WEB_UI_E2E_FIXTURE: fixtureName,
         PI_WEB_UI_E2E_EXTERNAL_ARTIFACT: path.join(externalDir, "external-skill.md"),
       },
@@ -70,14 +90,82 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   );
 
   captureProcessOutput(piProcess, processOutput);
-  await waitForWebUi(`http://127.0.0.1:${port}`, piProcess, processOutput);
+
+  // Additional Pi agents sharing the same hub (multi-agent scenarios).
+  const extraAgents: Array<{ process: ChildProcessWithoutNullStreams; output: string[]; name: string }> = [];
+
+  // Soft wait: give the extension time to connect to the hub before the
+  // browser opens the page. UI steps then poll for the agent to appear
+  // (the hub broadcasts hub:sessions when the extension handshakes).
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  if (piProcess.exitCode !== null) {
+    throw new Error(`pi exited before connecting to hub:\n${processOutput.join("")}`);
+  }
+
+  const spawnAgent = (name: string, index: number) => {
+    const workspaceB = path.join(tempRoot, `workspace-${index}`);
+    const sessionDirB = path.join(tempRoot, `sessions-${index}`);
+    const agentDirB = path.join(tempRoot, `agent-${index}`);
+    mkdirSync(workspaceB, { recursive: true });
+    mkdirSync(sessionDirB, { recursive: true });
+    mkdirSync(agentDirB, { recursive: true });
+    const output: string[] = [];
+    const agentProcess = spawn(
+      process.env.PI_E2E_BIN || "pi",
+      [
+        "--mode",
+        "rpc",
+        "--model",
+        "faux/faux-1",
+        "--api-key",
+        "faux-key",
+        "--session-dir",
+        sessionDirB,
+        "--name",
+        name,
+        "--approve",
+        "--no-skills",
+        "--no-prompt-templates",
+        "--no-context-files",
+        "--extension",
+        path.join(repoRoot, "e2e/fixtures/faux-provider-extension.ts"),
+        "--extension",
+        path.join(repoRoot, "extensions/pi-web-ui.ts"),
+      ],
+      {
+        cwd: workspaceB,
+        env: {
+          ...piEnv,
+          PI_CODING_AGENT_DIR: agentDirB,
+          PI_E2E: "1",
+          PI_OFFLINE: "1",
+          PI_WEB_UI_HUB: `ws://127.0.0.1:${port}/ws/extension`,
+          PI_WEB_UI_E2E_FIXTURE: fixtureName,
+          PI_WEB_UI_E2E_EXTERNAL_ARTIFACT: path.join(externalDir, "external-skill.md"),
+        },
+      },
+    );
+    captureProcessOutput(agentProcess, output);
+    extraAgents.push({ process: agentProcess, output, name });
+    return agentProcess;
+  };
 
   return {
     pageUrl: `http://127.0.0.1:${port}`,
     port,
     workspaceDir,
+    async addAgent(name: string) {
+      const agentProcess = spawnAgent(name, extraAgents.length + 1);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (agentProcess.exitCode !== null) {
+        const entry = extraAgents[extraAgents.length - 1];
+        throw new Error(`added agent "${name}" exited before connecting to hub:\n${entry.output.join("")}`);
+      }
+    },
     async stop() {
+      for (const agent of [...extraAgents].reverse()) await stopProcess(agent.process);
       await stopProcess(piProcess);
+      await stopProcess(hubProcess);
       if (existsSync(tempRoot)) rmSync(tempRoot, { recursive: true, force: true });
     },
   };
@@ -107,16 +195,17 @@ function captureProcessOutput(process: ChildProcessWithoutNullStreams, output: s
   process.stderr.on("data", capture);
 }
 
-async function waitForWebUi(
+async function waitForHttp(
   url: string,
   process: ChildProcessWithoutNullStreams,
   processOutput: string[],
-  timeoutMs = 20_000,
+  label: string,
+  timeoutMs = 30_000,
 ) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     if (process.exitCode !== null) {
-      throw new Error(`pi exited before Web UI started:\n${processOutput.join("")}`);
+      throw new Error(`${label} exited before serving ${url}:\n${processOutput.join("")}`);
     }
     try {
       const response = await fetch(url);
@@ -124,7 +213,7 @@ async function waitForWebUi(
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(`Timed out waiting for ${url}:\n${processOutput.join("")}`);
+  throw new Error(`Timed out waiting for ${label} at ${url}:\n${processOutput.join("")}`);
 }
 
 async function stopProcess(process: ChildProcessWithoutNullStreams) {
