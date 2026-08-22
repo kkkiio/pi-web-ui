@@ -8,12 +8,12 @@ The Pi extension runner **invalidates** `ExtensionContext` after session replace
 
 > This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload().
 
-**Rule**: `extensions/mirror-server.ts` uses a module-level `latestCtx` variable. Every Pi event callback updates it with the fresh `ctx`.
+**Rule**: `extensions/pi-web-ui.ts` uses a module-level `latestCtx` variable. Every Pi event callback updates it with the fresh `ctx`.
 
 **All code that may run after a session lifecycle event** — WebSocket `close`/`error`/`connection` handlers, `setInterval` timers, async callbacks from external sources — must use `latestCtx`, never a captured `ctx` parameter.
 
-The same stale-context rule applies to `latestExecuteCtx` (`ExtensionCommandContext`, captured via `/webui`, adds `navigateTree()`, `fork()`, and other session-control methods). 
-After session replacement, any captured `ExtensionCommandContext` becomes stale and must be re-captured via `/webui`.
+The same stale-context rule applies to `latestExecuteCtx` (`ExtensionCommandContext`, captured via `/webui:connect`, adds `navigateTree()`, `fork()`, and other session-control methods).
+After session replacement, any captured `ExtensionCommandContext` becomes stale and must be re-captured via `/webui:connect`.
 
 ### Extension output — `ctx.ui.setStatus` / `ctx.ui.notify` only
 
@@ -21,13 +21,15 @@ Per `docs/adr/0001-pi-extension-output-policy.md`: never write to `stdout`/`stde
 
 ### Event forwarding — thin transport
 
-Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation.
+Per `docs/adr/0002-web-ui-extension-event-protocol.md`: the extension forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation.
 
 ### Mandatory Skill Usage
 
 #### `$webui-visual-check`
 
-Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree/sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
+Run `$webui-visual-check` after UI, WebSocket-driven visible state, session sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
+
+The skill drives a real browser via the `agent-browser` CLI (`npm install -g agent-browser`, then `agent-browser install` once). It does not depend on any host-specific built-in browser tool.
 
 ## Project Structure Guide
 
@@ -42,25 +44,33 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree
 │   │   ├── 0003-navigate-tree-via-captured-command-context.md # latestCtx vs latestExecuteCtx workaround
 │   │   ├── 0004-web-ui-access-bind-address.md          # Server bind address policy
 │   │   ├── 0005-intercepted-command-ui-lifecycle.md    # Intercepted command UI state handling
-│   │   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
+│   │   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition (superseded by 0012)
 │   │   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
 │   │   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
 │   │   ├── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
 │   │   ├── 0010-real-pi-web-ui-e2e.md                  # Real Pi agent Web UI E2E tests
-│   │   └── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
+│   │   ├── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
+│   │   └── 0012-central-hub-connect-out-architecture.md # Hub service + extension connect-out (multi-session)
 │   ├── prd/                     # Product Requirement Documents (功能设计)
 │   │   ├── arch-mode-ui.md          # Architecture mode toggle UI
-│   │   ├── tree-sidebar.md          # Conversation tree sidebar
+│   │   ├── tree-sidebar.md          # SUPERSEDED — conversation tree removed
 │   │   ├── columns-layout.md        # Multi-column layout design
-│   │   ├── branch-message.md        # Branch from user messages
+│   │   ├── branch-message.md        # SUPERSEDED — branch entry removed with tree
 │   │   ├── left-sidebar.md          # Left sidebar design
 │   │   ├── right-panel.md           # Tabbed right panel design
 │   │   ├── workspace-artifacts.md   # Markdown artifact detection/display
 │   │   └── workspace-status-float.md # Git status + artifacts floating indicator
 │   └── images/                  # Screenshots for README
 ├── extensions/
-│   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
-│   └── imessage-bridge.ts       # iMessage integration extension
+│   └── pi-web-ui.ts           # Main extension: connect-out client to the hub (events + commands)
+├── src/
+│   ├── hub/                   # Standalone hub service (compiled to dist-hub/, ADR 0012)
+│   │   ├── cli.ts             # CLI entry (bin: pi-web-ui)
+│   │   ├── server.ts          # HTTP static serving + /ws/extension + /ws WebSocket endpoints
+│   │   ├── registry.ts        # Agent/browser registry, attach, relay with id rewriting, fan-out
+│   │   └── history.ts         # Recent-session listing from ~/.pi/agent/sessions (deferred feature)
+│   └── protocol/              # Shared protocol types for extension ↔ hub ↔ browser (ADR 0008/0012)
+│       └── index.ts           # Envelope, agent identity, hub-level methods/events
 ├── e2e/                         # Real Pi agent E2E tests
 │   ├── features/                # Playwright-BDD feature files
 │   ├── steps/                   # Step definitions
@@ -85,15 +95,14 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree
 │   │   └── components/
 │   │       ├── pi-web-ui/       # Pi Web UI components
 │   │       │   ├── chat-item-view.tsx    # Main chat message renderer
-│   │       │   ├── conversation-sidebar.tsx     # Session tree sidebar
-│   │       │   ├── conversation-sidebar-tree.tsx # Tree view component
+│   │       │   ├── conversation-sidebar.tsx     # Left sidebar (session list + search)
 │   │       │   ├── command-palette.tsx   # Command palette
 │   │       │   ├── model-picker.tsx
 │   │       │   ├── settings-panel.tsx
 │   │       │   ├── context-popover.tsx
 │   │       │   ├── right-panel.tsx
 │   │       │   ├── workspace-status-float.tsx
-│   │       │   ├── user-message-view.tsx # User message with Branch button
+│   │       │   ├── user-message-view.tsx # User message view
 │   │       │   └── ...
 │   ├── components/
 │   │   ├── ai-elements/         # AI Elements components (conversation, message, tool, reasoning, etc.)
@@ -102,46 +111,50 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree
 │       └── utils.ts             # shadcn/ui utility (cn helper)
 ├── public/                      # Static assets copied by Vite (icons, manifest, sw.js)
 ├── dist/                        # Vite build output (gitignored)
+├── dist-hub/                    # Hub build output (gitignored)
 
 ├── MOBILE.md                    # Mobile access guide
 ├── RELEASING.md                 # npm publish and pi.dev verification checklist
 
-├── package.json                 # npm package config + pi extension manifest
-├── tsconfig.json                # TypeScript config (only src/web + vite.config.ts)
+├── package.json                 # npm package config + pi extension manifest + hub bin
+├── tsconfig.json                # TypeScript config (src/web + src/protocol)
+├── tsconfig.hub.json            # TypeScript config (src/hub + src/protocol, NodeNext → dist-hub)
+├── tsconfig.extension.json      # TypeScript config (extensions/ + src/protocol, noEmit static check)
 ├── vite.config.ts               # Vite config (dev proxy to :3001, build to dist/)
 ├── biome.json                   # Biome formatter/linter config
 └── justfile                     # just tasks (fmt, check)
 ```
 
-### Architecture: Extension ↔ Frontend Communication
+### Architecture: Hub ↔ Extension ↔ Frontend (ADR 0012)
 
 ```mermaid
 graph LR
-    A[Pi TUI<br/>terminal] <-->|Pi events| B[Pi Process<br/>mirror-server.ts]
-    B <-->|HTTP + WS :3001| C[Browser]
+    A[Pi TUI 1<br/>terminal] -->|WS client| H[Hub 服务<br/>src/hub · :3001]
+    B[Pi TUI 2<br/>terminal] -->|WS client| H
+    C[Pi rpc<br/>E2E] -->|WS client| H
+    H <-->|HTTP + WS| D[Browser<br/>src/web]
+    A <-->|Pi events| E[extensions/pi-web-ui.ts]
+    B <-->|Pi events| E
 ```
 
-- **Extension (`mirror-server.ts`)**: subscribes to Pi events via `pi.on(...)`, forwards them to browser WebSocket clients. Accepts commands from browser, executes via extension API.
-- **Frontend (`src/web/`)**: React + Vite + Tailwind. `PiClient` connects to the extension WebSocket, `event-dispatch.ts` routes raw events into Zustand slices, and React components render store state.
-- **Dev proxy**: `vite dev` on `:4444` proxies `/api` → `:3001` and `/ws` → `ws://localhost:3001`.
+- **Hub (`src/hub/`)**: standalone service that serves the built frontend over HTTP, exposes `/ws/extension` (Pi extensions connect out) and `/ws` (browsers attach), routes req/res with id rewriting, and fans events out to attached browsers. History listing is implemented but the feature is deferred (ADR 0012).
+- **Extension (`extensions/pi-web-ui.ts`)**: WS **client** to the hub. Subscribes to Pi events via `pi.on(...)` and forwards them unchanged; executes commands relayed by the hub via `latestCtx`/`latestExecuteCtx`. Connects via `/webui:connect [url]` or `PI_WEB_UI_HUB`.
+- **Frontend (`src/web/`)**: React + Vite + Tailwind. `PiClient` connects to the hub WebSocket, `event-dispatch.ts` routes raw events into Zustand slices (`hub-slice.ts` tracks live agents and attach state), and React components render store state.
+- **Dev proxy**: `vite dev` on `:4444` proxies `/api` → `:3001` and `/ws` → `ws://localhost:3001` (the hub).
 
 #### Event envelope
 
-All WebSocket messages to the browser use:
+All WebSocket messages use the same envelope on both hops (browser ↔ hub, hub ↔ extension):
 
 ```json
 { "type": "event", "event": "<event-name>", "payload": { "...": "..." } }
 ```
 
-Pi core events carry their native fields inside `payload`. Extension-bus events keep their source payload nested under `payload` when needed to avoid field collisions.
+Pi core events carry their native fields inside `payload`. Hub-level events (`hub:sessions`, `hub:agent_gone`) originate from the hub and are never relayed to agents. Extension-bus events keep their source payload nested under `payload` when needed to avoid field collisions. Command routing is attach-based (ADR 0012): the hub relays each browser command to the agent the browser is currently attached to; only the `attach` request itself carries an `agentId` param, and `list_sessions`/`list_history`/`health` are handled by the hub directly.
 
-#### State snapshot on connect
+#### State snapshot on attach
 
-When a browser WebSocket connects, `buildStateSnapshot(latestCtx)` sends full session state (messages, model, session info, tool calls). After that, incremental events keep the UI in sync.
-
-#### Commands from browser → extension
-
-Browser sends JSON commands over WebSocket. Commands invoke Pi extension API methods (send message, cancel, set model, etc.) through `latestCtx`/`latestExecuteCtx`.
+When a browser attaches, the hub replays the registered agent's latest state: the extension's `buildStateSnapshot(latestCtx)` sends full session state (messages, model, session info, tool calls) to the hub on request, and the hub relays it to the browser. After that, incremental events keep the UI in sync. On session replacement (`session_start`), the extension sends `session_update` and the hub updates the registry entry **in place** — attached browsers keep their view.
 
 ## Operation Guide
 
@@ -149,25 +162,43 @@ Browser sends JSON commands over WebSocket. Commands invoke Pi extension API met
 
 #### Frontend development
 
-Run Pi with Pi Web UI on its normal port in one terminal, then:
+Start the hub (serves the built frontend + WebSocket endpoints) in one terminal, and Pi with the extension in another:
+
+```bash
+npm run build:web   # build the frontend into dist/
+npm run hub         # build:hub + start the hub on 127.0.0.1:3001
+```
+
+Then connect the Pi session with `/webui:connect` (or `PI_WEB_UI_HUB=ws://127.0.0.1:3001/ws/extension pi`).
+
+For live frontend editing without rebuilding:
 
 ```bash
 npm run dev:web
 ```
 
-Open `http://localhost:4444`. Vite serves the React UI and proxies `/api` and `/ws` to the Pi Web UI extension on `localhost:3001`.
+Open `http://localhost:4444`. Vite serves the React UI and proxies `/api` and `/ws` to the hub on `localhost:3001`. The dev proxy makes `wsUrl()` work unchanged in dev.
 
 #### Build for production
 
 ```bash
-npm run build:web
+npm run build:web   # outputs dist/ (frontend)
+npm run build:hub   # outputs dist-hub/ (hub, also compiled by prepack)
 ```
 
-Output goes to `dist/`. Then run Pi with the built assets:
+Start the hub from the repository:
 
 ```bash
-PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
+npm run hub         # or: node dist-hub/hub/cli.js
 ```
+
+Start Pi with the extension connected to it:
+
+```bash
+PI_WEB_UI_HUB=ws://127.0.0.1:3001/ws/extension pi
+```
+
+or inside Pi: `/webui:connect` (uses `PI_WEB_UI_HUB`, the `hub` key in `~/.pi/agent/settings.json`, or `ws://127.0.0.1:3001/ws/extension` by default).
 
 ### Testing & Checks
 
@@ -183,8 +214,8 @@ E2E means the test includes the real Pi product path:
 
 ```text
 Playwright Browser
-  -> Pi mirror-server static UI + /ws
-  -> pi --mode rpc
+  -> Hub static UI + /ws (src/hub, dist needed)
+  -> pi --mode rpc (loads extensions/pi-web-ui.ts, connects via PI_WEB_UI_HUB)
   -> Pi agent session
   -> faux LLM provider
   -> real tools / real temp workspace / real git
@@ -194,9 +225,9 @@ E2E rules:
 
 - Put E2E tests under `e2e/`.
 - Use Playwright-BDD feature files for product-level flows.
-- Start a real `pi --mode rpc` process for each scenario.
-- Load the local `extensions/mirror-server.ts` extension normally.
-- Use built `dist` assets served by mirror-server in CI.
+- Start a real `pi --mode rpc` process for each scenario, plus a hub process.
+- Load the local `extensions/pi-web-ui.ts` extension normally, auto-connected via `PI_WEB_UI_HUB`.
+- Use built `dist` assets served by the hub in CI.
 - Use a faux LLM provider only to make model responses deterministic.
 - Use real Pi `write` / `edit` tools when testing Markdown artifacts.
 - Use real git repositories in temp workspaces when testing git status or diff.
@@ -216,7 +247,7 @@ npm run e2e:gen
 
 GitHub Actions runs E2E on every PR after `npm run build:web`. Local default checks do not run E2E unless the developer explicitly invokes the E2E command or is changing E2E harness/tests.
 
-Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree/sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E.
+Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, session sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E. The skill uses the `agent-browser` CLI for screenshots.
 
 Run before committing:
 
@@ -224,7 +255,7 @@ Run before committing:
 just check
 ```
 
-This runs `npx tsc --noEmit` and then `npm run check` (`biome check .`). To format only:
+This runs `npx tsc --noEmit` (web + protocol), `npx tsc --noEmit -p tsconfig.hub.json` (hub), `npx tsc --noEmit -p tsconfig.extension.json` (extension), then `npm run check` (`biome check .`). To format only:
 
 ```bash
 just fmt
@@ -248,19 +279,23 @@ npm pack --dry-run --json
 
 When adding a new WebSocket event type from the extension to the browser:
 
-1. `extensions/mirror-server.ts` — emit the event
-2. `src/web/src/core/types.ts` — add the TypeScript type
-3. `src/web/src/core/store/event-dispatch.ts` — route the event to a store action
-4. Relevant `src/web/src/core/store/*-slice.ts` file — update domain state
-5. `src/web/src/core/chat-conversion.ts` — add conversion logic if it affects chat display
-6. Corresponding React component in `src/web/src/components/pi-web-ui/`
+1. `extensions/pi-web-ui.ts` — emit the event (thin transport)
+2. `src/protocol/index.ts` — add the event name constant/type if it is a hub-level event
+3. `src/web/src/core/types.ts` — add the browser-side payload type
+4. `src/web/src/core/store/event-dispatch.ts` — route the event to a store action
+5. Relevant `src/web/src/core/store/*-slice.ts` file — update domain state
+6. `src/web/src/core/chat-conversion.ts` — add conversion logic if it affects chat display
+7. Corresponding React component in `src/web/src/components/pi-web-ui/`
+
+The hub relays events as-is; only touch `src/hub/registry.ts`/`server.ts` when the event needs hub-level semantics (e.g. caching for attach replay, or a new hub-scoped event).
 
 When adding a new browser → extension command:
 
-1. `extensions/mirror-server.ts` — add the command handler (use `latestCtx`)
-2. `src/web/src/core/types.ts` — add the request/response type
-3. `src/web/src/core/store/*-slice.ts` — add an intent-level store action that calls `send(...)`
-4. React components — call the store action instead of invoking transport directly
+1. `src/protocol/index.ts` — add the method name constant (agent methods need no hub changes; only hub-scoped methods join `HUB_METHODS`)
+2. `extensions/pi-web-ui.ts` — add the case to the command handler (use `latestCtx`)
+3. `src/web/src/core/types.ts` — add the request/response type
+4. `src/web/src/core/store/*-slice.ts` — add an intent-level store action that calls `send(...)`
+5. React components — call the store action instead of invoking transport directly
 
 When changing Workspace Status Float, Right Panel, or Artifacts:
 

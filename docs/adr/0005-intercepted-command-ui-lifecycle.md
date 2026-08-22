@@ -4,6 +4,8 @@
 
 Draft
 
+> **Evolution (ADR 0012)**: the extension is now `extensions/pi-web-ui.ts` and connects out to a hub (commands arrive via `/webui:connect` or `PI_WEB_UI_HUB` instead of an in-process HTTP server). The intercepted-command lifecycle described here (extension intercepts a slash command, performs UI work, replies via context) is unchanged.
+
 ## Context
 
 Pi Web UI's Web UI sends user prompts to Pi through a WebSocket connection. The

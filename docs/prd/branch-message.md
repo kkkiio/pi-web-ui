@@ -1,5 +1,9 @@
 # PRD: Branch Message
 
+> **Status: SUPERSEDED**
+>
+> Branch/Continue entry points (tree sidebar action slots and the user-message Branch button) were removed together with the conversation tree in the ADR 0012 rework. The `navigate_tree` protocol method remains in the extension for future reuse but the frontend no longer calls it. Kept for historical record; do not resurrect without a new decision record.
+
 ## Problem Statement
 
 Pi 的 `/tree` 支持在同一个 session 文件里回到某个历史节点并继续对话，从而形成新的分支。Pi Web UI 需要把这个能力暴露到浏览器，但不能把它命名为 Fork：Pi 官方 `/fork` 会创建新的 session 文件，和这里的同 session 分支语义不同。

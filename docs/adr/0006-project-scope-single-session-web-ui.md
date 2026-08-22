@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR 0012: Central Hub Service with Connect-Out Extension](./0012-central-hub-connect-out-architecture.md)
+
+ADR 0012 把多 session 编排移到了独立的 hub 服务（而非 extension 层），与本 ADR "进程编排不属于 extension 层" 的核心理由一致，但推翻了 "pi-web-ui 是单 session 镜像" 的范围限定。
 
 ## Context
 

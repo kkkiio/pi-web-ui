@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Evolution (ADR 0012)**: the policy still stands, but the bound process changed from the mirror-server extension to the standalone hub service (`src/hub/`). The hub defaults to `127.0.0.1` and honors `PI_WEB_UI_HOST` / `PI_WEB_UI_PORT` env plus `--host` / `--port` CLI args, so the access surface is unchanged.
+
 ## Context
 
 Pi Web UI starts an HTTP + WebSocket server inside the Pi process to serve the web UI

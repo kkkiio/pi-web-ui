@@ -48,7 +48,7 @@ A persistent toggle in the chat input toolbar, to the left of the attachment but
 2. **Arch-mode installed but not enabled** — switch appears in off position.
 3. **Arch-mode enabled from previous session** — switch animates to on position on load.
 4. **Browser reconnects** — server sends latest arch-mode state so reconnecting clients see the correct switch position.
-5. **Arch-mode loaded after mirror-server** — Pi's session lifecycle ordering ensures arch-mode announces its presence before any UI queries it.
+5. **Arch-mode loaded after the pi-web-ui extension** — Pi's session lifecycle ordering ensures arch-mode announces its presence before any UI queries it.
 
 ## Future Improvements
 
