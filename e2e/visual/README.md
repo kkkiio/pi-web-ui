@@ -25,6 +25,7 @@ fixtures execute for real in the temp workspace.
 | `git-clean` | git repo, no changes | header chip without +/-, right panel "No changes" |
 | `git-messy` | modified + deleted + untracked text + untracked binary | diff panel renders all shapes, no white screen, binary fallback |
 | `no-git` | no git repo | no git chip in header |
+| `compact` | chat history then rpc `compact` | compaction banner with summary inline in the chat; survives re-attach via snapshot |
 
 The registry lives in `serve.mjs` (`SCENARIOS`); each entry prints its `lookAt`
 hints when started. Add new scenarios there; new canned LLM responses go in

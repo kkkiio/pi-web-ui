@@ -1,4 +1,5 @@
 import type { AgentSessionInfo } from "../../../../protocol/index";
+import { formatCompactionText } from "../chat-conversion";
 import type { RpcEvent, StateSyncPayload, WsEvent } from "../types";
 import type { PiWebUiStore } from "./types";
 
@@ -56,9 +57,22 @@ export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
       store.addSystemMessage("Compacting context...");
       break;
     case "auto_compaction_end":
-      store.addSystemMessage(`Context compacted${event.summary ? `: ${event.summary}` : ""}`, "success");
+      // The completion banner comes from session_compact (fired for manual,
+      // threshold, and overflow compactions alike); here we only reset usage.
       store.setLastUsage(null);
       break;
+    case "session_compact": {
+      store.addSystemMessage(
+        formatCompactionText({
+          summary: event.compactionEntry?.summary,
+          tokensBefore: event.compactionEntry?.tokensBefore,
+          reason: event.reason,
+        }),
+        "success",
+      );
+      store.setLastUsage(null);
+      break;
+    }
     case "extension_ui_request":
       if (event.id && event.method) {
         store.setDialog({

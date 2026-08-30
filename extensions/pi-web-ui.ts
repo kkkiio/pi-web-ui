@@ -332,6 +332,7 @@ export default function (pi: ExtensionAPI) {
     "tool_execution_end",
     "auto_compaction_start",
     "auto_compaction_end",
+    "session_compact",
     "auto_retry_start",
     "auto_retry_end",
     "model_select",

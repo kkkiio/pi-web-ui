@@ -70,6 +70,21 @@ const SCENARIOS = {
     prompt: null,
     lookAt: ["header 不显示 git chip", "页面其余部分正常"],
   },
+  compact: {
+    description: "Chat history, then rpc compact — compaction banner with summary in the chat flow",
+    workspace: "clean-git",
+    samplePng: true,
+    fixture: "visual-chat-rich",
+    prompt: "run the visual fixture",
+    rpcAfter: [{ type: "compact" }],
+    // Tiny keep-window so the small canned session is actually compactable.
+    settings: { compaction: { keepRecentTokens: 1 } },
+    lookAt: [
+      "聊天流中出现 'Context compacted (manual) · N tokens before' 横幅，下方是摘要文本",
+      "横幅在历史消息之后按时间序插入；刷新页面（重新 attach）后横幅仍在（来自快照的 compaction 条目）",
+      "不会出现重复的 compacted 横幅",
+    ],
+  },
 };
 
 // ── Args ─────────────────────────────────────────────────────────────────────
@@ -94,6 +109,9 @@ const workspaceDir = path.join(tempRoot, "workspace");
 mkdirSync(workspaceDir, { recursive: true });
 mkdirSync(path.join(tempRoot, "sessions"), { recursive: true });
 mkdirSync(path.join(tempRoot, "agent"), { recursive: true });
+if (scenario.settings) {
+  writeFileSync(path.join(tempRoot, "agent", "settings.json"), JSON.stringify(scenario.settings, null, 2));
+}
 
 if (scenario.samplePng) {
   copyFileSync(path.join(repoRoot, "public/icons/pi-web-ui-512.png"), path.join(workspaceDir, "sample.png"));
@@ -261,6 +279,16 @@ if (scenario.prompt) {
   send({ type: "prompt", message: scenario.prompt });
   const deadline = Date.now() + 60_000;
   while (!agentEnded && Date.now() < deadline) await new Promise((r) => setTimeout(r, 500));
+}
+for (const [i, cmd] of (scenario.rpcAfter ?? []).entries()) {
+  const id = `after-${i}`;
+  send({ ...cmd, id });
+  const result = await waitFor(
+    (m) => m.type === "response" && m.id === id,
+    30_000,
+    `${cmd.type} response`,
+  ).catch((e) => ({ timeout: e.message }));
+  if (!result.success) console.error(`warning: ${cmd.type} did not succeed:`, JSON.stringify(result).slice(0, 200));
 }
 
 console.log("");

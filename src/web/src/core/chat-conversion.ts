@@ -1,14 +1,42 @@
 import { MAX_IMAGE_DIM, VALID_IMAGE_MIME_TYPES } from "./constants";
 import type { ChatItem, PiMessage, PromptImage, Usage } from "./types";
 
-export function syncToItems(
-  entries: Array<{ type: string; id?: string; message?: PiMessage }>,
-  nextId: (prefix: string) => string,
-): ChatItem[] {
+export interface CompactionLike {
+  summary?: string;
+  tokensBefore?: number;
+  reason?: string;
+}
+
+/** Shared banner text for compaction entries (snapshot) and session_compact events. */
+export function formatCompactionText({ summary, tokensBefore, reason }: CompactionLike): string {
+  const marker = `Context compacted${reason ? ` (${reason})` : ""}${tokensBefore ? ` · ${tokensBefore.toLocaleString()} tokens before` : ""}`;
+  return summary ? `${marker}\n\n${summary}` : marker;
+}
+
+type SyncEntry = {
+  type: string;
+  id?: string;
+  message?: PiMessage;
+  // compaction entries
+  summary?: string;
+  tokensBefore?: number;
+};
+
+export function syncToItems(entries: SyncEntry[], nextId: (prefix: string) => string): ChatItem[] {
   const items: ChatItem[] = [];
   const tools = new Map<string, ChatItem & { kind: "tool" }>();
 
   for (const entry of entries) {
+    if (entry.type === "compaction") {
+      items.push({
+        kind: "system",
+        id: entry.id || nextId("compact"),
+        text: formatCompactionText(entry),
+        tone: "success",
+        entryId: entry.id,
+      });
+      continue;
+    }
     if (entry.type !== "message" || !entry.message) continue;
     const message = entry.message;
 

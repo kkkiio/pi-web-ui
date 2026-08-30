@@ -30,16 +30,21 @@ export function ChatItemView({
   const [copied, setCopied] = useState(false);
 
   if (item.kind === "system") {
+    const multiline = item.text.includes("\n");
     return (
       <div
         className={cn(
-          "mx-auto max-w-xl whitespace-pre-wrap rounded-md border px-3 py-2 text-center text-sm",
+          "mx-auto max-w-xl rounded-md border px-3 py-2 text-sm",
           item.tone === "error" && "border-destructive/30 bg-destructive/10 text-destructive",
           item.tone === "success" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
           (!item.tone || item.tone === "info") && "bg-muted text-muted-foreground",
         )}
       >
-        {item.text}
+        {multiline ? (
+          <MessageResponse className="text-left [&_p]:my-1 [&_pre]:my-1 [&_ul]:my-1">{item.text}</MessageResponse>
+        ) : (
+          <div className="whitespace-pre-wrap text-center">{item.text}</div>
+        )}
       </div>
     );
   }

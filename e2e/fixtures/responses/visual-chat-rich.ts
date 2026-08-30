@@ -14,4 +14,8 @@ export default [
     stopReason: "toolUse",
   }),
   fauxAssistantMessage("Ran bash and viewed sample.png — a dark T-shaped icon on a light background."),
+  // Consumed by the compaction summarization call in the "compact" scenario.
+  fauxAssistantMessage(
+    "Summary: ran `echo hello-from-bash` successfully, then read sample.png — a dark T-shaped icon on a light background.",
+  ),
 ];

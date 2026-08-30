@@ -85,6 +85,12 @@ export type RpcEvent = {
   notifyType?: "info" | "warning" | "error";
   enabled?: boolean;
   model?: ModelInfo;
+  reason?: string;
+  willRetry?: boolean;
+  compactionEntry?: {
+    summary?: string;
+    tokensBefore?: number;
+  };
 };
 
 export type PiMessage = {
