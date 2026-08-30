@@ -89,7 +89,7 @@ Hub environment variables (set before starting the hub):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PI_WEB_UI_PORT` | `3001` | Hub HTTP + WebSocket port |
+| `PI_WEB_UI_HUB_PORT` | `3001` | Hub HTTP + WebSocket port |
 | `PI_WEB_UI_HOST` | `127.0.0.1` | Bind address |
 | `PI_WEB_UI_STATIC_DIR` | *(bundled)* | Override static files path (the built frontend) |
 
@@ -97,8 +97,9 @@ Extension environment variables (set before starting Pi):
 
 | Variable | Description |
 |----------|-------------|
-| `PI_WEB_UI_HUB` | Hub WebSocket URL for the agent to connect out to (e.g. `ws://127.0.0.1:3001/ws/extension`) |
-| `PI_WEB_UI_DISABLED` | Set to `1` to disable the extension |
+| `PI_WEB_UI_HUB` | Hub WebSocket URL for the agent to connect out to (e.g. `ws://127.0.0.1:3001/ws/extension`); highest priority default target |
+| `PI_WEB_UI_HUB_PORT` | Derives the default connect target `ws://127.0.0.1:<port>/ws/extension`. Lower priority than `PI_WEB_UI_HUB` and the `hub` settings key |
+
 | `PI_CODING_AGENT_DIR` | Override Pi config directory (default `~/.pi/agent`) |
 
 Or in `~/.pi/agent/settings.json`:
@@ -106,8 +107,7 @@ Or in `~/.pi/agent/settings.json`:
 ```json
 {
   "pi-web-ui": {
-    "hub": "ws://127.0.0.1:3001/ws/extension",
-    "disabled": false
+    "hub": "ws://127.0.0.1:3001/ws/extension"
   }
 }
 ```

@@ -4,7 +4,7 @@
 
 Accepted
 
-> **Evolution (ADR 0012)**: the policy still stands, but the bound process changed from the mirror-server extension to the standalone hub service (`src/hub/`). The hub defaults to `127.0.0.1` and honors `PI_WEB_UI_HOST` / `PI_WEB_UI_PORT` env plus `--host` / `--port` CLI args, so the access surface is unchanged.
+> **Evolution (ADR 0012)**: the policy still stands, but the bound process changed from the mirror-server extension to the standalone hub service (`src/hub/`). The hub defaults to `127.0.0.1` and honors `PI_WEB_UI_HOST` / `PI_WEB_UI_HUB_PORT` env plus `--host` / `--port` CLI args, so the access surface is unchanged. The extension derives its default connect target from the same `PI_WEB_UI_HUB_PORT` (lower priority than `PI_WEB_UI_HUB`), so a single variable configures both sides.
 
 ## Context
 

@@ -4,20 +4,24 @@
  *
  *   pi-web-ui [--port 3001] [--host 127.0.0.1]
  *
- * Environment: PI_WEB_UI_PORT, PI_WEB_UI_HOST, PI_WEB_UI_STATIC_DIR.
+ * Environment: PI_WEB_UI_HUB_PORT, PI_WEB_UI_HOST, PI_WEB_UI_STATIC_DIR.
  */
 
 import * as path from "node:path";
 import { startHubServer } from "./server.js";
 
 function parseArgs(argv: string[]): { port: number; host: string } {
-  const args = { port: 3001, host: "127.0.0.1" };
+  // Precedence: explicit argv > env > defaults (env used to override argv,
+  // which silently hijacked any --port when PI_WEB_UI_HUB_PORT was exported).
+  const envPort = Number.parseInt(process.env.PI_WEB_UI_HUB_PORT ?? "", 10);
+  const args = {
+    port: Number.isFinite(envPort) ? envPort : 3001,
+    host: process.env.PI_WEB_UI_HOST || "127.0.0.1",
+  };
   for (const arg of argv) {
     if (arg.startsWith("--port=")) args.port = parseInt(arg.slice("--port=".length), 10);
     else if (arg.startsWith("--host=")) args.host = arg.slice("--host=".length);
   }
-  if (process.env.PI_WEB_UI_PORT) args.port = parseInt(process.env.PI_WEB_UI_PORT, 10);
-  if (process.env.PI_WEB_UI_HOST) args.host = process.env.PI_WEB_UI_HOST;
   return args;
 }
 
