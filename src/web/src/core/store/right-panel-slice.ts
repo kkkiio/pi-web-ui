@@ -1,4 +1,4 @@
-import type { FileContentResult, GitDiffResult, RightPanelSlice, StoreSlice } from "./types";
+import type { GitDiffResult, RightPanelSlice, StoreSlice } from "./types";
 
 export const createRightPanelSlice: StoreSlice<RightPanelSlice> = (set, get) => ({
   rightPanelTabs: [],
@@ -13,13 +13,17 @@ export const createRightPanelSlice: StoreSlice<RightPanelSlice> = (set, get) => 
         index === -1
           ? [...state.rightPanelTabs, tab]
           : state.rightPanelTabs.map((candidate) => (candidate.id === tab.id ? { ...candidate, ...tab } : candidate));
-      return { activeRightPanelTabId: tab.id, rightPanelHasOpened: true, rightPanelTabs, rightPanelVisible: true };
+      // NOTE: visibility is deliberately NOT set here. Async load completions
+      // also upsert, and they must not reopen the panel after the user hid it.
+      // Explicit user actions (openGitDiff) set visibility.
+      return { activeRightPanelTabId: tab.id, rightPanelHasOpened: true, rightPanelTabs };
     });
   },
 
   openGitDiff: async () => {
     const startedAt = Date.now();
     const status = get().gitStatus;
+    set({ rightPanelVisible: true });
     get().upsertRightPanelTab({
       id: "git-diff",
       kind: "git-diff",
@@ -55,53 +59,10 @@ export const createRightPanelSlice: StoreSlice<RightPanelSlice> = (set, get) => 
     }
   },
 
-  openArtifact: async (artifact) => {
-    get().upsertRightPanelTab({
-      id: `artifact:${artifact.path}`,
-      kind: "artifact-file",
-      title: artifact.name,
-      path: artifact.path,
-      loading: true,
-      updatedAt: Date.now(),
-    });
-    try {
-      const result = (await get().send("get_file_content", { path: artifact.path })) as FileContentResult;
-      get().upsertRightPanelTab({
-        id: `artifact:${artifact.path}`,
-        kind: "artifact-file",
-        title: result.name || artifact.name,
-        path: result.path || artifact.path,
-        content: result.content,
-        size: result.size,
-        loading: false,
-        updatedAt: Date.now(),
-      });
-    } catch (error) {
-      get().upsertRightPanelTab({
-        id: `artifact:${artifact.path}`,
-        kind: "artifact-file",
-        title: artifact.name,
-        path: artifact.path,
-        error: error instanceof Error ? error.message : "Failed to load artifact",
-        loading: false,
-        updatedAt: Date.now(),
-      });
-    }
-  },
-
   refreshRightPanelTab: (tab) => {
     if (tab.kind === "git-diff") {
       void get().openGitDiff();
-      return;
     }
-    void get().openArtifact({
-      id: tab.path,
-      path: tab.path,
-      name: tab.title,
-      directory: tab.path.includes("/") ? tab.path.slice(0, tab.path.lastIndexOf("/")) : ".",
-      tool: "edit",
-      updatedAt: Date.now(),
-    });
   },
 
   closeRightPanelTab: (id) => {

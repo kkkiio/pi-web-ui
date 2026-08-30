@@ -1,12 +1,12 @@
 import { expect } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { type PiWebUiHarness, startPiWebUi } from "../harness/pi-process";
+import { startPiWebUi } from "../harness/pi-process";
+import { getHarness, setHarness } from "./shared";
 
 const { Given, When, Then, After } = createBdd();
 
 let fixtureName = "chat-lifecycle";
 let workspaceGit = true;
-let harness: PiWebUiHarness | null = null;
 
 Given("当前工作区是 git 仓库", async () => {
   workspaceGit = true;
@@ -25,20 +25,13 @@ Given("agent 会更新 workspace status 文档", async () => {
   fixtureName = "workspace-artifact";
 });
 
-Given("agent 会写入 workspace 外 Markdown artifact", async () => {
-  fixtureName = "external-artifact";
-});
-
-Given("agent 会重复写入同一个 Markdown artifact", async () => {
-  fixtureName = "duplicate-artifact";
-});
-
 Given("agent 会执行失败的 write 工具", async () => {
   fixtureName = "tool-failure";
 });
 
 When("我打开 Pi Web UI", async ({ page }) => {
-  harness = await startPiWebUi(fixtureName, { git: workspaceGit });
+  const harness = await startPiWebUi(fixtureName, { git: workspaceGit });
+  setHarness(harness);
   await page.goto(harness.pageUrl);
   await expect(page.getByPlaceholder("Message Pi...")).toBeVisible();
 });
@@ -47,18 +40,6 @@ When("我让 agent 更新 workspace status 文档", async ({ page }) => {
   await page.getByPlaceholder("Message Pi...").fill("Update the workspace status docs.");
   await page.getByRole("button", { name: "Submit" }).click();
   await expect(page.getByText("Updated the workspace status docs.")).toBeVisible({ timeout: 30_000 });
-});
-
-When("我让 agent 更新 external skill 文档", async ({ page }) => {
-  await page.getByPlaceholder("Message Pi...").fill("Update the external skill docs.");
-  await page.getByRole("button", { name: "Submit" }).click();
-  await expect(page.getByText("Updated the external skill docs.")).toBeVisible({ timeout: 30_000 });
-});
-
-When("我让 agent 重复更新同一个 artifact", async ({ page }) => {
-  await page.getByPlaceholder("Message Pi...").fill("Update the same artifact twice.");
-  await page.getByRole("button", { name: "Submit" }).click();
-  await expect(page.getByText("Updated the same artifact twice.")).toBeVisible({ timeout: 30_000 });
 });
 
 When("我发送消息 {string}", async ({ page }, message: string) => {
@@ -71,115 +52,47 @@ When("我刷新 Pi Web UI", async ({ page }) => {
   await expect(page.getByPlaceholder("Message Pi...")).toBeVisible();
 });
 
-Then("Workspace Float 显示当前分支", async ({ page }) => {
-  await expect(page.getByTestId("workspace-status-float").getByTestId("workspace-git-row")).toContainText(/main/);
+Then("header 显示当前分支", async ({ page }) => {
+  await expect(page.getByTestId("header-git-status")).toContainText(/main/);
 });
 
-Then("Workspace Float 显示 git additions 和 deletions", async ({ page }) => {
-  const float = page.getByTestId("workspace-status-float");
-  await expect(float.getByText(/\+\d+/)).toBeVisible();
-  await expect(float.getByText(/-\d+/)).toBeVisible();
+Then("header 显示 git additions 和 deletions", async ({ page }) => {
+  const chip = page.getByTestId("header-git-status");
+  await expect(chip.getByText(/\+\d+/)).toBeVisible();
+  await expect(chip.getByText(/-\d+/)).toBeVisible();
 });
 
-Then("Workspace Float 不显示 git additions 和 deletions", async ({ page }) => {
-  const float = page.getByTestId("workspace-status-float");
-  await expect(float.getByText(/\+\d+/)).toHaveCount(0);
-  await expect(float.getByText(/-\d+/)).toHaveCount(0);
+Then("header 不显示 git additions 和 deletions", async ({ page }) => {
+  const chip = page.getByTestId("header-git-status");
+  await expect(chip.getByText(/\+\d+/)).toHaveCount(0);
+  await expect(chip.getByText(/-\d+/)).toHaveCount(0);
 });
 
-Then("Workspace Float 显示 git 状态不可用", async ({ page }) => {
-  const row = page.getByTestId("workspace-status-float").getByTestId("workspace-git-row");
-  await expect(row).toContainText("No git repository");
+Then("header 不显示 git 状态", async ({ page }) => {
+  await expect(page.getByTestId("header-git-status")).toHaveCount(0);
 });
 
-Then("Workspace Float 显示没有变更", async ({ page }) => {
-  const row = page.getByTestId("workspace-status-float").getByTestId("workspace-git-row");
-  await expect(row).toContainText("No changes");
+When("我打开 header 的 git 状态", async ({ page }) => {
+  const chip = page.getByTestId("header-git-status");
+  await expect(chip).toBeVisible();
+  await expect(chip).toBeEnabled();
+  await chip.click();
 });
 
-Then("Workspace Float 显示 Markdown artifact", async ({ page }) => {
-  await expect(
-    page.getByTestId("workspace-status-float").getByTestId("workspace-artifact-row").filter({
-      hasText: "workspace-status-float.md",
-    }),
-  ).toBeVisible();
-});
-
-Then("Workspace Float 显示 workspace 外 Markdown artifact", async ({ page }) => {
-  await expect(
-    page.getByTestId("workspace-status-float").getByTestId("workspace-artifact-row").filter({
-      hasText: "external-skill.md",
-    }),
-  ).toBeVisible();
-});
-
-Then("Workspace Float 只显示一个 Markdown artifact", async ({ page }) => {
-  await expect(
-    page.getByTestId("workspace-status-float").getByTestId("workspace-artifact-row").filter({
-      hasText: "workspace-status-float.md",
-    }),
-  ).toHaveCount(1);
-});
-
-When("我打开 Markdown artifact", async ({ page }) => {
-  await page
-    .getByTestId("workspace-status-float")
-    .getByTestId("workspace-artifact-row")
-    .filter({ hasText: "workspace-status-float.md" })
-    .click();
-});
-
-When("我打开 workspace 外 Markdown artifact", async ({ page }) => {
-  await page
-    .getByTestId("workspace-status-float")
-    .getByTestId("workspace-artifact-row")
-    .filter({ hasText: "external-skill.md" })
-    .click();
-});
-
-Then("右侧详情面板显示 artifact 文件内容", async ({ page }) => {
-  const panel = page.locator("aside");
-  await expect(panel).toContainText("workspace-status-float.md");
-  await expect(panel).toContainText("current git branch and readable diff status");
-});
-
-Then("右侧详情面板显示 workspace 外 artifact 文件内容", async ({ page }) => {
-  const panel = page.locator("aside");
-  await expect(panel).toContainText("external-skill.md");
-  await expect(panel).toContainText("outside the git workspace");
+When("我再次打开 header 的 git 状态", async ({ page }) => {
+  // The first click opens the right panel asynchronously; wait for it before
+  // clicking the (always visible) header chip again.
+  await expect(page.locator("aside")).toBeVisible();
+  const chip = page.getByTestId("header-git-status");
+  await expect(chip).toBeVisible();
+  await expect(chip).toBeEnabled();
+  await chip.click();
 });
 
 When("我隐藏右侧详情面板", async ({ page }) => {
   await page.locator("aside").getByTitle("Hide right panel").click();
   await expect(page.locator("aside")).toHaveCount(0);
   await expect(page.getByTitle("Show right panel")).toBeVisible();
-});
-
-When("我打开 Changes 行", async ({ page }) => {
-  const row = page.getByTestId("workspace-status-float").getByTestId("workspace-git-row");
-  await expect(row).toBeVisible();
-  await expect(row).toBeEnabled();
-  await row.click();
-});
-
-When("我再次打开 Changes 行", async ({ page }) => {
-  if (await page.locator("aside").getByTitle("Hide right panel").isVisible()) {
-    await page.locator("aside").getByTitle("Hide right panel").click();
-    await expect(page.locator("aside")).toHaveCount(0);
-    await expect(page.getByTitle("Show right panel")).toBeVisible();
-  }
-  const row = page.getByTestId("workspace-status-float").getByTestId("workspace-git-row");
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    await expect(row).toBeVisible();
-    await expect(row).toBeEnabled();
-    try {
-      await row.click({ timeout: 2_000 });
-      break;
-    } catch (error) {
-      if (attempt === 5 || !String(error).includes("detached from the DOM")) throw error;
-      await page.waitForTimeout(150);
-    }
-  }
 });
 
 Then("右侧详情面板显示 git diff tab", async ({ page }) => {
@@ -217,7 +130,9 @@ Then("聊天区显示工具调用 {string}", async ({ page }, toolName: string) 
 });
 
 Then("聊天区显示工具错误状态", async ({ page }) => {
-  await expect(page.getByText(/error|failed|EISDIR|directory/i)).toBeVisible();
+  // Error tool blocks auto-expand, so the "Error" heading inside the expanded
+  // tool content is only in the DOM when the failure is visible.
+  await expect(page.getByRole("heading", { name: "Error" })).toBeVisible();
 });
 
 Then("输入框恢复可提交状态", async ({ page }) => {
@@ -254,12 +169,14 @@ Then("左侧边栏只显示图标列", async ({ page }) => {
     .toBeLessThanOrEqual(64);
 });
 
-Then("左侧边栏不显示会话搜索框", async ({ page }) => {
-  await expect(page.getByPlaceholder("Search conversation...")).toBeHidden();
+Then("左侧边栏不显示 session 列表", async ({ page }) => {
+  const leftSidebar = page.locator('[data-slot="sidebar"][data-side="left"]');
+  await expect(leftSidebar.getByText("Agent Alpha", { exact: true })).toBeHidden();
 });
 
-Then("左侧边栏显示会话搜索框", async ({ page }) => {
-  await expect(page.getByPlaceholder("Search conversation...")).toBeVisible();
+Then("左侧边栏显示 agent session 列表", async ({ page }) => {
+  const leftSidebar = page.locator('[data-slot="sidebar"][data-side="left"]');
+  await expect(leftSidebar.getByText("Agent Alpha", { exact: true })).toBeVisible();
 });
 
 Then("聊天输入框仍然完整可见", async ({ page }) => {
@@ -271,7 +188,8 @@ Then("聊天输入框仍然完整可见", async ({ page }) => {
 });
 
 After(async () => {
+  const harness = getHarness();
   await harness?.stop();
-  harness = null;
+  setHarness(null);
   workspaceGit = true;
 });

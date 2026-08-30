@@ -1,7 +1,5 @@
-import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import {
   CopyIcon,
-  FileTextIcon,
   GitCompareIcon,
   Loader2Icon,
   PanelRightCloseIcon,
@@ -9,9 +7,12 @@ import {
   RotateCwIcon,
   XIcon,
 } from "lucide-react";
-import "@git-diff-view/react/styles/diff-view-pure.css";
+import { Diff, type FileData, Hunk, isDelete, isInsert, parseDiff } from "react-diff-view";
+import "react-diff-view/style/index.css";
 import {
+  Component,
   type CSSProperties,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -19,7 +20,6 @@ import {
   useState,
 } from "react";
 
-import { MessageResponse } from "@/components/ai-elements/message";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -103,7 +103,7 @@ export function RightPanel({
   if (!visible) {
     return (
       <Button
-        className="fixed right-3 top-16 z-40 shadow-lg"
+        className="fixed right-3 top-16 z-40 hidden shadow-lg md:inline-flex"
         onClick={onToggleVisible}
         size="icon-sm"
         title="Show right panel"
@@ -153,11 +153,7 @@ export function RightPanel({
                   onClick={() => onSelectTab(tab.id)}
                   type="button"
                 >
-                  {tab.kind === "git-diff" ? (
-                    <GitCompareIcon className="size-3.5 shrink-0" />
-                  ) : (
-                    <FileTextIcon className="size-3.5 shrink-0" />
-                  )}
+                  <GitCompareIcon className="size-3.5 shrink-0" />
                   <span className="truncate">{tab.title}</span>
                 </button>
                 <button
@@ -196,16 +192,20 @@ export function RightPanel({
 }
 
 function RightPanelTabContent({ tab }: { tab: RightPanelTab }) {
-  if (tab.loading) return <LoadingPanel label={tab.kind === "git-diff" ? "Loading diff" : "Loading file"} />;
+  if (tab.loading) return <LoadingPanel label="Loading diff" />;
   if (tab.error) return <PanelMessage tone="error" title="Unable to load" body={tab.error} />;
-  if (tab.kind === "git-diff") return <GitDiffTab tab={tab} />;
-  return <ArtifactFileTab tab={tab} />;
+  return <GitDiffTab tab={tab} />;
 }
 
 function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }> }) {
-  const diffFiles = useMemo(() => parseDiffFiles(tab.diff || ""), [tab.diff]);
-  const diffTheme =
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light";
+  const diffFiles = useMemo(() => {
+    try {
+      return parseDiff(tab.diff || "");
+    } catch (error) {
+      console.error("[pi-web-ui] diff parse failed", error);
+      return [];
+    }
+  }, [tab.diff]);
 
   if (!tab.isRepo) {
     return <PanelMessage title="No git repository" body="Open a git workspace to view changes." />;
@@ -214,8 +214,8 @@ function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }>
     return <PanelMessage title="No changes" body="The current branch has no staged, unstaged, or untracked diff." />;
   }
 
-  const totalAdditions = diffFiles.reduce((sum, file) => sum + file.additions, 0);
-  const totalDeletions = diffFiles.reduce((sum, file) => sum + file.deletions, 0);
+  const totalAdditions = diffFiles.reduce((sum, file) => sum + countChanges(file).additions, 0);
+  const totalDeletions = diffFiles.reduce((sum, file) => sum + countChanges(file).deletions, 0);
 
   return (
     <section className="space-y-3">
@@ -248,41 +248,53 @@ function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }>
       </div>
       {diffFiles.length > 0 ? (
         <div className="space-y-3">
-          {diffFiles.map((file) => (
-            <div className="overflow-hidden rounded-md border bg-card" key={file.id}>
-              <div className="flex items-center justify-between gap-3 bg-muted/40 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-xs">{file.newName || file.oldName}</div>
-                  {file.oldName && file.oldName !== file.newName && (
-                    <div className="truncate text-muted-foreground text-[11px]">{file.oldName}</div>
+          {diffFiles.map((file) => {
+            const { additions, deletions } = countChanges(file);
+            const name = file.newPath === "/dev/null" ? file.oldPath : file.newPath;
+            const renamedFrom =
+              file.oldPath !== file.newPath && file.oldPath !== "/dev/null" && file.newPath !== "/dev/null"
+                ? file.oldPath
+                : null;
+            return (
+              <div
+                className="overflow-hidden rounded-md border bg-card"
+                key={`${file.type}:${file.oldPath}:${file.newPath}`}
+              >
+                <div className="flex items-center justify-between gap-3 bg-muted/40 px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-xs">{name}</div>
+                    {renamedFrom && <div className="truncate text-muted-foreground text-[11px]">{renamedFrom}</div>}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {additions > 0 && (
+                      <Badge className="text-emerald-700 dark:text-emerald-300" variant="ghost">
+                        +{additions}
+                      </Badge>
+                    )}
+                    {deletions > 0 && (
+                      <Badge className="text-destructive" variant="ghost">
+                        -{deletions}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <Separator />
+                <div className="overflow-x-auto px-2 py-2 text-xs [&_table]:w-full">
+                  {file.hunks.length === 0 ? (
+                    <div className="px-1 py-1 text-muted-foreground">Binary file or empty diff not shown.</div>
+                  ) : (
+                    <DiffErrorBoundary
+                      fallback={<div className="px-1 py-1 text-muted-foreground">Unable to render this diff.</div>}
+                    >
+                      <Diff diffType={file.type} hunks={file.hunks} viewType="unified">
+                        {(hunks) => hunks.map((hunk) => <Hunk hunk={hunk} key={hunk.content} />)}
+                      </Diff>
+                    </DiffErrorBoundary>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Badge className="text-emerald-700 dark:text-emerald-300" variant="ghost">
-                    +{file.additions}
-                  </Badge>
-                  <Badge className="text-destructive" variant="ghost">
-                    -{file.deletions}
-                  </Badge>
-                </div>
               </div>
-              <Separator />
-              <div className="overflow-x-auto px-2 py-2 text-xs [&_.diff-view-wrapper]:min-w-full [&_table]:w-full">
-                <DiffView
-                  data={{
-                    oldFile: { fileName: file.oldName },
-                    newFile: { fileName: file.newName },
-                    hunks: [file.patch],
-                  }}
-                  diffViewFontSize={12}
-                  diffViewHighlight
-                  diffViewMode={DiffModeEnum.Unified}
-                  diffViewTheme={diffTheme}
-                  diffViewWrap
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <pre className="overflow-x-auto whitespace-pre rounded-md border bg-muted/30 p-3 text-xs leading-5">
@@ -293,35 +305,36 @@ function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }>
   );
 }
 
-function ArtifactFileTab({ tab }: { tab: Extract<RightPanelTab, { kind: "artifact-file" }> }) {
-  if (!tab.content?.trim()) {
-    return <PanelMessage title={tab.title} body="This artifact file is empty." />;
+function countChanges(file: FileData): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of file.hunks) {
+    for (const change of hunk.changes) {
+      if (isInsert(change)) additions += 1;
+      else if (isDelete(change)) deletions += 1;
+    }
+  }
+  return { additions, deletions };
+}
+
+/**
+ * Parser/render crashes must never take down the whole app (no root error
+ * boundary exists, so an uncaught render error unmounts everything).
+ */
+class DiffErrorBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
   }
 
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate font-medium text-sm">{tab.title}</div>
-          <div className="truncate text-muted-foreground text-xs">{tab.path}</div>
-        </div>
-        <Button
-          onClick={() => void copyText(tab.content || "")}
-          size="icon-sm"
-          title="Copy file content"
-          type="button"
-          variant="ghost"
-        >
-          <CopyIcon className="size-4" />
-        </Button>
-      </div>
-      <div className="rounded-md border bg-card p-3">
-        <MessageResponse className="break-words text-sm leading-6 [&_pre]:overflow-x-auto">
-          {tab.content}
-        </MessageResponse>
-      </div>
-    </section>
-  );
+  componentDidCatch(error: unknown) {
+    console.error("[pi-web-ui] diff render failed", error);
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }
 
 function LoadingPanel({ label }: { label: string }) {
@@ -348,65 +361,7 @@ function PanelMessage({ body, title, tone = "muted" }: { body: string; title: st
 }
 
 function EmptyPanel() {
-  return <PanelMessage title="No tab selected" body="Open changes or an artifact from the workspace float." />;
-}
-
-type DiffPanelFile = {
-  id: string;
-  oldName: string;
-  newName: string;
-  patch: string;
-  additions: number;
-  deletions: number;
-};
-
-function parseDiffFiles(diff: string): DiffPanelFile[] {
-  const files: DiffPanelFile[] = [];
-  let current: string[] = [];
-
-  for (const line of diff.replace(/\r\n/g, "\n").split("\n")) {
-    if (line.startsWith("diff --git ")) {
-      if (current.length > 0) files.push(buildDiffFile(current, files.length));
-      current = [line];
-    } else if (current.length > 0) {
-      current.push(line);
-    }
-  }
-
-  if (current.length > 0) files.push(buildDiffFile(current, files.length));
-  return files.filter((file) => file.patch.trim().length > 0);
-}
-
-function buildDiffFile(lines: string[], index: number): DiffPanelFile {
-  const patch = lines.join("\n").trimEnd();
-  const oldHeader = lines.find((line) => line.startsWith("--- "));
-  const newHeader = lines.find((line) => line.startsWith("+++ "));
-  const diffHeader = lines.find((line) => line.startsWith("diff --git "));
-  const fallbackNames = diffHeader?.match(/^diff --git a\/(.+) b\/(.+)$/);
-  const oldName = cleanDiffFileName(oldHeader?.slice(4).trim() || fallbackNames?.[1] || "");
-  const newName = cleanDiffFileName(newHeader?.slice(4).trim() || fallbackNames?.[2] || oldName);
-  let additions = 0;
-  let deletions = 0;
-
-  for (const line of lines) {
-    if (line.startsWith("+++") || line.startsWith("---")) continue;
-    if (line.startsWith("+")) additions++;
-    else if (line.startsWith("-")) deletions++;
-  }
-
-  return {
-    id: `${newName || oldName || "diff"}:${index}`,
-    oldName,
-    newName,
-    patch,
-    additions,
-    deletions,
-  };
-}
-
-function cleanDiffFileName(value: string): string {
-  if (!value || value === "/dev/null") return "";
-  return value.replace(/^a\//, "").replace(/^b\//, "");
+  return <PanelMessage title="No tab selected" body="Open changes from the git status in the header." />;
 }
 
 function getInitialWidth(): number {

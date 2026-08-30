@@ -30,7 +30,7 @@ export type ChatItem =
       presentation?: "normal" | "activity";
       cost?: number;
       images?: PromptImage[];
-      /** Session entry tree node ID, used for Branch actions via navigate_tree. */
+      /** Session entry ID this chat item was converted from. */
       entryId?: string;
       relatedEntryIds?: string[];
     }
@@ -41,8 +41,11 @@ export type ChatItem =
       input: unknown;
       output?: unknown;
       errorText?: string;
+      images?: PromptImage[];
       state: ToolState;
       open?: boolean;
+      /** Set once the user manually expands/collapses; disables auto-collapse. */
+      userToggled?: boolean;
       entryId?: string;
       relatedEntryIds?: string[];
     }
@@ -82,6 +85,12 @@ export type RpcEvent = {
   notifyType?: "info" | "warning" | "error";
   enabled?: boolean;
   model?: ModelInfo;
+  reason?: string;
+  willRetry?: boolean;
+  compactionEntry?: {
+    summary?: string;
+    tokensBefore?: number;
+  };
 };
 
 export type PiMessage = {
@@ -120,6 +129,9 @@ export type ModelInfo = {
   id: string;
   provider?: string;
   contextWindow?: number;
+  /** Raw pi-ai model fields, forwarded unchanged by the extension (ADR 0002). */
+  reasoning?: boolean;
+  thinkingLevelMap?: Record<string, string | null | undefined>;
 };
 
 export type WsRequest = {
@@ -152,8 +164,6 @@ export type WsError = {
 
 export type StateSyncPayload = {
   entries?: SessionEntry[];
-  tree?: SessionTreeNode[];
-  leafId?: string | null;
   model?: ModelInfo;
   thinkingLevel?: string;
   sessionName?: string;
@@ -182,36 +192,6 @@ export type SessionEntry = {
   [key: string]: unknown;
 };
 
-export type SessionTreeNode = {
-  entry: SessionEntry;
-  children: SessionTreeNode[];
-  label?: string;
-  labelTimestamp?: string;
-};
-
-export type ConversationTreeItem = {
-  id: string;
-  parentId: string | null;
-  entry: SessionEntry;
-  entryType: string;
-  isLeaf: boolean;
-  isBranchable: boolean;
-  isContinuable: boolean;
-  continueTargetId?: string;
-  label?: string;
-  text: string;
-  detail?: string;
-  depth: number;
-  connectorColumns: Array<{ key: string; state: "line" | "blank" }>;
-  connectorKind: "none" | "middle" | "last" | "line" | "blank";
-  isExpandable: boolean;
-  isExpanded: boolean;
-  hiddenChildCount: number;
-  childCount: number;
-  isSearchMatch: boolean;
-  order: number;
-};
-
 export type GitStatusResult = {
   isRepo: boolean;
   branch: string | null;
@@ -227,45 +207,17 @@ export type GitDiffResult = {
   diff: string;
 };
 
-export type FileContentResult = {
-  path: string;
-  name: string;
-  size: number;
-  content: string;
-};
-
-export type WorkspaceArtifact = {
-  id: string;
-  path: string;
-  name: string;
-  directory: string;
-  tool: "edit" | "write";
+export type RightPanelTab = {
+  id: "git-diff";
+  kind: "git-diff";
+  title: string;
+  branch: string | null;
+  diff?: string;
+  isRepo?: boolean;
+  loading?: boolean;
+  error?: string;
   updatedAt: number;
 };
-
-export type RightPanelTab =
-  | {
-      id: "git-diff";
-      kind: "git-diff";
-      title: string;
-      branch: string | null;
-      diff?: string;
-      isRepo?: boolean;
-      loading?: boolean;
-      error?: string;
-      updatedAt: number;
-    }
-  | {
-      id: `artifact:${string}`;
-      kind: "artifact-file";
-      title: string;
-      path: string;
-      content?: string;
-      size?: number;
-      loading?: boolean;
-      error?: string;
-      updatedAt: number;
-    };
 
 export type ExtensionDialog = {
   id: string;

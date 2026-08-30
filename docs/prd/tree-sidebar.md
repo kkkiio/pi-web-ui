@@ -1,5 +1,9 @@
 # PRD: Conversation Tree Sidebar
 
+> **Status: SUPERSEDED**
+>
+> The conversation tree feature was removed in the ADR 0012 rework. The store fields (`tree`/`leafId` and selection state), the components (`conversation-sidebar-tree.tsx`, `conversation-tree-model.ts`, `use-conversation-tree.ts`), and the sidebar's tree rendering are gone. Kept for historical record; do not resurrect without a new decision record.
+
 ## Overview
 
 Replace the old session list/sidebar with a compact conversation tree for the current Pi session. The tree visualizes parent-child relationships, branch segment starts, collapse state, and same-session Branch entry points.

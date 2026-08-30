@@ -2,13 +2,13 @@ import {
   extractText,
   extractThinking,
   extractToolCalls,
+  extractToolResultImages,
   findLastUsage,
   formatToolOutput,
   syncToItems,
 } from "../chat-conversion";
 import { isToolExpandable } from "../tool-summary";
 import type { ChatItem } from "../types";
-import { artifactsFromEntries } from "../workspace-artifacts";
 import type { SessionSlice, StoreSlice } from "./types";
 
 let conversationSyncInFlight = false;
@@ -18,6 +18,11 @@ let streamingId: string | null = null;
 let streamingHasToolCall = false;
 let itemCounter = 0;
 
+/** Tools that auto-expand while running and auto-collapse shortly after success. */
+const AUTO_EXPAND_TOOLS = new Set(["bash"]);
+const TOOL_AUTO_CLOSE_DELAY_MS = 1000;
+const toolAutoCloseTimers = new Map<string, number>();
+
 function nextId(prefix: string) {
   itemCounter += 1;
   return `${prefix}-${Date.now()}-${itemCounter}`;
@@ -26,10 +31,6 @@ function nextId(prefix: string) {
 export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   items: [],
   chatStatus: "ready",
-  tree: [],
-  leafId: null,
-  selectedTreeEntryId: null,
-  loadingTreeEntryId: null,
   conversationSyncing: false,
   conversationSyncError: null,
   lastUsage: null,
@@ -42,25 +43,8 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   applyStateSync: (sync) => {
     const entries = sync.entries ?? [];
     const items = syncToItems(entries, nextId);
-    const artifacts = artifactsFromEntries(entries);
-    const tree = sync.tree ?? [];
-    const currentSelection = get().selectedTreeEntryId;
-    let selectedTreeEntryId: string | null = sync.leafId ?? null;
-
-    if (currentSelection) {
-      const stack = [...tree];
-      while (stack.length > 0) {
-        const node = stack.pop();
-        if (node?.entry.id === currentSelection) {
-          selectedTreeEntryId = currentSelection;
-          break;
-        }
-        if (node) stack.push(...node.children);
-      }
-    }
 
     set({
-      artifacts,
       chatStatus: sync.isStreaming ? "streaming" : "ready",
       connection: "connected",
       contextWindowSize: sync.model?.contextWindow || get().contextWindowSize,
@@ -68,12 +52,9 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       error: null,
       items,
       lastUsage: findLastUsage(entries),
-      leafId: sync.leafId ?? null,
       modelLabel: sync.model?.id ? sync.model.id.split("/").pop() || sync.model.id : "model",
-      selectedTreeEntryId,
       sessionName: sync.sessionName || "Pi Web UI",
       thinkingLevel: sync.thinkingLevel || "off",
-      tree,
     });
     get().requestGitStatusRefresh({ debounce: true });
   },
@@ -113,11 +94,11 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   clearConversationTimers: () => {
     if (conversationSyncTimer) window.clearTimeout(conversationSyncTimer);
     conversationSyncTimer = null;
+    for (const timer of toolAutoCloseTimers.values()) window.clearTimeout(timer);
+    toolAutoCloseTimers.clear();
   },
 
   setChatStatus: (chatStatus) => set({ chatStatus }),
-  setSelectedTreeEntryId: (selectedTreeEntryId) => set({ selectedTreeEntryId }),
-  setLoadingTreeEntryId: (loadingTreeEntryId) => set({ loadingTreeEntryId }),
   setLastUsage: (lastUsage) => set({ lastUsage }),
   setContextWindowSize: (contextWindowSize) => set({ contextWindowSize }),
 
@@ -145,13 +126,17 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
 
   toggleAllTools: (open) => {
     set((state) => ({
-      items: state.items.map((item) => (item.kind === "tool" && isToolExpandable(item) ? { ...item, open } : item)),
+      items: state.items.map((item) =>
+        item.kind === "tool" && isToolExpandable(item) ? { ...item, open, userToggled: true } : item,
+      ),
     }));
   },
 
   toggleTool: (id, open) => {
     set((state) => ({
-      items: state.items.map((item) => (item.kind === "tool" && item.id === id ? { ...item, open } : item)),
+      items: state.items.map((item) =>
+        item.kind === "tool" && item.id === id ? { ...item, open, userToggled: true } : item,
+      ),
     }));
   },
 
@@ -270,6 +255,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   applyToolExecutionStart: (event) => {
     if (!event.toolCallId) return;
     streamingHasToolCall = true;
+    const toolName = (event.toolName || "tool").toLowerCase();
     set((state) => ({
       items: [
         ...state.items,
@@ -279,7 +265,9 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
           name: event.toolName || "tool",
           input: event.args,
           state: "input-streaming",
-          open: false,
+          // Leave undefined for non-auto tools so content-aware defaults
+          // (images, errors) in the view layer still apply.
+          open: AUTO_EXPAND_TOOLS.has(toolName) ? true : undefined,
         } satisfies ChatItem,
       ],
     }));
@@ -297,21 +285,37 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   },
 
   applyToolExecutionEnd: (event) => {
-    get().mergeArtifactsFromToolEvent(event);
     get().requestGitStatusRefresh({ debounce: true });
     if (!event.toolCallId) return;
+    const toolCallId = event.toolCallId;
+    const toolName = typeof event.toolName === "string" ? event.toolName.toLowerCase() : "";
     set((state) => ({
       items: state.items.map((item) =>
-        item.kind === "tool" && item.id === event.toolCallId
+        item.kind === "tool" && item.id === toolCallId
           ? {
               ...item,
               errorText: event.isError ? String(formatToolOutput(event.result)) : undefined,
               output: event.isError ? undefined : formatToolOutput(event.result),
+              images: event.isError ? undefined : extractToolResultImages(event.result),
               state: event.isError ? "output-error" : "output-available",
+              // Errors always expand and never auto-collapse.
+              open: event.isError ? true : item.open,
             }
           : item,
       ),
     }));
+    // Auto-collapse auto-expanded tools after a beat, unless the user took over.
+    if (!event.isError && AUTO_EXPAND_TOOLS.has(toolName)) {
+      const timer = window.setTimeout(() => {
+        toolAutoCloseTimers.delete(toolCallId);
+        set((state) => ({
+          items: state.items.map((item) =>
+            item.kind === "tool" && item.id === toolCallId && !item.userToggled ? { ...item, open: false } : item,
+          ),
+        }));
+      }, TOOL_AUTO_CLOSE_DELAY_MS);
+      toolAutoCloseTimers.set(toolCallId, timer);
+    }
   },
 
   markPromptReady: () => {

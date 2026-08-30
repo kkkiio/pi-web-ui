@@ -4,6 +4,8 @@
 
 Accepted
 
+> **Evolution (ADR 0012)**: the topology changed — the Web UI is now a standalone hub (`src/hub/`, `node dist-hub/hub/cli.js`) with Pi extensions connecting out to it, and `extensions/mirror-server.ts` no longer exists. The harness starts **two processes per scenario**: a hub (built `dist` on a per-scenario free port, `--host=127.0.0.1 --port=<port>`), then `pi --mode rpc` loading `extensions/pi-web-ui.ts`; the harness injects `/webui:connect` over rpc stdin once the extension registers it (connection is manual by design — `PI_WEB_UI_HUB=ws://127.0.0.1:<port>/ws/extension` only supplies the command's default target). `pageUrl` is the hub URL. Everything else in this ADR is unchanged: per-scenario fresh Pi process + fresh temp workspace, built `dist` reused, faux provider fixtures via `PI_WEB_UI_E2E_FIXTURE`, real tools/git/session paths. Multi-agent scenarios may spawn additional Pi agents against the same hub (`harness.addAgent`). The old mirror-server env vars (`PI_WEB_UI_STATIC_DIR`, `PI_WEB_UI_PORT` for the in-extension server) are replaced by hub CLI args.
+
 ## Context
 
 Pi Web UI 的关键风险在端到端集成边界：浏览器 UI、WebSocket transport、mirror-server extension、Pi agent session、工具执行、文件系统、git workspace 和 session tree 必须一起工作。Workspace Status Float、Right Panel、artifact 展示、Branch/Continue、streaming tool card 等功能都跨过这些边界。

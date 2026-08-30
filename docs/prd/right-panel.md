@@ -1,5 +1,14 @@
 # PRD: Right Panel
 
+
+> **Status: UPDATED**
+>
+> The right panel now only hosts the git-diff ("Changes") tab. Markdown
+> artifact-file tabs were removed with the Artifacts feature
+> (`docs/prd/workspace-artifacts.md`), and the panel's entry point moved from the
+> deleted workspace float to the header git chip. The tab lifecycle below still
+> applies, but artifact examples are historical.
+
 ## Problem Statement
 
 Pi Web UI 需要一个稳定的右侧工作区来承载聊天之外的次要内容，例如当前 git diff、Markdown artifact 文件内容、未来的计划或报告。现有右侧详情侧边栏以单一详情视图为中心，无法表达 Codex 风格的多 tab 工作流，也缺少一个可预测的显隐控制。

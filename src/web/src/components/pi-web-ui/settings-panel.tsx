@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-import { THINKING_LEVELS } from "../../core/constants";
-import type { ThemeMode } from "../../core/types";
+import { getSupportedThinkingLevels } from "../../core/thinking-levels";
+import type { ModelInfo, ThemeMode } from "../../core/types";
 import { Modal } from "./modal";
 
 export function SettingsPanel(props: {
@@ -23,6 +23,7 @@ export function SettingsPanel(props: {
   setShowThinking: (show: boolean) => void;
   themeMode: ThemeMode;
   thinkingLevel: string;
+  currentModel: ModelInfo | null;
 }) {
   const [draftName, setDraftName] = useState(props.sessionName);
 
@@ -63,7 +64,7 @@ export function SettingsPanel(props: {
             value={props.autoCompaction}
           />
           <div className="flex flex-wrap gap-2">
-            {THINKING_LEVELS.map((level) => (
+            {getSupportedThinkingLevels(props.currentModel).map((level) => (
               <Button
                 key={level}
                 onClick={() => props.onSetThinking(level)}

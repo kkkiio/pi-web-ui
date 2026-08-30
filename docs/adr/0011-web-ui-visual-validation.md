@@ -4,6 +4,8 @@
 
 Proposed
 
+> **Evolution (ADR 0012)**: the conversation tree and Branch/Continue surfaces listed below were removed (see PRDs `tree-sidebar.md` / `branch-message.md`); the session-list sidebar and multi-agent switching are now the layout-sensitive surfaces to validate instead.
+
 ## Context
 
 Pi Web UI has layout-sensitive surfaces: conversation tree, sidebars, Workspace Status Float, Right Panel tabs, mobile sheets, overlays, loading states, and long text/path truncation. DOM assertions can prove elements exist, but they cannot prove the user can actually see and use the UI without clipping, overlap, offscreen positioning, unreadable text, or blank panels.

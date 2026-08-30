@@ -1,5 +1,12 @@
 # PRD: Workspace Artifacts
 
+> **Status: REMOVED**
+>
+> The Markdown artifacts feature was removed: the artifact list in the workspace
+> float, artifact-file tabs in the right panel, the frontend artifact recovery
+> (`core/workspace-artifacts.ts`), and the extension's `get_file_content` command
+> plus its artifact path tracking are gone. Kept for historical record.
+
 ## Problem Statement
 
 Pi Web UI 的聊天流会展示工具调用，但用户很难从聊天中快速找到“本轮工作实际产出的文档”。当 agent 使用 `edit` 或 `write` 修改 Markdown 文件时，这些文件往往就是计划、报告、规格说明或交付物。用户需要一个轻量入口查看这些文件，而不是在工具卡片和文件浏览器之间来回寻找。

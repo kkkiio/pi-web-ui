@@ -5,7 +5,7 @@ This document is the source of truth for publishing `@kkkiio/pi-web-ui` to npm a
 ## Release Policy
 
 - Publish from a reviewed commit on the intended release branch.
-- Keep `dist/` out of git. `npm publish` runs `prepack`, which runs `npm run build:web` and includes `dist/` in the npm tarball.
+- Keep `dist/` and `dist-hub/` out of git. `npm publish` runs `prepack`, which runs `npm run build:web` **and** `npm run build:hub`, and includes `dist/`, `dist-hub/`, and `src/protocol/` in the npm tarball.
 - Do not run `npm publish` until the package contents have been checked with `npm pack --dry-run --json`.
 - Treat package media as part of the release. If `README.md` references local images, those files must be included in `package.json.files`. If pi.dev should show a card preview, `package.json` must provide `pi.image`.
 
@@ -61,7 +61,7 @@ Before publishing, verify that `package.json` includes a stable `pi.image` URL i
 ```json
 "pi": {
   "extensions": [
-    "./extensions/mirror-server.ts"
+    "./extensions/pi-web-ui.ts"
   ],
   "image": "https://raw.githubusercontent.com/kkkiio/pi-web-ui/main/docs/images/pi-web-ui-example.png"
 }
@@ -78,6 +78,8 @@ then `package.json.files` must include `docs/images/`:
 ```json
 "files": [
   "extensions/",
+  "src/protocol/",
+  "dist-hub/",
   "dist/",
   "public/",
   "docs/images/",
@@ -97,11 +99,15 @@ The output must include at least:
 
 - `README.md`
 - `package.json`
-- `extensions/mirror-server.ts`
+- `extensions/pi-web-ui.ts`
+- `src/protocol/index.js` (compiled shared protocol used by the hub)
+- `dist-hub/hub/cli.js` (hub CLI, the `pi-web-ui` bin entry)
 - `dist/index.html`
 - `dist/assets/`
 - `public/`
 - `docs/images/pi-web-ui-example.png` when README references that image
+
+Verify the bin entry resolves in the published package:
 
 Check the CDN path that pi.dev will use for README images after publish. Replace `<version>` with the version being released:
 

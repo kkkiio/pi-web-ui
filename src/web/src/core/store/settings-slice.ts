@@ -71,17 +71,6 @@ export const createSettingsSlice: StoreSlice<SettingsSlice> = (set, get) => ({
   setThemeMode: (themeMode) => set({ themeMode }),
   setShowThinking: (showThinking) => set({ showThinking }),
 
-  cycleThinking: async () => {
-    try {
-      const result = (await get().send("cycle_thinking_level")) as
-        | { level?: string; thinkingLevel?: string }
-        | undefined;
-      set({ thinkingLevel: result?.level || result?.thinkingLevel || "off" });
-    } catch (error) {
-      get().setError(error instanceof Error ? error.message : "Failed to change thinking level");
-    }
-  },
-
   selectModel: async (model) => {
     try {
       await get().send("set_model", { provider: model.provider, modelId: model.id });

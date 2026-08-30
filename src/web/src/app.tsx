@@ -1,14 +1,7 @@
-import {
-  ArchiveIcon,
-  BarChart3Icon,
-  DownloadIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  TerminalIcon,
-  XIcon,
-} from "lucide-react";
+import { TerminalIcon, XIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 import {
   Conversation,
   ConversationContent,
@@ -16,12 +9,10 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
 import {
   AppHeader,
   ChatInput,
   ChatItemView,
-  CommandPalette,
   ContextPopover,
   ConversationSidebar,
   ExtensionDialogView,
@@ -29,14 +20,25 @@ import {
   RightPanel,
   SettingsPanel,
   UserMessageView,
-  WorkspaceStatusFloat,
 } from "./components/pi-web-ui";
-import { extractText, processPromptFiles } from "./core/chat-conversion";
-import { copyText, formatTime, formatTokens, isEditableTarget } from "./core/format";
+import { processPromptFiles } from "./core/chat-conversion";
+import { copyText, isEditableTarget } from "./core/format";
 import { PiClient } from "./core/pi-client";
 import { usePiWebUiStore } from "./core/store";
 import { dispatchPiEvent } from "./core/store/event-dispatch";
-import type { ChatItem, PromptCommand } from "./core/types";
+import type { PromptCommand } from "./core/types";
+
+/** Jump to the latest message when a session's content first fills in
+ * (attach / session switch) — StickToBottom's `initial` only covers the
+ * very first mount, and content arrives asynchronously via state_sync. */
+function ScrollToLatestOnFill({ filled }: { filled: boolean }) {
+  const { scrollToBottom } = useStickToBottomContext();
+  useEffect(() => {
+    if (!filled) return;
+    void scrollToBottom({ animation: "instant", wait: 100, ignoreEscapes: true });
+  }, [filled, scrollToBottom]);
+  return null;
+}
 
 const DEFAULT_LEFT_SIDEBAR_WIDTH = 320;
 const MIN_LEFT_SIDEBAR_WIDTH = 240;
@@ -47,21 +49,16 @@ const LEFT_SIDEBAR_WIDTH_STORAGE_KEY = "pi-web-ui-left-sidebar-width";
 export function App() {
   const items = usePiWebUiStore((state) => state.items);
   const connection = usePiWebUiStore((state) => state.connection);
+  const liveSessions = usePiWebUiStore((state) => state.liveSessions);
+  const attachedAgentId = usePiWebUiStore((state) => state.attachedAgentId);
   const chatStatus = usePiWebUiStore((state) => state.chatStatus);
   const modelLabel = usePiWebUiStore((state) => state.modelLabel);
   const currentModel = usePiWebUiStore((state) => state.currentModel);
   const thinkingLevel = usePiWebUiStore((state) => state.thinkingLevel);
   const sessionName = usePiWebUiStore((state) => state.sessionName);
   const error = usePiWebUiStore((state) => state.error);
-  const advancedFeatures = usePiWebUiStore((state) => state.advancedFeatures);
   const archModeEnabled = usePiWebUiStore((state) => state.archModeEnabled);
   const archAvailable = usePiWebUiStore((state) => state.archAvailable);
-  const tree = usePiWebUiStore((state) => state.tree);
-  const leafId = usePiWebUiStore((state) => state.leafId);
-  const selectedTreeEntryId = usePiWebUiStore((state) => state.selectedTreeEntryId);
-  const loadingTreeEntryId = usePiWebUiStore((state) => state.loadingTreeEntryId);
-  const conversationSyncing = usePiWebUiStore((state) => state.conversationSyncing);
-  const conversationSyncError = usePiWebUiStore((state) => state.conversationSyncError);
   const availableModels = usePiWebUiStore((state) => state.availableModels);
   const showThinking = usePiWebUiStore((state) => state.showThinking);
   const autoCompaction = usePiWebUiStore((state) => state.autoCompaction);
@@ -70,7 +67,6 @@ export function App() {
   const dialog = usePiWebUiStore((state) => state.dialog);
   const gitStatus = usePiWebUiStore((state) => state.gitStatus);
   const gitLoading = usePiWebUiStore((state) => state.gitLoading);
-  const artifacts = usePiWebUiStore((state) => state.artifacts);
   const rightPanelTabs = usePiWebUiStore((state) => state.rightPanelTabs);
   const activeRightPanelTabId = usePiWebUiStore((state) => state.activeRightPanelTabId);
   const rightPanelVisible = usePiWebUiStore((state) => state.rightPanelVisible);
@@ -83,8 +79,6 @@ export function App() {
   const clearConversationTimers = usePiWebUiStore((state) => state.clearConversationTimers);
   const clearWorkspaceTimers = usePiWebUiStore((state) => state.clearWorkspaceTimers);
   const compactSend = usePiWebUiStore((state) => state.send);
-  const cycleThinking = usePiWebUiStore((state) => state.cycleThinking);
-  const openArtifact = usePiWebUiStore((state) => state.openArtifact);
   const openGitDiff = usePiWebUiStore((state) => state.openGitDiff);
   const refreshAuthState = usePiWebUiStore((state) => state.refreshAuthState);
   const refreshRightPanelTab = usePiWebUiStore((state) => state.refreshRightPanelTab);
@@ -94,18 +88,16 @@ export function App() {
   const respondDialog = usePiWebUiStore((state) => state.respondDialog);
   const selectModel = usePiWebUiStore((state) => state.selectModel);
   const sendPrompt = usePiWebUiStore((state) => state.sendPrompt);
+  const switchAgent = usePiWebUiStore((state) => state.switchAgent);
   const setActiveRightPanelTabId = usePiWebUiStore((state) => state.setActiveRightPanelTabId);
   const setClient = usePiWebUiStore((state) => state.setClient);
   const setConnection = usePiWebUiStore((state) => state.setConnection);
   const setError = usePiWebUiStore((state) => state.setError);
-  const setLoadingTreeEntryId = usePiWebUiStore((state) => state.setLoadingTreeEntryId);
-  const setSelectedTreeEntryId = usePiWebUiStore((state) => state.setSelectedTreeEntryId);
   const setShowThinking = usePiWebUiStore((state) => state.setShowThinking);
   const setThemeMode = usePiWebUiStore((state) => state.setThemeMode);
   const setThinkingLevel = usePiWebUiStore((state) => state.setThinkingLevel);
   const setAutoCompactionRemote = usePiWebUiStore((state) => state.setAutoCompactionRemote);
   const closeRightPanelTab = usePiWebUiStore((state) => state.closeRightPanelTab);
-  const toggleAllTools = usePiWebUiStore((state) => state.toggleAllTools);
   const toggleArchMode = usePiWebUiStore((state) => state.toggleArchMode);
   const toggleAuth = usePiWebUiStore((state) => state.toggleAuth);
   const toggleRightPanelVisible = usePiWebUiStore((state) => state.toggleRightPanelVisible);
@@ -127,7 +119,6 @@ export function App() {
     );
     return Math.min(maxWidth, Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(requestedWidth)));
   });
-  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
 
   const [queuedMessages, setQueuedMessages] = useState<PromptCommand[]>([]);
@@ -135,12 +126,8 @@ export function App() {
   const [modelOpen, setModelOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [commandOpen, setCommandOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
 
-  const itemElementsRef = useRef<Map<string, HTMLElement>>(new Map());
-  const pendingFocusEntryIdRef = useRef<string | null>(null);
-  const highlightTimerRef = useRef<number | null>(null);
   const promptCounterRef = useRef(0);
 
   const resolvedTheme = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
@@ -223,7 +210,6 @@ export function App() {
       setClient(null);
       clearConversationTimers();
       clearWorkspaceTimers();
-      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
     };
   }, [clearConversationTimers, clearWorkspaceTimers, setClient, setConnection, setError]);
 
@@ -244,6 +230,7 @@ export function App() {
 
   const submitMessage = useCallback(
     async ({ text, files }: { text: string; files?: unknown[] }) => {
+      if (!attachedAgentId) return;
       const trimmed = text.trim();
       const images = await processPromptFiles(files);
       if (!trimmed && images.length === 0) return;
@@ -263,7 +250,7 @@ export function App() {
       await sendPrompt(command);
       setDraftText("");
     },
-    [chatStatus, nextPromptId, sendPrompt],
+    [attachedAgentId, chatStatus, nextPromptId, sendPrompt],
   );
 
   const openModelPicker = useCallback(async () => {
@@ -284,6 +271,14 @@ export function App() {
     await refreshAuthState();
   }, [refreshAuthState]);
 
+  const setThinkingLevelRemote = useCallback(
+    async (level: string) => {
+      await compactSend("set_thinking_level", { level });
+      setThinkingLevel(level);
+    },
+    [compactSend, setThinkingLevel],
+  );
+
   const compactContext = useCallback(async () => {
     try {
       await compactSend("compact");
@@ -293,226 +288,27 @@ export function App() {
     }
   }, [addSystemMessage, compactSend, setError]);
 
-  const exportHtml = useCallback(async () => {
-    try {
-      const result = (await compactSend("export_html")) as { path?: string } | undefined;
-      if (result?.path) addSystemMessage(`Exported: ${result.path}`, "success");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Export failed");
-    }
-  }, [addSystemMessage, compactSend, setError]);
-
-  const showSessionStats = useCallback(async () => {
-    try {
-      const stats = (await compactSend("get_session_stats")) as {
-        totalMessages?: number;
-        userMessages?: number;
-        assistantMessages?: number;
-        toolCalls?: number;
-        tokens?: { input?: number; total?: number };
-      };
-      addSystemMessage(
-        [
-          "Session stats",
-          `Messages: ${stats.totalMessages} (${stats.userMessages} user, ${stats.assistantMessages} assistant)`,
-          `Tool calls: ${stats.toolCalls}`,
-          stats.tokens ? `Context: ~${formatTokens(stats.tokens.input || stats.tokens.total || 0)} tokens` : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Stats failed");
-    }
-  }, [addSystemMessage, compactSend, setError]);
-
   useEffect(() => {
     if (!dialog?.timeout) return;
     const timeout = window.setTimeout(() => respondDialog({ cancelled: true }), dialog.timeout);
     return () => window.clearTimeout(timeout);
   }, [dialog, respondDialog]);
 
-  const registerItemElement = useCallback((item: ChatItem, node: HTMLElement | null) => {
-    const ids = [item.entryId, ...(item.relatedEntryIds ?? [])].filter((value): value is string => Boolean(value));
-    for (const id of ids) {
-      if (node) itemElementsRef.current.set(id, node);
-      else itemElementsRef.current.delete(id);
-    }
-  }, []);
-
-  const findVisibleEntryId = useCallback(
-    (entryId: string) => {
-      const byId = new Map<string, { parentId?: string | null }>();
-      const stack = [...tree];
-      while (stack.length > 0) {
-        const node = stack.pop();
-        if (!node?.entry.id) continue;
-        byId.set(node.entry.id, { parentId: node.entry.parentId });
-        stack.push(...node.children);
-      }
-
-      let cursor: string | null | undefined = entryId;
-      while (cursor) {
-        if (itemElementsRef.current.has(cursor)) return cursor;
-        cursor = byId.get(cursor)?.parentId ?? null;
-      }
-      return null;
-    },
-    [tree],
-  );
-
-  const focusEntry = useCallback(
-    (entryId: string) => {
-      const visibleEntryId = findVisibleEntryId(entryId);
-      if (!visibleEntryId) return false;
-      const element = itemElementsRef.current.get(visibleEntryId);
-      if (!element) return false;
-      let scrollContainer: HTMLElement | null = null;
-      let ancestor = element.parentElement;
-      while (ancestor && ancestor !== document.body) {
-        const style = window.getComputedStyle(ancestor);
-        if (style.overflowY === "hidden" && ancestor.scrollTop !== 0) ancestor.scrollTop = 0;
-        if (
-          !scrollContainer &&
-          ["auto", "scroll"].includes(style.overflowY) &&
-          ancestor.scrollHeight > ancestor.clientHeight
-        ) {
-          scrollContainer = ancestor;
-        }
-        ancestor = ancestor.parentElement;
-      }
-      if (scrollContainer) {
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const elementRect = element.getBoundingClientRect();
-        const targetTop =
-          scrollContainer.scrollTop +
-          elementRect.top -
-          containerRect.top -
-          (containerRect.height - elementRect.height) / 2;
-        scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
-      }
-      setHighlightedEntryId(visibleEntryId);
-      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current);
-      highlightTimerRef.current = window.setTimeout(() => setHighlightedEntryId(null), 1200);
-      return true;
-    },
-    [findVisibleEntryId],
-  );
-
-  useEffect(() => {
-    const targetEntryId = pendingFocusEntryIdRef.current;
-    if (!targetEntryId) return;
-    if (focusEntry(targetEntryId)) pendingFocusEntryIdRef.current = null;
-  }, [focusEntry]);
-
-  const selectTreeEntry = useCallback(
-    (entryId: string) => {
-      setSelectedTreeEntryId(entryId);
-      focusEntry(entryId);
-    },
-    [focusEntry, setSelectedTreeEntryId],
-  );
-
-  const branchFromMessage = useCallback(
-    async (entryId: string) => {
-      if (draftText.trim() && !window.confirm("Replace the current draft with this message?")) return;
-      let timestamp = "";
-      let fallbackText = "";
-      const stack = [...tree];
-      while (stack.length > 0) {
-        const node = stack.pop();
-        if (!node) continue;
-        if (node.entry.id === entryId) {
-          timestamp = typeof node.entry.timestamp === "string" ? node.entry.timestamp : "";
-          fallbackText = extractText(node.entry.message?.content);
-          break;
-        }
-        stack.push(...node.children);
-      }
-
-      pendingFocusEntryIdRef.current = entryId;
-      setSelectedTreeEntryId(entryId);
-      setLoadingTreeEntryId(entryId);
-      setError(null);
-      try {
-        const result = (await compactSend("navigate_tree", { entryId })) as
-          | { editorText?: string; cancelled?: boolean }
-          | undefined;
-        if (result?.cancelled) {
-          pendingFocusEntryIdRef.current = null;
-          return;
-        }
-        await requestConversationSync();
-        setDraftText(result?.editorText ?? fallbackText);
-        addSystemMessage(
-          `Branching from ${formatTime(timestamp) || "selected message"}. Previous branch is preserved in this session.`,
-        );
-        requestAnimationFrame(() => {
-          const input = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
-          input?.focus();
-          input?.setSelectionRange(input.value.length, input.value.length);
-        });
-      } catch (err) {
-        pendingFocusEntryIdRef.current = null;
-        setError(err instanceof Error ? err.message : "Branch failed");
-      } finally {
-        setLoadingTreeEntryId(null);
-      }
-    },
-    [
-      addSystemMessage,
-      compactSend,
-      draftText,
-      requestConversationSync,
-      setError,
-      setLoadingTreeEntryId,
-      setSelectedTreeEntryId,
-      tree,
-    ],
-  );
-
-  const continueBranch = useCallback(
-    async (entryId: string) => {
-      setSelectedTreeEntryId(entryId);
-      setLoadingTreeEntryId(entryId);
-      setError(null);
-      try {
-        const result = (await compactSend("navigate_tree", { entryId })) as { cancelled?: boolean } | undefined;
-        if (result?.cancelled) return;
-        await requestConversationSync();
-        requestAnimationFrame(() => {
-          const input = document.querySelector<HTMLTextAreaElement>('textarea[name="message"]');
-          input?.focus();
-          input?.setSelectionRange(input.value.length, input.value.length);
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Continue branch failed");
-      } finally {
-        setLoadingTreeEntryId(null);
-      }
-    },
-    [compactSend, requestConversationSync, setError, setLoadingTreeEntryId, setSelectedTreeEntryId],
-  );
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandOpen(true);
-      } else if (event.key === "/") {
+      if (event.key === "/") {
         event.preventDefault();
         document.querySelector<HTMLTextAreaElement>('textarea[name="message"]')?.focus();
       } else if (event.key === "Escape") {
-        if (commandOpen) setCommandOpen(false);
-        else if (modelOpen) setModelOpen(false);
+        if (modelOpen) setModelOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
         else if (chatStatus === "streaming") abort();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [abort, chatStatus, commandOpen, modelOpen, settingsOpen]);
+  }, [abort, chatStatus, modelOpen, settingsOpen]);
 
   const totalCost = useMemo(
     () => items.reduce((sum, item) => sum + (item.kind === "message" ? item.cost || 0 : 0), 0),
@@ -522,40 +318,6 @@ export function App() {
   const usedContextTokens = (lastUsage?.input || 0) + (lastUsage?.cacheRead || 0);
   const contextPercent = contextWindowSize > 0 ? Math.round((usedContextTokens / contextWindowSize) * 100) : 0;
   const shouldSuggestCompaction = contextPercent >= 80;
-  const rightPanelOpen = rightPanelVisible && rightPanelTabs.length > 0;
-
-  const commandActions = [
-    {
-      label: "Compact",
-      desc: "Compact context to save tokens",
-      icon: ArchiveIcon,
-      action: compactContext,
-    },
-    {
-      label: "Export HTML",
-      desc: "Export current session as HTML",
-      icon: DownloadIcon,
-      action: exportHtml,
-    },
-    {
-      label: "Session Stats",
-      desc: "Show message and tool call counts",
-      icon: BarChart3Icon,
-      action: showSessionStats,
-    },
-    {
-      label: "Expand All Tools",
-      desc: "Open every tool card",
-      icon: PanelLeftOpenIcon,
-      action: () => toggleAllTools(true),
-    },
-    {
-      label: "Collapse All Tools",
-      desc: "Close every tool card",
-      icon: PanelLeftCloseIcon,
-      action: () => toggleAllTools(false),
-    },
-  ];
 
   return (
     <SidebarProvider
@@ -565,20 +327,12 @@ export function App() {
       style={{ "--sidebar-width": `${leftSidebarWidth}px` } as CSSProperties}
     >
       <ConversationSidebar
-        branchEnabled={advancedFeatures}
+        attachedAgentId={attachedAgentId}
         connection={connection}
-        leafId={leafId}
-        loadingEntryId={loadingTreeEntryId}
-        onBranchTree={branchFromMessage}
-        onContinueTree={continueBranch}
+        liveSessions={liveSessions}
         onOpenSettings={openSettings}
-        onRefreshTree={() => void requestConversationSync()}
         onResizeSidebar={updateLeftSidebarWidth}
-        onSelectTree={selectTreeEntry}
-        selectedEntryId={selectedTreeEntryId}
-        syncError={conversationSyncError}
-        syncing={conversationSyncing}
-        tree={tree}
+        onSwitchAgent={(agentId) => void switchAgent(agentId)}
       />
 
       <SidebarInset className="h-full min-h-0">
@@ -586,16 +340,15 @@ export function App() {
           connection={connection}
           contextPercent={contextPercent}
           contextWindowSize={contextWindowSize}
+          gitLoading={gitLoading}
+          gitStatus={gitStatus}
           isViewingOtherSession={false}
           modelLabel={modelLabel}
           onCompactContext={compactContext}
-          onCycleThinking={cycleThinking}
-          onOpenCommandPalette={() => setCommandOpen(true)}
-          onOpenModelPicker={openModelPicker}
+          onOpenGitDiff={() => void openGitDiff()}
           onReturnToLive={() => void requestConversationSync()}
           onToggleContext={() => setContextOpen((open) => !open)}
           shouldSuggestCompaction={shouldSuggestCompaction}
-          thinkingLevel={thinkingLevel}
           title={sessionName}
           totalCost={totalCost}
         />
@@ -604,6 +357,7 @@ export function App() {
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="relative min-h-0 flex-1">
               <Conversation className="h-full">
+                <ScrollToLatestOnFill filled={items.length > 0} />
                 <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-4 py-6">
                   {items.length === 0 ? (
                     <ConversationEmptyState
@@ -612,37 +366,23 @@ export function App() {
                       title="Pi Web UI"
                     />
                   ) : (
-                    items.map((item) => {
-                      const highlighted = [item.entryId, ...(item.relatedEntryIds ?? [])].includes(
-                        highlightedEntryId ?? "",
-                      );
-                      return (
-                        <div
-                          className={cn(
-                            "rounded-lg transition-[background-color,box-shadow] duration-300",
-                            highlighted && "bg-primary/10 ring-1 ring-primary/40",
-                          )}
+                    items.map((item) =>
+                      item.kind === "message" && item.role === "user" ? (
+                        <UserMessageView
+                          item={item as typeof item & { kind: "message"; role: "user" }}
                           key={item.id}
-                          ref={(node) => registerItemElement(item, node)}
-                        >
-                          {item.kind === "message" && item.role === "user" ? (
-                            <UserMessageView
-                              actionsVisible={highlighted}
-                              item={item as typeof item & { kind: "message"; role: "user" }}
-                              onBranch={advancedFeatures && item.entryId ? branchFromMessage : undefined}
-                              onCopy={(text) => copyText(text)}
-                            />
-                          ) : (
-                            <ChatItemView
-                              item={item}
-                              onCopy={(text) => copyText(text)}
-                              onToggleTool={toggleTool}
-                              showThinking={showThinking}
-                            />
-                          )}
-                        </div>
-                      );
-                    })
+                          onCopy={(text) => copyText(text)}
+                        />
+                      ) : (
+                        <ChatItemView
+                          item={item}
+                          key={item.id}
+                          onCopy={(text) => copyText(text)}
+                          onToggleTool={toggleTool}
+                          showThinking={showThinking}
+                        />
+                      ),
+                    )
                   )}
                 </ConversationContent>
                 <ConversationScrollButton />
@@ -653,15 +393,6 @@ export function App() {
                   contextWindowSize={contextWindowSize}
                   lastUsage={lastUsage}
                   onClose={() => setContextOpen(false)}
-                />
-              )}
-              {!rightPanelOpen && !contextOpen && (
-                <WorkspaceStatusFloat
-                  artifacts={artifacts}
-                  gitLoading={gitLoading}
-                  gitStatus={gitStatus}
-                  onOpenArtifact={openArtifact}
-                  onOpenGitDiff={openGitDiff}
                 />
               )}
             </div>
@@ -699,14 +430,20 @@ export function App() {
             )}
 
             <ChatInput
+              agentAttached={attachedAgentId !== null}
               archAvailable={archAvailable}
               archModeEnabled={archModeEnabled}
               chatStatus={chatStatus}
               connection={connection}
+              currentModel={currentModel}
+              modelLabel={modelLabel}
               onAbort={abort}
+              onOpenModelPicker={openModelPicker}
+              onSetThinkingLevel={(level) => void setThinkingLevelRemote(level)}
               onSubmit={submitMessage}
               onToggleArchMode={toggleArchMode}
               onValueChange={setDraftText}
+              thinkingLevel={thinkingLevel}
               value={draftText}
               viewingHistory={false}
             />
@@ -740,14 +477,12 @@ export function App() {
             authConfigured={authConfigured}
             authEnabled={authEnabled}
             autoCompaction={autoCompaction}
+            currentModel={currentModel}
             onClose={() => setSettingsOpen(false)}
             onRenameSession={renameActiveSession}
             onSetAutoCompaction={setAutoCompactionRemote}
             onSetTheme={setThemeMode}
-            onSetThinking={async (level) => {
-              await compactSend("set_thinking_level", { level });
-              setThinkingLevel(level);
-            }}
+            onSetThinking={setThinkingLevelRemote}
             onToggleAuth={toggleAuth}
             sessionName={sessionName}
             showThinking={showThinking}
@@ -756,7 +491,6 @@ export function App() {
             thinkingLevel={thinkingLevel}
           />
         )}
-        {commandOpen && <CommandPalette commands={commandActions} onClose={() => setCommandOpen(false)} />}
         {dialog && (
           <ExtensionDialogView
             dialog={dialog}

@@ -1,15 +1,17 @@
-import { ArrowLeftIcon, BrainIcon, ChevronsUpDownIcon, CommandIcon } from "lucide-react";
+import { ArrowLeftIcon, GitBranchIcon, Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import type { ConnectionState } from "../../core/types";
+import type { ConnectionState, GitStatusResult } from "../../core/types";
 import { ConnectionDot } from "./connection-dot";
 
 type AppHeaderProps = {
   title: string;
   connection: ConnectionState;
   modelLabel: string;
-  thinkingLevel: string;
   isViewingOtherSession: boolean;
+  gitStatus: GitStatusResult | null;
+  gitLoading: boolean;
   /** Context window size in tokens (0 = unknown). */
   contextWindowSize: number;
   /** Context usage percentage (0-100). */
@@ -19,39 +21,39 @@ type AppHeaderProps = {
   /** Total cost in dollars. */
   totalCost: number;
   onReturnToLive: () => void;
-  onOpenModelPicker: () => void;
-  onCycleThinking: () => void;
+  onOpenGitDiff: () => void;
   onToggleContext: () => void;
   onCompactContext: () => void;
-  onOpenCommandPalette: () => void;
 };
 
 export function AppHeader({
   title,
   connection,
   modelLabel,
-  thinkingLevel,
   isViewingOtherSession,
+  gitStatus,
+  gitLoading,
   contextWindowSize,
   contextPercent,
   shouldSuggestCompaction,
   totalCost,
   onReturnToLive,
-  onOpenModelPicker,
-  onCycleThinking,
+  onOpenGitDiff,
   onToggleContext,
   onCompactContext,
-  onOpenCommandPalette,
 }: AppHeaderProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3">
-      <div className="min-w-0">
-        <div className="truncate font-medium text-sm">{title}</div>
-        <div className="flex items-center gap-2 text-muted-foreground text-xs">
-          <ConnectionDot state={connection} />
-          <span>{connection}</span>
-          <span>/</span>
-          <span>{modelLabel}</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <SidebarTrigger aria-label="Toggle left sidebar" className="md:hidden" title="Toggle left sidebar" />
+        <div className="min-w-0">
+          <div className="truncate font-medium text-sm">{title}</div>
+          <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <ConnectionDot state={connection} />
+            <span>{connection}</span>
+            <span>/</span>
+            <span>{modelLabel}</span>
+          </div>
         </div>
       </div>
 
@@ -63,14 +65,25 @@ export function AppHeader({
       )}
 
       <div className="flex items-center gap-1">
-        <Button onClick={onOpenModelPicker} size="sm" type="button" variant="outline">
-          <ChevronsUpDownIcon className="size-4" />
-          <span className="hidden sm:inline">{modelLabel}</span>
-        </Button>
-        <Button onClick={onCycleThinking} size="sm" type="button" variant="outline">
-          <BrainIcon className="size-4" />
-          <span className="hidden sm:inline">{thinkingLevel}</span>
-        </Button>
+        {gitStatus?.isRepo && (
+          <Button
+            data-testid="header-git-status"
+            onClick={onOpenGitDiff}
+            size="sm"
+            title="Open git changes"
+            type="button"
+            variant="outline"
+          >
+            {gitLoading ? <Loader2Icon className="size-4 animate-spin" /> : <GitBranchIcon className="size-4" />}
+            <span className="hidden max-w-32 truncate sm:inline">{gitStatus.branch || "Detached HEAD"}</span>
+            {gitStatus.hasChanges && (
+              <span className="hidden text-xs sm:inline">
+                <span className="text-emerald-600">+{gitStatus.additions}</span>{" "}
+                <span className="text-destructive">-{gitStatus.deletions}</span>
+              </span>
+            )}
+          </Button>
+        )}
         {contextWindowSize > 0 && (
           <Button
             className={cn(shouldSuggestCompaction && "border-amber-500 text-amber-600")}
@@ -92,9 +105,6 @@ export function AppHeader({
             Compact
           </Button>
         )}
-        <Button onClick={onOpenCommandPalette} size="icon-sm" type="button" variant="ghost">
-          <CommandIcon className="size-4" />
-        </Button>
       </div>
     </header>
   );

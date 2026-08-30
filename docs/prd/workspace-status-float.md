@@ -1,5 +1,14 @@
 # PRD: Workspace Status Float
 
+> **Status: REMOVED**
+>
+> The floating workspace status panel was removed: its absolute positioning overlaid
+> chat content and blocked interactive controls underneath. Git status (branch,
+> additions/deletions) now lives in the app header (`header-git-status` chip in
+> `app-header.tsx`) and opens the right panel's git-diff tab. The Markdown artifacts
+> section was removed together with the Artifacts feature (see
+> `docs/prd/workspace-artifacts.md`). Kept for historical record.
+
 ## Problem Statement
 
 Pi Web UI needs a lightweight workspace surface that answers two questions without forcing the user to inspect tool cards or switch to a terminal:
@@ -25,7 +34,7 @@ Clicking the git row opens a `git-diff` tab in the Right Panel. Clicking an arti
 3. As a user, I can click the git row and inspect the full diff in the Right Panel.
 4. As a user, I can see Markdown files touched by the agent and open their content from the Right Panel.
 5. As a user, I can open Markdown artifacts written outside the git workspace when they were created by this Pi session.
-6. As a mobile user, I get a compact workspace entry that does not cover the chat surface.
+6. As a mobile user, I am not bothered by floating workspace icons covering the chat surface.
 
 ## Display Content
 
@@ -99,11 +108,7 @@ The float is an entry surface for Right Panel tabs:
 
 ## Mobile Behavior
 
-Mobile does not show the large desktop float. It uses a compact workspace button that opens the appropriate Right Panel surface:
-
-- If git diff is available, open `git-diff`.
-- Otherwise, if artifacts exist, open the most recent artifact.
-- If neither is available, keep the button disabled.
+Mobile does not show the large desktop float, and the compact floating workspace button was removed (mobile floating icon clutter). Mobile users open workspace status through the same entry points as desktop when a Right Panel surface is already open; otherwise there is no dedicated mobile float entry.
 
 The Right Panel should behave as a full-width sheet-like surface on mobile.
 

@@ -4,6 +4,8 @@
 
 Proposed
 
+> **Evolution (ADR 0012)**: the unified WebSocket envelope defined here remains the wire format, but the topology changed — the server is now a standalone hub, Pi extensions connect out to it (`/ws/extension`), and browsers attach to one agent at a time. Command routing is **attach-based**: the hub relays a browser's commands to the agent it is attached to (default: the most recent agent), rewriting relay ids to avoid collisions. Only the `attach` request itself carries an `agentId` param; `agentId`-in-request routing from the original draft was not adopted.
+
 ## Context
 
 pi-web-ui currently uses **two communication channels** between the browser frontend and the mirror-server extension:

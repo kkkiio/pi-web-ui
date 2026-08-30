@@ -1,4 +1,4 @@
-import { CheckIcon, CopyIcon, GitBranchPlusIcon } from "lucide-react";
+import { CheckIcon, CopyIcon } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -15,17 +15,14 @@ import { ImagePreviewStrip } from "./image-preview-strip";
 export function UserMessageView({
   actionsVisible,
   item,
-  onBranch,
   onCopy,
 }: {
   actionsVisible?: boolean;
   item: ChatItem & { kind: "message"; role: "user" };
-  onBranch?: (entryId: string) => Promise<void> | void;
   onCopy: (text: string) => Promise<void> | void;
 }) {
   const [copied, setCopied] = useState(false);
   const canCopy = item.text.trim().length > 0 && !item.streaming;
-  const canBranch = Boolean(onBranch && item.entryId && !item.streaming);
 
   const copyMessage = async () => {
     if (!canCopy) return;
@@ -48,14 +45,6 @@ export function UserMessageView({
             {copied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
           </MessageAction>
         )}
-        <MessageAction
-          disabled={!canBranch}
-          label="Branch from message"
-          onClick={() => item.entryId && onBranch?.(item.entryId)}
-          tooltip={canBranch ? "Branch from message" : "Run /webui in terminal to enable branching"}
-        >
-          <GitBranchPlusIcon className="size-4" />
-        </MessageAction>
       </MessageActions>
     </Message>
   );

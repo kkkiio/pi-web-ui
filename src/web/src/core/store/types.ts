@@ -5,20 +5,18 @@ import type {
   ChatSubmitStatus,
   ConnectionState,
   ExtensionDialog,
-  FileContentResult,
   GitDiffResult,
   GitStatusResult,
   ModelInfo,
   PromptCommand,
   RightPanelTab,
   RpcEvent,
-  SessionTreeNode,
   StateSyncPayload,
   SystemTone,
   ThemeMode,
   Usage,
-  WorkspaceArtifact,
 } from "../types";
+import type { HubSlice } from "./hub-slice";
 
 export type ConnectionSlice = {
   client: PiClient | null;
@@ -36,10 +34,6 @@ export type ConnectionSlice = {
 export type SessionSlice = {
   items: ChatItem[];
   chatStatus: ChatSubmitStatus;
-  tree: SessionTreeNode[];
-  leafId: string | null;
-  selectedTreeEntryId: string | null;
-  loadingTreeEntryId: string | null;
   conversationSyncing: boolean;
   conversationSyncError: string | null;
   lastUsage: Usage | null;
@@ -49,8 +43,6 @@ export type SessionSlice = {
   requestConversationSync: (options?: { debounce?: boolean }) => Promise<void> | void;
   clearConversationTimers: () => void;
   setChatStatus: (status: ChatSubmitStatus) => void;
-  setSelectedTreeEntryId: (entryId: string | null) => void;
-  setLoadingTreeEntryId: (entryId: string | null) => void;
   setLastUsage: (usage: Usage | null) => void;
   setContextWindowSize: (size: number) => void;
   sendPrompt: (command: PromptCommand) => Promise<void>;
@@ -91,7 +83,6 @@ export type SettingsSlice = {
   setArchModeEnabled: (enabled: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setShowThinking: (show: boolean) => void;
-  cycleThinking: () => Promise<void>;
   selectModel: (model: ModelInfo) => Promise<void>;
   setAutoCompactionRemote: (enabled: boolean) => Promise<void>;
   toggleAuth: () => Promise<void>;
@@ -102,9 +93,6 @@ export type SettingsSlice = {
 export type WorkspaceSlice = {
   gitStatus: GitStatusResult | null;
   gitLoading: boolean;
-  artifacts: WorkspaceArtifact[];
-  setArtifacts: (artifacts: WorkspaceArtifact[]) => void;
-  mergeArtifactsFromToolEvent: (event: RpcEvent) => void;
   refreshGitStatus: () => Promise<void>;
   requestGitStatusRefresh: (options?: { debounce?: boolean }) => void;
   clearWorkspaceTimers: () => void;
@@ -117,7 +105,6 @@ export type RightPanelSlice = {
   rightPanelHasOpened: boolean;
   upsertRightPanelTab: (tab: RightPanelTab) => void;
   openGitDiff: () => Promise<void>;
-  openArtifact: (artifact: WorkspaceArtifact) => Promise<void>;
   refreshRightPanelTab: (tab: RightPanelTab) => void;
   closeRightPanelTab: (id: string) => void;
   setActiveRightPanelTabId: (id: string | null) => void;
@@ -135,7 +122,8 @@ export type PiWebUiStore = ConnectionSlice &
   SettingsSlice &
   WorkspaceSlice &
   RightPanelSlice &
-  DialogSlice;
+  DialogSlice &
+  HubSlice;
 
 export type StoreSlice<T> = StateCreator<PiWebUiStore, [], [], T>;
 
@@ -159,4 +147,4 @@ export type SessionStatsResult = {
   tokens?: { input?: number; total?: number };
 };
 
-export type { FileContentResult, GitDiffResult };
+export type { GitDiffResult };
