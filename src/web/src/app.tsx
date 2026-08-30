@@ -1,6 +1,7 @@
 import { TerminalIcon, XIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useStickToBottomContext } from "use-stick-to-bottom";
 import {
   Conversation,
   ConversationContent,
@@ -26,6 +27,18 @@ import { PiClient } from "./core/pi-client";
 import { usePiWebUiStore } from "./core/store";
 import { dispatchPiEvent } from "./core/store/event-dispatch";
 import type { PromptCommand } from "./core/types";
+
+/** Jump to the latest message when a session's content first fills in
+ * (attach / session switch) — StickToBottom's `initial` only covers the
+ * very first mount, and content arrives asynchronously via state_sync. */
+function ScrollToLatestOnFill({ filled }: { filled: boolean }) {
+  const { scrollToBottom } = useStickToBottomContext();
+  useEffect(() => {
+    if (!filled) return;
+    void scrollToBottom({ animation: "instant", wait: 100, ignoreEscapes: true });
+  }, [filled, scrollToBottom]);
+  return null;
+}
 
 const DEFAULT_LEFT_SIDEBAR_WIDTH = 320;
 const MIN_LEFT_SIDEBAR_WIDTH = 240;
@@ -344,6 +357,7 @@ export function App() {
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="relative min-h-0 flex-1">
               <Conversation className="h-full">
+                <ScrollToLatestOnFill filled={items.length > 0} />
                 <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-4 py-6">
                   {items.length === 0 ? (
                     <ConversationEmptyState
