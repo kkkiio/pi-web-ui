@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
+import { ImagePreviewStrip } from "./image-preview-strip";
 
 export function ChatItemView({
   item,
@@ -45,7 +46,7 @@ export function ChatItemView({
 
   if (item.kind === "tool") {
     const expandable = isToolExpandable(item);
-    const open = expandable ? (item.open ?? false) : false;
+    const open = expandable ? (item.open ?? Boolean(item.images?.length || item.state === "output-error")) : false;
 
     return (
       <div className="w-full max-w-[95%]">
@@ -61,6 +62,12 @@ export function ChatItemView({
             <ToolContent>
               <ToolInput input={item.input as never} />
               <ToolOutput errorText={item.errorText} output={item.output as never} />
+              {item.images && item.images.length > 0 && (
+                <div className="space-y-1.5">
+                  <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Images</h4>
+                  <ImagePreviewStrip images={item.images} readonly />
+                </div>
+              )}
             </ToolContent>
           )}
         </Tool>
@@ -84,19 +91,17 @@ export function ChatItemView({
       <MessageContent
         className={cn(
           "w-full",
-          isActivity && "gap-1 text-muted-foreground",
+          isActivity && "gap-1",
           item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]',
         )}
       >
         {showThinking && item.reasoning && (
-          <Reasoning className={cn(isActivity && "mb-1")} isStreaming={Boolean(item.streaming)}>
-            <ReasoningTrigger className={cn(isActivity && "text-xs")} />
-            <ReasoningContent className={cn(isActivity && "mt-1 text-xs")}>{item.reasoning}</ReasoningContent>
+          <Reasoning className="mb-1" isStreaming={Boolean(item.streaming)}>
+            <ReasoningTrigger className="text-xs" />
+            <ReasoningContent className="mt-1 text-xs">{item.reasoning}</ReasoningContent>
           </Reasoning>
         )}
-        <MessageResponse
-          className={cn(isActivity && "text-muted-foreground [&_ol]:my-1 [&_p]:my-0 [&_pre]:my-1 [&_ul]:my-1")}
-        >
+        <MessageResponse className={cn(isActivity && "[&_ol]:my-1 [&_p]:my-0 [&_pre]:my-1 [&_ul]:my-1")}>
           {item.text}
         </MessageResponse>
       </MessageContent>

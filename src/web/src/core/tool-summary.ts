@@ -5,6 +5,7 @@ type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 const EDIT_TOOL_NAMES = new Set(["edit", "write", "apply_patch", "patch", "replace", "create"]);
 
 export function isToolExpandable(tool: ToolItem): boolean {
+  if (tool.images?.length) return true;
   return tool.name !== "read" || tool.state === "output-error" || Boolean(tool.errorText);
 }
 

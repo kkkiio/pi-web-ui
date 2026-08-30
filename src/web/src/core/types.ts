@@ -41,8 +41,11 @@ export type ChatItem =
       input: unknown;
       output?: unknown;
       errorText?: string;
+      images?: PromptImage[];
       state: ToolState;
       open?: boolean;
+      /** Set once the user manually expands/collapses; disables auto-collapse. */
+      userToggled?: boolean;
       entryId?: string;
       relatedEntryIds?: string[];
     }
@@ -120,6 +123,9 @@ export type ModelInfo = {
   id: string;
   provider?: string;
   contextWindow?: number;
+  /** Raw pi-ai model fields, forwarded unchanged by the extension (ADR 0002). */
+  reasoning?: boolean;
+  thinkingLevelMap?: Record<string, string | null | undefined>;
 };
 
 export type WsRequest = {
@@ -195,45 +201,17 @@ export type GitDiffResult = {
   diff: string;
 };
 
-export type FileContentResult = {
-  path: string;
-  name: string;
-  size: number;
-  content: string;
-};
-
-export type WorkspaceArtifact = {
-  id: string;
-  path: string;
-  name: string;
-  directory: string;
-  tool: "edit" | "write";
+export type RightPanelTab = {
+  id: "git-diff";
+  kind: "git-diff";
+  title: string;
+  branch: string | null;
+  diff?: string;
+  isRepo?: boolean;
+  loading?: boolean;
+  error?: string;
   updatedAt: number;
 };
-
-export type RightPanelTab =
-  | {
-      id: "git-diff";
-      kind: "git-diff";
-      title: string;
-      branch: string | null;
-      diff?: string;
-      isRepo?: boolean;
-      loading?: boolean;
-      error?: string;
-      updatedAt: number;
-    }
-  | {
-      id: `artifact:${string}`;
-      kind: "artifact-file";
-      title: string;
-      path: string;
-      content?: string;
-      size?: number;
-      loading?: boolean;
-      error?: string;
-      updatedAt: number;
-    };
 
 export type ExtensionDialog = {
   id: string;

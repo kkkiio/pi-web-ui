@@ -68,6 +68,7 @@ export function syncToItems(
         } else {
           tool.state = "output-available";
           tool.output = formatToolOutput(message.content);
+          tool.images = extractToolResultImages(message.content);
         }
       }
     }
@@ -115,6 +116,20 @@ export function extractImages(content: PiMessage["content"]): PromptImage[] {
       mimeType: block.source?.media_type || block.mimeType || "image/png",
     }))
     .filter((image) => image.data);
+}
+
+export function extractToolResultImages(result: unknown): PromptImage[] {
+  if (!result) return [];
+  if (Array.isArray(result)) return extractImages(result as PiMessage["content"]);
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "content" in result &&
+    Array.isArray((result as { content?: unknown }).content)
+  ) {
+    return extractImages((result as { content: unknown[] }).content as PiMessage["content"]);
+  }
+  return [];
 }
 
 export function extractToolCalls(content: PiMessage["content"]) {
@@ -217,7 +232,10 @@ export function formatToolOutput(result: unknown): string {
   if (!result) return "";
 
   if (Array.isArray(result)) {
-    return result.map((block) => (isTextBlock(block) ? block.text || "" : JSON.stringify(block, null, 2))).join("\n");
+    return result
+      .filter((block) => !isImageBlock(block))
+      .map((block) => (isTextBlock(block) ? block.text || "" : JSON.stringify(block, null, 2)))
+      .join("\n");
   }
 
   if (
@@ -235,5 +253,11 @@ export function formatToolOutput(result: unknown): string {
 function isTextBlock(value: unknown): value is { type: "text"; text?: string } {
   return (
     typeof value === "object" && value !== null && "type" in value && (value as { type?: unknown }).type === "text"
+  );
+}
+
+function isImageBlock(value: unknown): boolean {
+  return (
+    typeof value === "object" && value !== null && "type" in value && (value as { type?: unknown }).type === "image"
   );
 }
