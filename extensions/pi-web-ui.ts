@@ -9,9 +9,12 @@
  * - Reconnects with backoff; the TUI is unaffected when the hub is down
  * - Updates its session identity in place after session replacement
  *
- * Connect manually with /webui:connect [url], or automatically by setting
- * PI_WEB_UI_HUB (e.g. ws://127.0.0.1:3001/ws/extension) or the "hub" key in
- * the pi-web-ui section of ~/.pi/agent/settings.json.
+ * Connect with /webui:connect [url]. Connection is manual only: nothing
+ * talks to the hub until the command runs (or a rpc-injected prompt of it).
+ * A default target can be set with PI_WEB_UI_HUB (e.g. ws://127.0.0.1:3001/ws/extension)
+ * or the "hub" key in the pi-web-ui section of ~/.pi/agent/settings.json;
+ * /webui:connect without an explicit URL uses it. PI_WEB_UI_HUB_PORT derives
+ * a default target (ws://127.0.0.1:<port>/ws/extension) at lower priority.
  */
 
 import { spawnSync } from "node:child_process";
@@ -25,7 +28,6 @@ import { PROTOCOL_VERSION } from "../src/protocol/index";
 
 type SettingsData = {
   hub?: string;
-  disabled?: boolean;
 };
 
 type BrowserImage = {
@@ -89,13 +91,6 @@ type GitDiffResult = {
   diff: string;
 };
 
-type FileContentResult = {
-  path: string;
-  name: string;
-  size: number;
-  content: string;
-};
-
 type ExtensionAPIWithEvents = ExtensionAPI & {
   events?: {
     on?: (eventType: string, listener: (payload: unknown) => void) => void;
@@ -113,12 +108,10 @@ const AGENT_DIR = path.resolve(
 const DEFAULT_HUB_URL = "ws://127.0.0.1:3001/ws/extension";
 const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
 const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
-const ARTIFACT_TOOL_NAMES = new Set(["edit", "write"]);
-const MARKDOWN_EXTENSIONS = [".md", ".mdx", ".markdown"];
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
-function loadSettings(): { hubUrl: string | null; disabled: boolean } {
+function loadSettings(): { hubUrl: string | null } {
   let settings: SettingsData = {};
   try {
     const settingsPath = path.join(AGENT_DIR, "settings.json");
@@ -129,10 +122,12 @@ function loadSettings(): { hubUrl: string | null; disabled: boolean } {
         }
       )["pi-web-ui"] || {};
   } catch {}
+  // Derive a default target from PI_WEB_UI_HUB_PORT when no explicit hub URL
+  // is configured (env PI_WEB_UI_HUB > settings.hub > PI_WEB_UI_HUB_PORT).
+  const port = process.env.PI_WEB_UI_HUB_PORT;
+  const portUrl = port && /^\d+$/.test(port) ? `ws://127.0.0.1:${port}/ws/extension` : null;
   return {
-    hubUrl: process.env.PI_WEB_UI_HUB || settings.hub || null,
-    disabled:
-      process.env.PI_WEB_UI_DISABLED === "1" || process.env.PI_WEB_UI_DISABLED === "true" || settings.disabled === true,
+    hubUrl: process.env.PI_WEB_UI_HUB || settings.hub || portUrl || null,
   };
 }
 
@@ -151,7 +146,6 @@ export default function (pi: ExtensionAPI) {
   let archExtensionPresent = false;
   let advancedFeaturesEnabled = false;
   let latestExecuteCtx: ExtensionCommandContext | null = null;
-  const liveArtifactPaths = new Set<string>();
 
   // ═══════════════════════════════════════
   // Hub connection
@@ -290,10 +284,6 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("webui:connect", {
     description: "Connect this Pi session to a pi-web-ui hub",
     handler: async (args, ctx) => {
-      if (settings.disabled) {
-        ctx.ui.notify("pi-web-ui is disabled (PI_WEB_UI_DISABLED)", "warning");
-        return;
-      }
       latestCtx = ctx;
       // Capture full ExtensionCommandContext for session-control methods
       // (navigateTree, fork, etc.). Cleared on session_start/session_shutdown;
@@ -308,7 +298,8 @@ export default function (pi: ExtensionAPI) {
         event: "webui_state",
         payload: { advancedFeatures: true, archAvailable: archExtensionPresent },
       });
-      ctx.ui.notify(`pi-web-ui connecting to ${url}`, "info");
+      // No notify: connection state is presented via the status area only
+      // (updateHubStatus shows the url or "reconnecting…").
     },
   });
 
@@ -320,7 +311,8 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       disconnectFromHub();
-      ctx.ui.notify("pi-web-ui disconnected", "info");
+      // No notify on disconnect: the status area clearing is the feedback
+      // (updateHubStatus clears when wantConnection turns false).
     },
   });
 
@@ -349,32 +341,6 @@ export default function (pi: ExtensionAPI) {
     pi.on(eventType as Parameters<ExtensionAPI["on"]>[0], async (event: unknown, ctx: ExtensionContext) => {
       latestCtx = ctx;
       const eventPayload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
-
-      if (eventType === "tool_execution_end" && eventPayload.isError !== true) {
-        const toolName = typeof eventPayload.toolName === "string" ? eventPayload.toolName.toLowerCase() : "";
-        const args =
-          eventPayload.args && typeof eventPayload.args === "object" && !Array.isArray(eventPayload.args)
-            ? (eventPayload.args as Record<string, unknown>)
-            : {};
-        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
-          .map((key) => args[key])
-          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
-        const normalizedPath = rawPath
-          ?.trim()
-          .replace(/^file:\/\//, "")
-          .replace(/\\/g, "/");
-        const lowerPath = normalizedPath?.toLowerCase() || "";
-        if (
-          ARTIFACT_TOOL_NAMES.has(toolName) &&
-          MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))
-        ) {
-          liveArtifactPaths.add(
-            path.isAbsolute(normalizedPath || "")
-              ? path.resolve(normalizedPath || "")
-              : path.resolve(workspaceDir(), normalizedPath || ""),
-          );
-        }
-      }
 
       // Forward event to the hub (which fans out to attached browsers)
       sendToHub({
@@ -416,7 +382,6 @@ export default function (pi: ExtensionAPI) {
     latestCtx = ctx;
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
-    liveArtifactPaths.clear();
     sendToHub({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
     turnCount = 0;
     titleSet = false;
@@ -425,10 +390,10 @@ export default function (pi: ExtensionAPI) {
     // Session replacement: update identity in place on the same connection
     if (isConnected()) {
       sendToHub({ type: "session_update", agent: buildAgentInfo() });
-    } else if (settings.hubUrl && !settings.disabled && !wantConnection) {
-      // Auto-connect when a hub URL is configured via env/settings
-      connectToHub(settings.hubUrl);
     }
+    // No auto-connect here: connecting to the hub is manual-only, triggered
+    // exclusively by /webui:connect (env/settings only provide its default
+    // target URL).
   });
 
   pi.on("turn_start", async (_event, _ctx) => {
@@ -740,20 +705,6 @@ export default function (pi: ExtensionAPI) {
           break;
         }
 
-        case "cycle_thinking_level": {
-          const levels = ["off", "minimal", "low", "medium", "high"];
-          const current = pi.getThinkingLevel();
-          const next = levels[(levels.indexOf(current) + 1) % levels.length] as
-            | "off"
-            | "minimal"
-            | "low"
-            | "medium"
-            | "high";
-          pi.setThinkingLevel(next);
-          sendToHub(success({ level: next }));
-          break;
-        }
-
         case "set_thinking_level": {
           pi.setThinkingLevel(params.level as Parameters<typeof pi.setThinkingLevel>[0]);
           sendToHub(success());
@@ -877,16 +828,6 @@ export default function (pi: ExtensionAPI) {
         case "get_git_diff": {
           const filePath = typeof params.path === "string" ? params.path : undefined;
           sendToHub(success(getGitDiff(ctx, filePath)));
-          break;
-        }
-
-        case "get_file_content": {
-          const filePath = typeof params.path === "string" ? params.path : "";
-          if (!filePath) {
-            sendToHub(error("path required"));
-            break;
-          }
-          sendToHub(success(getFileContent(ctx, filePath)));
           break;
         }
 
@@ -1121,146 +1062,33 @@ export default function (pi: ExtensionAPI) {
     const staged = (outputs.get("staged") || "").trimEnd();
     const unstaged = (outputs.get("unstaged") || "").trimEnd();
 
-    if (staged) parts.push(`## Staged changes\n\n${staged}`);
-    if (unstaged) parts.push(`## Working tree changes\n\n${unstaged}`);
-    if (untrackedPaths.length) {
-      const untrackedDiffs: string[] = [];
-      for (const relativePath of untrackedPaths) {
-        const absolutePath = path.resolve(gitRoot, relativePath);
-        try {
-          const stat = fs.statSync(absolutePath);
-          if (!stat.isFile()) continue;
-          if (stat.size > MAX_FILE_CONTENT_BYTES) {
-            untrackedDiffs.push(`diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n[large file]`);
-            continue;
-          }
-          const content = fs.readFileSync(absolutePath, "utf8");
-          if (content.includes("\0")) {
-            untrackedDiffs.push(`diff --git a/${relativePath} b/${relativePath}\nnew file mode 100644\n[binary file]`);
-            continue;
-          }
-          const lines = content.split(/\r?\n/);
-          if (lines.at(-1) === "") lines.pop();
-          untrackedDiffs.push(
-            [
-              `diff --git a/${relativePath} b/${relativePath}`,
-              "new file mode 100644",
-              "--- /dev/null",
-              `+++ b/${relativePath}`,
-              `@@ -0,0 +1,${lines.length} @@`,
-              ...lines.map((line) => `+${line}`),
-            ].join("\n"),
-          );
-        } catch {}
-      }
-      if (untrackedDiffs.length) parts.push(`## Untracked files\n\n${untrackedDiffs.join("\n\n")}`);
+    // Untracked files: `git diff --no-index /dev/null <path>` produces standard
+    // new-file diffs (text) and standard "Binary files ... differ" notices
+    // (binary), with no hand-assembled diff text. Exit code 1 means
+    // "differences found", not an error. Large files are skipped.
+    const untrackedDiffs: string[] = [];
+    for (const relativePath of untrackedPaths) {
+      const absolutePath = path.resolve(gitRoot, relativePath);
+      try {
+        const stat = fs.statSync(absolutePath);
+        if (!stat.isFile() || stat.size > MAX_FILE_CONTENT_BYTES) continue;
+        const result = spawnSync("git", ["diff", "--no-index", "--", "/dev/null", relativePath], gitOptions);
+        if (result.error) continue;
+        // exit 0 = identical (shouldn't happen for /dev/null), 1 = differences
+        if (result.status !== 0 && result.status !== 1) continue;
+        const text = typeof result.stdout === "string" ? result.stdout.trimEnd() : "";
+        if (text) untrackedDiffs.push(text);
+      } catch {}
     }
+
+    if (staged) parts.push(staged);
+    if (unstaged) parts.push(unstaged);
+    parts.push(...untrackedDiffs);
 
     return {
       isRepo: true,
       branch: (outputs.get("branch") || outputs.get("head") || "").trim() || null,
       diff: parts.join("\n\n"),
-    };
-  }
-
-  function getFileContent(ctx: ExtensionContext | null, requestedPath: string): FileContentResult {
-    let workspace = path.resolve(process.cwd());
-    let entries: SessionEntry[] = [];
-    if (ctx) {
-      try {
-        entries = ctx.sessionManager.getEntries() as SessionEntry[];
-        const sessionEntry = entries.find((entry) => entry.type === "session");
-        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspace = path.resolve(sessionEntry.cwd);
-      } catch {}
-    }
-
-    const normalizedRequest = requestedPath
-      .trim()
-      .replace(/^file:\/\//, "")
-      .replace(/\\/g, "/");
-    const absolutePath = path.isAbsolute(normalizedRequest)
-      ? path.resolve(normalizedRequest)
-      : path.resolve(workspace, normalizedRequest);
-    const insideWorkspace = absolutePath === workspace || absolutePath.startsWith(`${workspace}${path.sep}`);
-    const artifactPaths = new Set(liveArtifactPaths);
-    const pendingToolCalls = new Map<string, string>();
-
-    for (const entry of entries) {
-      const message = entry.message;
-      if (message?.role === "assistant" && Array.isArray(message.content)) {
-        for (const block of message.content) {
-          if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-          const record = block as Record<string, unknown>;
-          if (record.type !== "toolCall" || typeof record.id !== "string") continue;
-          const tool = typeof record.name === "string" ? record.name.toLowerCase() : "";
-          const args =
-            record.arguments && typeof record.arguments === "object"
-              ? (record.arguments as Record<string, unknown>)
-              : {};
-          const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
-            .map((key) => args[key])
-            .find((value): value is string => typeof value === "string" && value.trim().length > 0);
-          const normalizedPath = rawPath
-            ?.trim()
-            .replace(/^file:\/\//, "")
-            .replace(/\\/g, "/");
-          const lowerPath = normalizedPath?.toLowerCase() || "";
-          if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
-            pendingToolCalls.set(
-              record.id,
-              path.isAbsolute(normalizedPath || "")
-                ? path.resolve(normalizedPath || "")
-                : path.resolve(workspace, normalizedPath || ""),
-            );
-          }
-        }
-      }
-
-      if (message?.role === "toolResult" && typeof message.toolCallId === "string" && message.isError !== true) {
-        const artifactPath = pendingToolCalls.get(message.toolCallId);
-        if (artifactPath) artifactPaths.add(artifactPath);
-      }
-
-      const entryRecord = entry as SessionEntry & { toolName?: unknown; args?: unknown; isError?: unknown };
-      if (entry.type === "tool_execution_end" && entryRecord.isError !== true) {
-        const tool = typeof entryRecord.toolName === "string" ? entryRecord.toolName.toLowerCase() : "";
-        const args =
-          entryRecord.args && typeof entryRecord.args === "object" && !Array.isArray(entryRecord.args)
-            ? (entryRecord.args as Record<string, unknown>)
-            : {};
-        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
-          .map((key) => args[key])
-          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
-        const normalizedPath = rawPath
-          ?.trim()
-          .replace(/^file:\/\//, "")
-          .replace(/\\/g, "/");
-        const lowerPath = normalizedPath?.toLowerCase() || "";
-        if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
-          artifactPaths.add(
-            path.isAbsolute(normalizedPath || "")
-              ? path.resolve(normalizedPath || "")
-              : path.resolve(workspace, normalizedPath || ""),
-          );
-        }
-      }
-    }
-
-    if (!insideWorkspace && !artifactPaths.has(absolutePath)) {
-      throw new Error("file is not a session artifact");
-    }
-
-    const stat = fs.statSync(absolutePath);
-    if (!stat.isFile()) throw new Error("Not a file");
-    if (stat.size > MAX_FILE_CONTENT_BYTES) throw new Error("File is too large to preview");
-    const content = fs.readFileSync(absolutePath, "utf8");
-    if (content.includes("\0")) throw new Error("Binary file cannot be previewed");
-    const relativePath = path.relative(workspace, absolutePath).replace(/\\/g, "/");
-    return {
-      path: relativePath || path.basename(absolutePath),
-      name: path.basename(absolutePath),
-      size: stat.size,
-      content,
     };
   }
 
@@ -1306,7 +1134,6 @@ export default function (pi: ExtensionAPI) {
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
     latestCtx = null;
-    liveArtifactPaths.clear();
     disconnectFromHub();
   });
 }

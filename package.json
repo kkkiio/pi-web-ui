@@ -26,6 +26,7 @@
     "pi-web-ui": "./dist-hub/hub/cli.js"
   },
   "scripts": {
+    "dev": "concurrently -k -n hub,web \"npm run hub\" \"npm run dev:web\"",
     "dev:web": "vite --host 127.0.0.1",
     "build:web": "tsc --noEmit && vite build",
     "build:hub": "tsc -p tsconfig.hub.json",
@@ -42,7 +43,7 @@
     "prepack": "npm run build:web && npm run build:hub"
   },
   "dependencies": {
-    "@git-diff-view/react": "^0.1.6",
+    "react-diff-view": "^3.3.3",
     "ws": "^8.16.0",
     "zustand": "^5.0.14"
   },
@@ -68,6 +69,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "concurrently": "^10.0.5",
     "lucide-react": "^1.16.0",
     "motion": "^12.40.0",
     "nanoid": "^5.1.11",
