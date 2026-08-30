@@ -27,7 +27,7 @@ Per `docs/adr/0002-web-ui-extension-event-protocol.md`: the extension forwards e
 
 #### `$webui-visual-check`
 
-Run `$webui-visual-check` after UI, WebSocket-driven visible state, session sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
+Run `$webui-visual-check` after UI, WebSocket-driven visible state, session sidebar, app header, Right Panel, mobile sheet, or chat input toolbar changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
 
 The skill drives a real browser via the `agent-browser` CLI (`npm install -g agent-browser`, then `agent-browser install` once). It does not depend on any host-specific built-in browser tool.
 
@@ -57,9 +57,9 @@ The skill drives a real browser via the `agent-browser` CLI (`npm install -g age
 │   │   ├── columns-layout.md        # Multi-column layout design
 │   │   ├── branch-message.md        # SUPERSEDED — branch entry removed with tree
 │   │   ├── left-sidebar.md          # Left sidebar design
-│   │   ├── right-panel.md           # Tabbed right panel design
-│   │   ├── workspace-artifacts.md   # Markdown artifact detection/display
-│   │   └── workspace-status-float.md # Git status + artifacts floating indicator
+│   │   ├── right-panel.md           # Tabbed right panel design (git-diff only; artifact tabs removed)
+│   │   ├── workspace-artifacts.md   # REMOVED — artifacts feature deleted
+│   │   └── workspace-status-float.md # REMOVED — float deleted; git status lives in the header
 │   └── images/                  # Screenshots for README
 ├── extensions/
 │   └── pi-web-ui.ts           # Main extension: connect-out client to the hub (events + commands)
@@ -88,7 +88,6 @@ The skill drives a real browser via the `agent-browser` CLI (`npm install -g age
 │   │   │   ├── types.ts         # TypeScript types for WebSocket protocol
 │   │   │   ├── chat-conversion.ts # Converts raw events → UI message models
 │   │   │   ├── format.ts        # Display formatting utilities
-│   │   │   ├── workspace-artifacts.ts # Markdown artifact recovery from tool events/session entries
 │   │   │   ├── tool-summary.ts  # Tool call summary rendering
 │   │   │   ├── constants.ts     # Shared constants
 │   │   │   └── store/           # Zustand slices + event dispatcher
@@ -101,7 +100,6 @@ The skill drives a real browser via the `agent-browser` CLI (`npm install -g age
 │   │       │   ├── settings-panel.tsx
 │   │       │   ├── context-popover.tsx
 │   │       │   ├── right-panel.tsx
-│   │       │   ├── workspace-status-float.tsx
 │   │       │   ├── user-message-view.tsx # User message view
 │   │       │   └── ...
 │   ├── components/
@@ -171,13 +169,13 @@ npm run hub         # build:hub + start the hub on 127.0.0.1:3001
 
 Then connect the Pi session with `/webui:connect` (or `PI_WEB_UI_HUB=ws://127.0.0.1:3001/ws/extension pi`).
 
-For live frontend editing without rebuilding:
+For live frontend editing without rebuilding, run the hub and the Vite dev server side by side:
 
 ```bash
-npm run dev:web
+just dev-hub   # = npm run dev: concurrently runs `npm run hub` + `npm run dev:web`
 ```
 
-Open `http://localhost:4444`. Vite serves the React UI and proxies `/api` and `/ws` to the hub on `localhost:3001`. The dev proxy makes `wsUrl()` work unchanged in dev.
+Open `http://localhost:4444`. Vite serves the React UI and proxies `/api` and `/ws` to the hub. Both sides resolve the hub port from `PI_WEB_UI_HUB_PORT` (default 3001), so the proxy never drifts from the hub. Ctrl-C stops both processes. If the hub is already running elsewhere, `npm run dev:web` alone also works. The dev proxy makes `wsUrl()` work unchanged in dev.
 
 #### Build for production
 
@@ -226,10 +224,10 @@ E2E rules:
 - Put E2E tests under `e2e/`.
 - Use Playwright-BDD feature files for product-level flows.
 - Start a real `pi --mode rpc` process for each scenario, plus a hub process.
-- Load the local `extensions/pi-web-ui.ts` extension normally, auto-connected via `PI_WEB_UI_HUB`.
+- Load the local `extensions/pi-web-ui.ts` extension normally; the harness injects `/webui:connect` over rpc stdin to connect it to the hub (`PI_WEB_UI_HUB` supplies the default target only). Connection is manual by design — the extension never connects on its own.
 - Use built `dist` assets served by the hub in CI.
 - Use a faux LLM provider only to make model responses deterministic.
-- Use real Pi `write` / `edit` tools when testing Markdown artifacts.
+- Use real Pi `write` / `edit` tools when testing file-producing flows.
 - Use real git repositories in temp workspaces when testing git status or diff.
 - Do not mock `/ws`, set React state directly, or call component props in E2E.
 
@@ -247,7 +245,9 @@ npm run e2e:gen
 
 GitHub Actions runs E2E on every PR after `npm run build:web`. Local default checks do not run E2E unless the developer explicitly invokes the E2E command or is changing E2E harness/tests.
 
-Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, session sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E. The skill uses the `agent-browser` CLI for screenshots.
+**Local test time budget**: do not run test commands expected to take longer than 30 seconds locally unless they are necessary for the change at hand (for example, running `npm run e2e` when changing the E2E harness, fixtures, or product flows it covers). Prefer fast targeted checks — `just check`, `npx tsc --noEmit`, single-feature Playwright runs (`npx playwright test -c e2e/playwright.config.ts <feature-name>`) — and let CI run the long suites.
+
+Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, session sidebar, app header, Right Panel, mobile sheet, or chat input toolbar changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E. The skill uses the `agent-browser` CLI for screenshots.
 
 Run before committing:
 
@@ -297,14 +297,12 @@ When adding a new browser → extension command:
 4. `src/web/src/core/store/*-slice.ts` — add an intent-level store action that calls `send(...)`
 5. React components — call the store action instead of invoking transport directly
 
-When changing Workspace Status Float, Right Panel, or Artifacts:
+When changing the Right Panel or header git status:
 
-1. `docs/prd/workspace-status-float.md` — update floating summary and entry behavior
-2. `docs/prd/right-panel.md` — update tab, toggle, and panel lifecycle behavior
-3. `docs/prd/workspace-artifacts.md` — update Markdown artifact source and display rules
-4. `docs/adr/0008-unified-websocket-protocol.md` — update WebSocket methods if data access changes
-5. `src/web/src/core/store/workspace-slice.ts` and `src/web/src/core/store/right-panel-slice.ts` — update shared state and tab lifecycle
-6. `src/web/src/components/pi-web-ui/workspace-status-float.tsx` and related right-panel components — keep UI behavior aligned with the PRDs
+1. `docs/prd/right-panel.md` — update tab, toggle, and panel lifecycle behavior
+2. `docs/adr/0008-unified-websocket-protocol.md` — update WebSocket methods if data access changes
+3. `src/web/src/core/store/workspace-slice.ts` and `src/web/src/core/store/right-panel-slice.ts` — update shared state and tab lifecycle
+4. `src/web/src/components/pi-web-ui/app-header.tsx` and `right-panel.tsx` — keep UI behavior aligned with the PRDs
 
 When changing real Pi E2E behavior:
 

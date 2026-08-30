@@ -21,6 +21,13 @@ If `agent-browser` is missing, install it or stop and ask the user — do not fa
 
 ## Core Loop
 
+**Prefer fixed scenario environments when one matches what you need to see.**
+`just visual <name>` (see `e2e/visual/README.md` and the `SCENARIOS` registry in
+`e2e/visual/serve.mjs`) starts a real hub + real pi session driven into a known
+state and prints a URL — no ad-hoc state construction. If none of the fixed
+scenarios covers your change, build the state manually as below and consider
+adding a new scenario afterwards.
+
 Work in a single isolated session and drive it interactively:
 
 ```bash
