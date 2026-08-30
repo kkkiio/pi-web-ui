@@ -1,12 +1,4 @@
-import {
-  ArchiveIcon,
-  BarChart3Icon,
-  DownloadIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  TerminalIcon,
-  XIcon,
-} from "lucide-react";
+import { TerminalIcon, XIcon } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -20,7 +12,6 @@ import {
   AppHeader,
   ChatInput,
   ChatItemView,
-  CommandPalette,
   ContextPopover,
   ConversationSidebar,
   ExtensionDialogView,
@@ -28,10 +19,9 @@ import {
   RightPanel,
   SettingsPanel,
   UserMessageView,
-  WorkspaceStatusFloat,
 } from "./components/pi-web-ui";
 import { processPromptFiles } from "./core/chat-conversion";
-import { copyText, formatTokens, isEditableTarget } from "./core/format";
+import { copyText, isEditableTarget } from "./core/format";
 import { PiClient } from "./core/pi-client";
 import { usePiWebUiStore } from "./core/store";
 import { dispatchPiEvent } from "./core/store/event-dispatch";
@@ -64,7 +54,6 @@ export function App() {
   const dialog = usePiWebUiStore((state) => state.dialog);
   const gitStatus = usePiWebUiStore((state) => state.gitStatus);
   const gitLoading = usePiWebUiStore((state) => state.gitLoading);
-  const artifacts = usePiWebUiStore((state) => state.artifacts);
   const rightPanelTabs = usePiWebUiStore((state) => state.rightPanelTabs);
   const activeRightPanelTabId = usePiWebUiStore((state) => state.activeRightPanelTabId);
   const rightPanelVisible = usePiWebUiStore((state) => state.rightPanelVisible);
@@ -77,8 +66,6 @@ export function App() {
   const clearConversationTimers = usePiWebUiStore((state) => state.clearConversationTimers);
   const clearWorkspaceTimers = usePiWebUiStore((state) => state.clearWorkspaceTimers);
   const compactSend = usePiWebUiStore((state) => state.send);
-  const cycleThinking = usePiWebUiStore((state) => state.cycleThinking);
-  const openArtifact = usePiWebUiStore((state) => state.openArtifact);
   const openGitDiff = usePiWebUiStore((state) => state.openGitDiff);
   const refreshAuthState = usePiWebUiStore((state) => state.refreshAuthState);
   const refreshRightPanelTab = usePiWebUiStore((state) => state.refreshRightPanelTab);
@@ -98,7 +85,6 @@ export function App() {
   const setThinkingLevel = usePiWebUiStore((state) => state.setThinkingLevel);
   const setAutoCompactionRemote = usePiWebUiStore((state) => state.setAutoCompactionRemote);
   const closeRightPanelTab = usePiWebUiStore((state) => state.closeRightPanelTab);
-  const toggleAllTools = usePiWebUiStore((state) => state.toggleAllTools);
   const toggleArchMode = usePiWebUiStore((state) => state.toggleArchMode);
   const toggleAuth = usePiWebUiStore((state) => state.toggleAuth);
   const toggleRightPanelVisible = usePiWebUiStore((state) => state.toggleRightPanelVisible);
@@ -127,7 +113,6 @@ export function App() {
   const [modelOpen, setModelOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [commandOpen, setCommandOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
 
   const promptCounterRef = useRef(0);
@@ -232,6 +217,7 @@ export function App() {
 
   const submitMessage = useCallback(
     async ({ text, files }: { text: string; files?: unknown[] }) => {
+      if (!attachedAgentId) return;
       const trimmed = text.trim();
       const images = await processPromptFiles(files);
       if (!trimmed && images.length === 0) return;
@@ -251,7 +237,7 @@ export function App() {
       await sendPrompt(command);
       setDraftText("");
     },
-    [chatStatus, nextPromptId, sendPrompt],
+    [attachedAgentId, chatStatus, nextPromptId, sendPrompt],
   );
 
   const openModelPicker = useCallback(async () => {
@@ -272,45 +258,20 @@ export function App() {
     await refreshAuthState();
   }, [refreshAuthState]);
 
+  const setThinkingLevelRemote = useCallback(
+    async (level: string) => {
+      await compactSend("set_thinking_level", { level });
+      setThinkingLevel(level);
+    },
+    [compactSend, setThinkingLevel],
+  );
+
   const compactContext = useCallback(async () => {
     try {
       await compactSend("compact");
       addSystemMessage("Compaction requested");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Compaction failed");
-    }
-  }, [addSystemMessage, compactSend, setError]);
-
-  const exportHtml = useCallback(async () => {
-    try {
-      const result = (await compactSend("export_html")) as { path?: string } | undefined;
-      if (result?.path) addSystemMessage(`Exported: ${result.path}`, "success");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Export failed");
-    }
-  }, [addSystemMessage, compactSend, setError]);
-
-  const showSessionStats = useCallback(async () => {
-    try {
-      const stats = (await compactSend("get_session_stats")) as {
-        totalMessages?: number;
-        userMessages?: number;
-        assistantMessages?: number;
-        toolCalls?: number;
-        tokens?: { input?: number; total?: number };
-      };
-      addSystemMessage(
-        [
-          "Session stats",
-          `Messages: ${stats.totalMessages} (${stats.userMessages} user, ${stats.assistantMessages} assistant)`,
-          `Tool calls: ${stats.toolCalls}`,
-          stats.tokens ? `Context: ~${formatTokens(stats.tokens.input || stats.tokens.total || 0)} tokens` : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Stats failed");
     }
   }, [addSystemMessage, compactSend, setError]);
 
@@ -323,22 +284,18 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setCommandOpen(true);
-      } else if (event.key === "/") {
+      if (event.key === "/") {
         event.preventDefault();
         document.querySelector<HTMLTextAreaElement>('textarea[name="message"]')?.focus();
       } else if (event.key === "Escape") {
-        if (commandOpen) setCommandOpen(false);
-        else if (modelOpen) setModelOpen(false);
+        if (modelOpen) setModelOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
         else if (chatStatus === "streaming") abort();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [abort, chatStatus, commandOpen, modelOpen, settingsOpen]);
+  }, [abort, chatStatus, modelOpen, settingsOpen]);
 
   const totalCost = useMemo(
     () => items.reduce((sum, item) => sum + (item.kind === "message" ? item.cost || 0 : 0), 0),
@@ -348,40 +305,6 @@ export function App() {
   const usedContextTokens = (lastUsage?.input || 0) + (lastUsage?.cacheRead || 0);
   const contextPercent = contextWindowSize > 0 ? Math.round((usedContextTokens / contextWindowSize) * 100) : 0;
   const shouldSuggestCompaction = contextPercent >= 80;
-  const rightPanelOpen = rightPanelVisible && rightPanelTabs.length > 0;
-
-  const commandActions = [
-    {
-      label: "Compact",
-      desc: "Compact context to save tokens",
-      icon: ArchiveIcon,
-      action: compactContext,
-    },
-    {
-      label: "Export HTML",
-      desc: "Export current session as HTML",
-      icon: DownloadIcon,
-      action: exportHtml,
-    },
-    {
-      label: "Session Stats",
-      desc: "Show message and tool call counts",
-      icon: BarChart3Icon,
-      action: showSessionStats,
-    },
-    {
-      label: "Expand All Tools",
-      desc: "Open every tool card",
-      icon: PanelLeftOpenIcon,
-      action: () => toggleAllTools(true),
-    },
-    {
-      label: "Collapse All Tools",
-      desc: "Close every tool card",
-      icon: PanelLeftCloseIcon,
-      action: () => toggleAllTools(false),
-    },
-  ];
 
   return (
     <SidebarProvider
@@ -404,16 +327,15 @@ export function App() {
           connection={connection}
           contextPercent={contextPercent}
           contextWindowSize={contextWindowSize}
+          gitLoading={gitLoading}
+          gitStatus={gitStatus}
           isViewingOtherSession={false}
           modelLabel={modelLabel}
           onCompactContext={compactContext}
-          onCycleThinking={cycleThinking}
-          onOpenCommandPalette={() => setCommandOpen(true)}
-          onOpenModelPicker={openModelPicker}
+          onOpenGitDiff={() => void openGitDiff()}
           onReturnToLive={() => void requestConversationSync()}
           onToggleContext={() => setContextOpen((open) => !open)}
           shouldSuggestCompaction={shouldSuggestCompaction}
-          thinkingLevel={thinkingLevel}
           title={sessionName}
           totalCost={totalCost}
         />
@@ -459,15 +381,6 @@ export function App() {
                   onClose={() => setContextOpen(false)}
                 />
               )}
-              {!rightPanelOpen && !contextOpen && (
-                <WorkspaceStatusFloat
-                  artifacts={artifacts}
-                  gitLoading={gitLoading}
-                  gitStatus={gitStatus}
-                  onOpenArtifact={openArtifact}
-                  onOpenGitDiff={openGitDiff}
-                />
-              )}
             </div>
 
             {queuedMessages.length > 0 && (
@@ -503,14 +416,20 @@ export function App() {
             )}
 
             <ChatInput
+              agentAttached={attachedAgentId !== null}
               archAvailable={archAvailable}
               archModeEnabled={archModeEnabled}
               chatStatus={chatStatus}
               connection={connection}
+              currentModel={currentModel}
+              modelLabel={modelLabel}
               onAbort={abort}
+              onOpenModelPicker={openModelPicker}
+              onSetThinkingLevel={(level) => void setThinkingLevelRemote(level)}
               onSubmit={submitMessage}
               onToggleArchMode={toggleArchMode}
               onValueChange={setDraftText}
+              thinkingLevel={thinkingLevel}
               value={draftText}
               viewingHistory={false}
             />
@@ -544,14 +463,12 @@ export function App() {
             authConfigured={authConfigured}
             authEnabled={authEnabled}
             autoCompaction={autoCompaction}
+            currentModel={currentModel}
             onClose={() => setSettingsOpen(false)}
             onRenameSession={renameActiveSession}
             onSetAutoCompaction={setAutoCompactionRemote}
             onSetTheme={setThemeMode}
-            onSetThinking={async (level) => {
-              await compactSend("set_thinking_level", { level });
-              setThinkingLevel(level);
-            }}
+            onSetThinking={setThinkingLevelRemote}
             onToggleAuth={toggleAuth}
             sessionName={sessionName}
             showThinking={showThinking}
@@ -560,7 +477,6 @@ export function App() {
             thinkingLevel={thinkingLevel}
           />
         )}
-        {commandOpen && <CommandPalette commands={commandActions} onClose={() => setCommandOpen(false)} />}
         {dialog && (
           <ExtensionDialogView
             dialog={dialog}

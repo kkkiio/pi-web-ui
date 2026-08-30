@@ -2,7 +2,6 @@ export { AppHeader } from "./app-header";
 export { ArchModeToggle } from "./arch-mode-toggle";
 export { ChatInput } from "./chat-input";
 export { ChatItemView } from "./chat-item-view";
-export { CommandPalette } from "./command-palette";
 export { ConnectionDot } from "./connection-dot";
 export { ContextPopover } from "./context-popover";
 export { ConversationSidebar } from "./conversation-sidebar";
@@ -16,4 +15,3 @@ export {
 export { RightPanel } from "./right-panel";
 export { SettingsPanel } from "./settings-panel";
 export { UserMessageView } from "./user-message-view";
-export { WorkspaceStatusFloat } from "./workspace-status-float";

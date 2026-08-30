@@ -21,13 +21,11 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   const repoRoot = path.resolve(__dirname, "../..");
   const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-web-ui-e2e-"));
   const workspaceDir = path.join(tempRoot, "workspace");
-  const externalDir = path.join(tempRoot, "external");
   const agentDir = path.join(tempRoot, "agent");
   const sessionDir = path.join(tempRoot, "sessions");
   const port = await getFreePort();
 
   mkdirSync(workspaceDir, { recursive: true });
-  mkdirSync(externalDir, { recursive: true });
   mkdirSync(agentDir, { recursive: true });
   mkdirSync(sessionDir, { recursive: true });
   if (options.git !== false) prepareGitWorkspace(workspaceDir);
@@ -37,7 +35,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   // env-overrides-argv behavior cannot pick up stale values.
   const hubEnv = { ...process.env };
   delete hubEnv.PI_WEB_UI_HOST;
-  delete hubEnv.PI_WEB_UI_PORT;
+  delete hubEnv.PI_WEB_UI_HUB_PORT;
   delete hubEnv.PI_WEB_UI_STATIC_DIR;
   const hubOutput: string[] = [];
   const hubProcess = spawn("node", [path.join(repoRoot, "dist-hub/hub/cli.js"), "--host=127.0.0.1", `--port=${port}`], {
@@ -50,7 +48,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   // ── Pi process: rpc + faux provider + connect-out extension ───────────
   const piEnv = { ...process.env };
   delete piEnv.PI_WEB_UI_HOST;
-  delete piEnv.PI_WEB_UI_PORT;
+  delete piEnv.PI_WEB_UI_HUB_PORT;
   delete piEnv.PI_WEB_UI_STATIC_DIR;
   const processOutput: string[] = [];
   const piProcess = spawn(
@@ -84,7 +82,6 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
         PI_OFFLINE: "1",
         PI_WEB_UI_HUB: `ws://127.0.0.1:${port}/ws/extension`,
         PI_WEB_UI_E2E_FIXTURE: fixtureName,
-        PI_WEB_UI_E2E_EXTERNAL_ARTIFACT: path.join(externalDir, "external-skill.md"),
       },
     },
   );
@@ -94,13 +91,11 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   // Additional Pi agents sharing the same hub (multi-agent scenarios).
   const extraAgents: Array<{ process: ChildProcessWithoutNullStreams; output: string[]; name: string }> = [];
 
-  // Soft wait: give the extension time to connect to the hub before the
-  // browser opens the page. UI steps then poll for the agent to appear
-  // (the hub broadcasts hub:sessions when the extension handshakes).
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  if (piProcess.exitCode !== null) {
-    throw new Error(`pi exited before connecting to hub:\n${processOutput.join("")}`);
-  }
+  // Connect this Pi to the hub by injecting /webui:connect over rpc stdin
+  // (rpc.md: extension commands execute immediately without an LLM turn).
+  // Connection is manual by design; PI_WEB_UI_HUB above only supplies the
+  // command's default target URL.
+  await injectWebuiConnect(piProcess, processOutput);
 
   const spawnAgent = (name: string, index: number) => {
     const workspaceB = path.join(tempRoot, `workspace-${index}`);
@@ -141,7 +136,6 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
           PI_OFFLINE: "1",
           PI_WEB_UI_HUB: `ws://127.0.0.1:${port}/ws/extension`,
           PI_WEB_UI_E2E_FIXTURE: fixtureName,
-          PI_WEB_UI_E2E_EXTERNAL_ARTIFACT: path.join(externalDir, "external-skill.md"),
         },
       },
     );
@@ -156,11 +150,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
     workspaceDir,
     async addAgent(name: string) {
       const agentProcess = spawnAgent(name, extraAgents.length + 1);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      if (agentProcess.exitCode !== null) {
-        const entry = extraAgents[extraAgents.length - 1];
-        throw new Error(`added agent "${name}" exited before connecting to hub:\n${entry.output.join("")}`);
-      }
+      await injectWebuiConnect(agentProcess, extraAgents[extraAgents.length - 1].output);
     },
     async stop() {
       for (const agent of [...extraAgents].reverse()) await stopProcess(agent.process);
@@ -193,6 +183,105 @@ function captureProcessOutput(process: ChildProcessWithoutNullStreams, output: s
   };
   process.stdout.on("data", capture);
   process.stderr.on("data", capture);
+}
+
+/**
+ * Connect a Pi process to the hub by injecting /webui:connect over rpc stdin.
+ *
+ * Event-driven, no sleeps: poll rpc `get_commands` until the extension has
+ * registered /webui:connect (i.e. pi finished loading it), then send the
+ * prompt. Fails fast on timeout or process exit instead of relying on
+ * downstream Playwright timeouts.
+ *
+ * Note: rpc requests use {type}, not {command} (pi rpc-mode.ts switches on
+ * command.type; "command" only appears in response frames).
+ */
+async function injectWebuiConnect(
+  process: ChildProcessWithoutNullStreams,
+  output: string[],
+  timeoutMs = 20_000,
+): Promise<void> {
+  const PROBE_ID = "webui-probe";
+  const probe = () => `${JSON.stringify({ type: "get_commands", id: PROBE_ID })}\n`;
+  const connect = () => `${JSON.stringify({ type: "prompt", message: "/webui:connect" })}\n`;
+
+  let buffer = "";
+  let settled = false;
+  const finished = new Promise<void>((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    let probeTimer: ReturnType<typeof setInterval> | undefined;
+
+    const settle = (ok: boolean, reason?: string) => {
+      if (settled) return;
+      settled = true;
+      process.stdout.off("data", onData);
+      clearInterval(probeTimer);
+      if (ok) resolve();
+      else reject(new Error(reason ?? `timed out waiting for /webui:connect registration:\n${output.join("")}`));
+    };
+
+    const onData = (chunk: Buffer) => {
+      buffer += chunk.toString("utf8");
+      let nl = buffer.indexOf("\n");
+      while (nl >= 0) {
+        const line = buffer.slice(0, nl);
+        buffer = buffer.slice(nl + 1);
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line) as {
+            type?: string;
+            id?: string;
+            command?: string;
+            success?: boolean;
+            data?: { commands?: Array<{ name?: string }> };
+          };
+          if (
+            msg.type === "response" &&
+            msg.id === PROBE_ID &&
+            msg.command === "get_commands" &&
+            msg.success === true &&
+            msg.data?.commands?.some((command) => command.name?.includes("webui:connect"))
+          ) {
+            settle(true);
+            return;
+          }
+        } catch {}
+        nl = buffer.indexOf("\n");
+      }
+    };
+
+    process.stdout.on("data", onData);
+    probeTimer = setInterval(() => {
+      if (settled) return;
+      // Deadline check must live on the timer, not onData: a silent pi (no
+      // stdout at all) would otherwise never settle.
+      if (process.exitCode !== null) {
+        settle(false, `pi exited while waiting for /webui:connect:\n${output.join("")}`);
+        return;
+      }
+      if (Date.now() > deadline) {
+        settle(false);
+        return;
+      }
+      try {
+        if (process.stdin.writable) process.stdin.write(probe());
+      } catch (error) {
+        output.push(`get_commands probe failed: ${String(error)}\n`);
+      }
+    }, 400);
+    try {
+      if (process.stdin.writable) process.stdin.write(probe());
+    } catch (error) {
+      output.push(`get_commands probe failed: ${String(error)}\n`);
+    }
+  });
+
+  await finished;
+  try {
+    if (process.stdin.writable) process.stdin.write(connect());
+  } catch (error) {
+    output.push(`webui:connect injection failed: ${String(error)}\n`);
+  }
 }
 
 async function waitForHttp(

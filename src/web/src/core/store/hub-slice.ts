@@ -24,7 +24,6 @@ const agentStateReset: Partial<PiWebUiStore> = {
   thinkingLevel: "off",
   sessionName: "",
   gitStatus: null,
-  artifacts: [],
   rightPanelTabs: [],
   activeRightPanelTabId: null,
   error: null,

@@ -6,6 +6,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import type { AgentSessionInfo } from "../../../../protocol/index";
@@ -21,6 +22,7 @@ function sessionLabel(session: AgentSessionInfo): string {
 }
 
 export function SessionList({ sessions, attachedAgentId, onSwitchAgent }: SessionListProps) {
+  const { isMobile, setOpenMobile } = useSidebar();
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Sessions</SidebarGroupLabel>
@@ -42,6 +44,9 @@ export function SessionList({ sessions, attachedAgentId, onSwitchAgent }: Sessio
                     data-testid="session-list-row"
                     isActive={isActive}
                     onClick={() => {
+                      // Full-cover mobile sheet: close it after any pick so the
+                      // user sees the switch result.
+                      if (isMobile) setOpenMobile(false);
                       if (!isActive) onSwitchAgent(session.agentId);
                     }}
                     title={session.cwd}

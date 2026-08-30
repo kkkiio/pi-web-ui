@@ -1,5 +1,4 @@
 import type { GitStatusResult } from "../types";
-import { artifactsFromToolEvent, mergeArtifacts } from "../workspace-artifacts";
 import type { StoreSlice, WorkspaceSlice } from "./types";
 
 let gitRefreshTimer: number | null = null;
@@ -7,15 +6,6 @@ let gitRefreshTimer: number | null = null;
 export const createWorkspaceSlice: StoreSlice<WorkspaceSlice> = (set, get) => ({
   gitStatus: null,
   gitLoading: false,
-  artifacts: [],
-
-  setArtifacts: (artifacts) => set({ artifacts }),
-
-  mergeArtifactsFromToolEvent: (event) => {
-    const incoming = artifactsFromToolEvent(event);
-    if (incoming.length === 0) return;
-    set((state) => ({ artifacts: mergeArtifacts(state.artifacts, incoming) }));
-  },
 
   refreshGitStatus: async () => {
     set({ gitLoading: true });

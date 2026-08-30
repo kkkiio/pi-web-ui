@@ -21,7 +21,7 @@ ADR 0006 把 pi-web-ui 限定为单 session 镜像，并否决了在 extension �
 平台层确认的事实：
 
 - Pi extension API 的事件（`agent_start`/`message_update`/`tool_execution_*`/`session_tree` 等）和命令能力（`pi.sendUserMessage`、`ctx.abort`、`ctx.compact`、`ctx.sessionManager` 等）对"extension 作为出站客户端"的模式覆盖完整，events forwarding（ADR 0002）和命令 handler 逻辑都不需要改。
-- Extension 在 TUI 和 RPC 模式下都会加载（E2E harness 通过 `pi --mode rpc` 启动 Pi 并加载本扩展，经 `PI_WEB_UI_HUB` 自动连接 hub）。扩展命令可以通过 prompt 触发（`/mycommand`），所以 herdr 可以用 `herdr agent prompt` 向 TUI 里的 Pi 注入 `/webui:connect`。
+- Extension 在 TUI 和 RPC 模式下都会加载（E2E harness 通过 `pi --mode rpc` 启动 Pi 并加载本扩展，经 rpc stdin 注入 `/webui:connect` 连接 hub）。扩展命令可以通过 prompt 触发（`/mycommand`），所以 herdr 可以用 `herdr agent prompt` 向 TUI 里的 Pi 注入 `/webui:connect`。连接是手动触发的：扩展从不自动连接。
 - Session 文件在 `~/.pi/agent/sessions/` 按 cwd 组织，JSONL 格式公开（session-format.md）。
 
 ## Decision
@@ -47,7 +47,7 @@ pi (E2E, rpc mode)   ──┘ ────────────────�
 ### Extension（瘦身）
 
 - 删除 HTTP/WS server 和静态资源 serving，改为 WS **client** 连 hub。
-- 新增 `/webui:connect [url]` 命令触发连接（若冒号与扩展命令后缀机制 `name:1` 冲突，则退为 `/webui-connect`）；支持 `PI_WEB_UI_HUB` 环境变量自动连接（E2E 和 herdr 注入场景用）。
+- 新增 `/webui:connect [url]` 命令触发连接（若冒号与扩展命令后缀机制 `name:1` 冲突，则退为 `/webui-connect`）；支持 `PI_WEB_UI_HUB` 环境变量作为无参时默认目标（E2E 和 herdr 注入场景用）。连接只由命令显式触发，无自动连接行为。
 - 断线指数退避重连；hub 不可达时 TUI 不受影响，仅 status/notify 提示。
 - `/webui:connect` 时捕获 `ExtensionCommandContext` 作为 `latestExecuteCtx`——现有 `navigate_tree` 等高级功能的门控从 `/webui` 平移到 `/webui:connect`，语义不变。
 - 事件转发保持薄传输（ADR 0002 不变）；文件/git/artifact 命令**留在 extension 侧执行**，因为它们依赖 Pi 进程的 cwd 和本地文件系统。
@@ -73,7 +73,7 @@ session 替换（`session_start` 事件）后，extension 在同一条 WS 连接
 
 主流程**不需要** RPC 模式，也**不依赖 herdr**——用户在终端（或 herdr 面板）里正常启动 Pi TUI，然后 `/webui:connect`。本期不做"从 Web 启动新 agent"，因此 hub 没有 herdr 集成代码。RPC 模式只保留给：
 
-- E2E harness（沿用现有 `pi --mode rpc` 启动方式，extension 用 `PI_WEB_UI_HUB` 自动连接）；
+- E2E harness（沿用现有 `pi --mode rpc` 启动方式，extension 经注入的 `/webui:connect` 连接，以 `PI_WEB_UI_HUB` 为目标）；
 - 未来的方案 C（见下）。
 
 ## Alternatives Considered
@@ -110,7 +110,7 @@ session 替换（`session_start` 事件）后，extension 在同一条 WS 连接
 
 - ADR 0006 被本 ADR 取代（superseded）。
 - ADR 0004 的绑定地址策略延续到 hub。
-- E2E harness 增加 hub 进程；extension 经环境变量自动连接，整体更贴近真实使用路径。
+- E2E harness 增加 hub 进程；extension 经 rpc 注入的 `/webui:connect` 连接 hub，更贴近真实使用路径（手动连接）。
 
 ## References
 
