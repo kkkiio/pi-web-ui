@@ -50,5 +50,5 @@ PI_WEB_UI_DISABLED=1 pi
 
 Pi Web UI binds to `127.0.0.1` by default — accessible only from your local machine.
 
-- For remote or mobile access, use `tailscale serve` or a reverse proxy with TLS (see [MOBILE.md](../MOBILE.md)).
+- For remote or mobile access, use `tailscale serve` or a reverse proxy with TLS (see [MOBILE.md](https://github.com/kkkiio/pi-web-ui/blob/main/MOBILE.md)).
 - There is no built-in HTTP Basic Auth; it is unnecessary for localhost access and insecure over cleartext.
