@@ -2,58 +2,77 @@
 
 ## Problem Statement
 
-Pi Web UI 当前只有左侧导航栏和聊天区域两列布局。当用户在聊天中需要查看 git diff、Markdown artifacts、报告或预览等详细信息时，这些内容不得不挤在聊天流中，打乱阅读节奏。用户需要一个能够专注查看次要信息的区域，同时不丢失聊天上下文的实时更新。
+Pi Web UI 是单会话（Single-Session）的 **Interactive Agent UI**。过去的布局包含左侧导航栏（Left Sidebar / Tree Sidebar）、中间聊天区、右上角悬浮状态窗（Workspace Status Float）以及右侧面板（Right Panel）：
+1. 单会话场景下不需要切换多项目/多会话，砍掉 Branch 树后，Left Sidebar 只剩一个设置按钮，占用水平空间且造成三栏拥挤。
+2. 右上角悬浮的 Workspace Status Float 经常遮挡聊天消息（Transcript），干扰阅读。
+3. 当用户需要对照查看 Git Diff（核对模型到底改了哪些代码）或开启旁路追问（Side Chat / BTW）时，需要一个按需展开、不遮挡主对话流的右侧面板。
 
 ## Solution
 
-在经典的双列布局基础上，引入可选的右侧 tabbed panel，形成三列布局模式。Right Panel 打开时，悬浮状态卡片自动隐藏，二者互斥。用户可以在不离开聊天的情况下查看详细信息，并通过明显的 toggle 操作回到双列模式。
+采用 **「默认单栏居中 + 按需双栏展开（Main Chat + Right Panel）」** 的极简布局：
+- **移除 Left Sidebar** 与 **Workspace Status Float**。
+- **统一顶部 Header Bar**：承载品牌与连接状态、当前会话标题、模型与思维级别控制、上下文用量、Git 变更摘要按钮（如 `+42 -15`，点击打开 Git Diff 面板）、Right Panel 显隐按钮以及 Settings 入口。
+- **主对话区（Main Chat）**：默认单栏居中显示，视野开阔且无任何悬浮遮挡。
+- **右侧面板（Right Panel）**：按需从右侧展开，与 Main Chat 构成可拖拽调整宽度的左右双栏布局。
+
+## Layout Overview
+
+### 默认单栏模式（Right Panel 隐藏）
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│ [Pi] Session Title   [Model] [Thinking] [Context]  [+42 -15] [⚙] [◨]│
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│                         Main Chat Transcript                         │
+│                    （居中单栏，无悬浮窗遮挡内容）                       │
+│                                                                      │
+│                       [ Prompt Composer ... ]                        │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 双栏模式（Right Panel 展开：Git Diff / Side Chat）
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│ [Pi] Session Title   [Model] [Thinking] [Context]  [+42 -15] [⚙] [◨]│
+├──────────────────────────────────────┬───────────────────────────────┤
+│                                      │ [Changes] [BTW: Side Chat] [×]│
+│         Main Chat Transcript         ├───────────────────────────────┤
+│                                      │                               │
+│                                      │   Git Diff / Side Chat 视图    │
+│                                      │  （支持对 Diff 行直接 Comment） │
+│       [ Prompt Composer ... ]        │                               │
+└──────────────────────────────────────┴───────────────────────────────┘
+```
 
 ## User Stories
 
-1. 作为 Pi Web UI 桌面用户，我希望聊天区域右侧有一个可开关的 tabbed panel，这样我可以在不中断聊天的情况下查看 git diff、artifact 文件或其他详细信息。
-
-2. 作为 Pi Web UI 桌面用户，当我打开右侧详情侧边栏时，我希望悬浮状态卡片自动隐藏，以免两个右侧区域互相遮挡或重复。
-
-3. 作为 Pi Web UI 桌面用户，我希望右侧 panel 有明确的 toggle button，隐藏后聊天区域恢复完整的宽度，以便我回到专注聊天的状态。
-
-4. 作为 Pi Web UI 桌面用户，我希望在屏幕宽度受限时打开右侧 panel，左侧导航栏能自动折叠，这样聊天和详情区域仍保持可用。
-
-5. 作为 Pi Web UI 移动端用户，我不希望看到多列并排布局，右侧 panel 内容应该以全屏或接近全屏的 sheet 形式打开，以便在小屏幕上有清晰的阅读体验。
-
-6. 作为 Pi Web UI 移动端用户，我关闭 panel sheet 后，聊天滚动位置不应该丢失，这样我不用重新翻找刚才阅读的位置。
-
-7. 作为 Pi Web UI 桌面用户，我希望 Right Panel 和聊天区域之间的边界可以拖拽调整宽度，以便我根据当前查看的内容灵活分配空间。
+1. 作为 Pi Web UI 用户，我希望默认界面是干净的单栏聊天视图，没有任何左侧栏或悬浮窗遮挡对话内容。
+2. 作为 Pi Web UI 用户，我希望在顶部 Header 直接看到当前 Git 变更统计（如分支名与 `+N -N`），点击即可在右侧打开 Git Diff 面板，无需悬浮卡片。
+3. 作为 Pi Web UI 用户，我希望在顶部 Header 直接访问 Settings，无需展开左侧抽屉。
+4. 作为桌面端用户，当我打开 Right Panel（查看 Git Diff 或进行 Side Chat）时，我希望能够拖拽中间分隔线调整左右两栏宽度。
+5. 作为移动端用户，我不希望小屏幕并排显示两列，Right Panel 应以全屏或接近全屏的 Sheet 形式打开，且关闭后保持主聊天滚动位置不变。
 
 ## Implementation Decisions
 
-### 两列模式与三列模式互斥
+### 1. 移除左侧栏与悬浮窗
+- 不再渲染 Left Sidebar（会话树/历史列表）和 Workspace Status Float。
+- Settings 按钮、连接状态指示器、Git 状态摘要入口统一收敛到顶部 Header。
 
-Right Panel 与悬浮状态卡片互斥。打开 panel 时隐藏浮窗，隐藏或关闭 panel 后根据浮窗规则恢复显示。保持右侧区域只有一个活跃表面。
+### 2. 单栏与双栏切换
+- Right Panel 关闭或隐藏时，Main Chat 占据全部可用宽度（内部消息容器保持舒适的最大阅读宽度并居中）。
+- Right Panel 展开时，与 Main Chat 并排形成左右双栏，中间提供可拖拽 resize handle。
 
-### 左侧导航折叠策略
-
-在桌面三列模式下，当窗口宽度不足以容纳三列时，左侧导航栏自动折叠为图标或抽屉，优先保证聊天区域和 Right Panel 的可读性。导航折叠不应丢失用户的导航状态。
-
-### Right Panel 的通用容器规则
-
-Right Panel 提供通用的 tabbed 容器框架（tab bar、active tab、close tab、toggle button、可滚动内容体）。具体内容由各 feature 的 PRD 定义。初始支持的 tab 类型为 `git-diff` 和 `artifact-file`，规则见 `docs/prd/right-panel.md`。
-
-### 详情内容专一性
-
-Right Panel 不是通用的 context-item 渲染器。每个 feature 拥有自己的详情内容规则，不暴露原始事件 JSON 作为用户可见的详情视图。
-
-### 移动端适配
-
-移动端不尝试文字多列布局：左侧导航保持抽屉形式，Right Panel 内容以全屏 sheet 打开，浮窗不显示为大卡片。
+### 3. 移动端适配
+- 移动端始终保持单栏主视图，Header 按钮紧凑排列；打开 Right Panel 时以 Sheet 呈现。
 
 ## Out of Scope
 
-- 不引入通用的 context-item 抽象层
-- 不暴露原始事件 JSON 作为用户可见的详情视图
-- 不替换现有的 session、model、settings 控件
-- 不支持在 Right Panel 内直接编辑
+- 不包含三栏布局（无 Left Sidebar）
+- 不包含悬浮在聊天内容上方的 Workspace Status Float
+- 不包含多会话切换列表或会话分支树侧边栏
 
 ## Further Notes
 
-- Right Panel 宽度建议保持合理的可拖拽范围，最小宽度保证元数据可读，最大宽度保证聊天区域仍为主要工作区
-- Right Panel 的 tab 生命周期、toggle 和移动端 sheet 行为由 `docs/prd/right-panel.md` 定义
+- Right Panel 内部的 Tab 生命周期、Git Diff 渲染与行级 Comment 交互见 `docs/prd/right-panel.md`。

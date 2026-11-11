@@ -85,6 +85,7 @@
     "extensions/",
     "dist/",
     "public/",
+    "docs/configuration.md",
     "README.md"
   ]
 }

@@ -12,7 +12,7 @@ The Pi extension runner **invalidates** `ExtensionContext` after session replace
 
 **All code that may run after a session lifecycle event** — WebSocket `close`/`error`/`connection` handlers, `setInterval` timers, async callbacks from external sources — must use `latestCtx`, never a captured `ctx` parameter.
 
-The same stale-context rule applies to `latestExecuteCtx` (`ExtensionCommandContext`, captured via `/webui`, adds `navigateTree()`, `fork()`, and other session-control methods). 
+The same stale-context rule applies to `latestExecuteCtx` (`ExtensionCommandContext`, captured via `/webui`, adds `navigateTree()`, `fork()`, and other session-control methods).
 After session replacement, any captured `ExtensionCommandContext` becomes stale and must be re-captured via `/webui`.
 
 ### Extension output — `ctx.ui.setStatus` / `ctx.ui.notify` only
@@ -23,11 +23,25 @@ Per `docs/adr/0001-pi-extension-output-policy.md`: never write to `stdout`/`stde
 
 Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation.
 
+### Interactive Agent UI positioning
+
+Per `docs/adr/0012-interactive-agent-ui-positioning.md`: Pi Web UI is an **Interactive Agent UI** built to steer high-impulse, cryptic coding models (e.g., GPT coding variants, DeepSeek) that tend to interpret prompts overly literally, diverge into rabbit holes, or rush into execution before clarifying intent. When designing or implementing UI features (such as `Quote / Add to Chat`, `Git Diff Comment`, `BTW / Ask in Side Chat`, `AskUserQuestion`, `Edit Message`, or `Generative UI`), keep session scope single-process (`docs/adr/0006-project-scope-single-session-web-ui.md`) and keep product-level UI interpretation in `src/web/` (`docs/adr/0002-web-ui-extension-event-protocol.md`).
+
 ### Mandatory Skill Usage
 
 #### `$webui-visual-check`
 
-Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree/sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
+Run `$webui-visual-check` after UI, WebSocket-driven visible state, Right Panel, Git Diff, or mobile sheet changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
+
+## Domain Language
+
+- **Interactive Agent UI** — Browser interface designed to interrogate, clarify, and steer high-agency coding models rather than passively mirroring terminal text.
+- **Quote / Add to Chat** — Transcript selection attachment that pins user feedback to exact assistant prose, reasoning, or tool output spans.
+- **Git Diff Comment** — Line-level comment/quote action inside the Right Panel Git Diff view (Codex-style) that attaches specific file/line changes and user feedback to the chat composer.
+- **Side Chat (BTW)** — Isolated side inquiry in the Right Panel used to unpack cryptic model output without polluting the main session trajectory or triggering main-agent execution.
+- **AskUserQuestion** — Structured clarification interaction where the agent presents multi-choice or form questions to align on intent before executing tasks.
+- **Edit Message** — Inline editing of a previous user message (`Save & Send`) that rewinds the session via `navigate_tree` and re-sends the updated prompt.
+- **Generative UI** — Task-specific interactive visual views rendered in place of dense prose explanations.
 
 ## Project Structure Guide
 
@@ -47,16 +61,13 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree
 │   │   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
 │   │   ├── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
 │   │   ├── 0010-real-pi-web-ui-e2e.md                  # Real Pi agent Web UI E2E tests
-│   │   └── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
+│   │   ├── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
+│   │   └── 0012-interactive-agent-ui-positioning.md    # Interactive Agent UI positioning & feature cuts
 │   ├── prd/                     # Product Requirement Documents (功能设计)
-│   │   ├── arch-mode-ui.md          # Architecture mode toggle UI
-│   │   ├── tree-sidebar.md          # Conversation tree sidebar
-│   │   ├── columns-layout.md        # Multi-column layout design
-│   │   ├── branch-message.md        # Branch from user messages
-│   │   ├── left-sidebar.md          # Left sidebar design
-│   │   ├── right-panel.md           # Tabbed right panel design
-│   │   ├── workspace-artifacts.md   # Markdown artifact detection/display
-│   │   └── workspace-status-float.md # Git status + artifacts floating indicator
+│   │   ├── columns-layout.md        # Single-column default + on-demand two-column layout
+│   │   ├── edit-message.md          # Inline edit user message + Save & Send
+│   │   └── right-panel.md           # Right panel (Git Diff + line Comment, Side Chat)
+│   ├── configuration.md         # Environment variables, settings.json, and security reference
 │   └── images/                  # Screenshots for README
 ├── extensions/
 │   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
@@ -173,11 +184,11 @@ PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
 
 Testing has three layers:
 
-| Layer | Purpose | Includes Pi agent? | Primary tool |
-|-------|---------|--------------------|--------------|
-| Check | Fast local static/build validation | No | `just check`, `npm run build:web` |
-| E2E | Validate the real Pi Web UI product path | Yes | Playwright-BDD + `pi --mode rpc` + faux provider |
-| Visual validation | Inspect rendered UI for visible layout defects | Optional | Browser screenshots via `$webui-visual-check` |
+| Layer             | Purpose                                        | Includes Pi agent? | Primary tool                                     |
+| ----------------- | ---------------------------------------------- | ------------------ | ------------------------------------------------ |
+| Check             | Fast local static/build validation             | No                 | `just check`, `npm run build:web`                |
+| E2E               | Validate the real Pi Web UI product path       | Yes                | Playwright-BDD + `pi --mode rpc` + faux provider |
+| Visual validation | Inspect rendered UI for visible layout defects | Optional           | Browser screenshots via `$webui-visual-check`    |
 
 E2E means the test includes the real Pi product path:
 
@@ -216,7 +227,7 @@ npm run e2e:gen
 
 GitHub Actions runs E2E on every PR after `npm run build:web`. Local default checks do not run E2E unless the developer explicitly invokes the E2E command or is changing E2E harness/tests.
 
-Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, session tree/sidebar, Workspace Status Float, Right Panel, mobile sheet, or artifact display changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E.
+Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, Right Panel, Git Diff, or mobile sheet changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E.
 
 Run before committing:
 
@@ -236,52 +247,41 @@ To lint only:
 npm run lint
 ```
 
-### Publishing
+### PR Workflow
 
-For npm releases, read and follow `RELEASING.md` before changing package release metadata or running publish commands.
+GitHub PRs are gated by [Codex Review Check](.github/workflows/codex-review-check.yml) (`require-lgtm: true`) and structured by [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md).
 
-```bash
-npm pack --dry-run --json
-```
+When asked to open or update a PR (e.g. after aligning on a design/spec):
 
-### Key Files to Update Together
+1. **Write a high-signal PR description**: Fill out every section of [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) (`Goal`, `Unknown Unknowns & Plan Drifts`, `Visual Explanation & Live Evidence`) as an implementation report for the human — do not restate file-by-file diffs or routine CI test logs.
+2. **Self-heal CI & Codex Review in the background**:
+   - Wait for checks with `gh pr checks --watch`.
+   - If CI or `Codex Review Gate` fails, inspect the failure with `gh run view <run-id> --log-failed`. Fix valid findings (or reply with reasoning and resolve the thread), push, and trigger `@codex review` as instructed until the current `HEAD` receives an LGTM.
+   - Update the PR description if fixes introduce new plan drifts or findings worth noting.
+3. **Auto-merge or escalate**:
+   - Once all checks pass, squash-merge the PR (`gh pr merge --squash --delete-branch`).
+   - Stop and discuss with the maintainer if the review loop does not pass after 3 rounds or a finding requires changing the agreed design/spec.
 
-When adding a new WebSocket event type from the extension to the browser:
+### Release
 
-1. `extensions/mirror-server.ts` — emit the event
-2. `src/web/src/core/types.ts` — add the TypeScript type
-3. `src/web/src/core/store/event-dispatch.ts` — route the event to a store action
-4. Relevant `src/web/src/core/store/*-slice.ts` file — update domain state
-5. `src/web/src/core/chat-conversion.ts` — add conversion logic if it affects chat display
-6. Corresponding React component in `src/web/src/components/pi-web-ui/`
+When asked to release a new version, prepare a **draft** GitHub Release and stop so the maintainer can review and publish (see `RELEASING.md` for package media and tarball checks):
 
-When adding a new browser → extension command:
-
-1. `extensions/mirror-server.ts` — add the command handler (use `latestCtx`)
-2. `src/web/src/core/types.ts` — add the request/response type
-3. `src/web/src/core/store/*-slice.ts` — add an intent-level store action that calls `send(...)`
-4. React components — call the store action instead of invoking transport directly
-
-When changing Workspace Status Float, Right Panel, or Artifacts:
-
-1. `docs/prd/workspace-status-float.md` — update floating summary and entry behavior
-2. `docs/prd/right-panel.md` — update tab, toggle, and panel lifecycle behavior
-3. `docs/prd/workspace-artifacts.md` — update Markdown artifact source and display rules
-4. `docs/adr/0008-unified-websocket-protocol.md` — update WebSocket methods if data access changes
-5. `src/web/src/core/store/workspace-slice.ts` and `src/web/src/core/store/right-panel-slice.ts` — update shared state and tab lifecycle
-6. `src/web/src/components/pi-web-ui/workspace-status-float.tsx` and related right-panel components — keep UI behavior aligned with the PRDs
-
-When changing real Pi E2E behavior:
-
-1. `docs/adr/0010-real-pi-web-ui-e2e.md` — update process, fixtures, or scope decisions
-2. `e2e/features/*.feature` — update product-level scenarios
-3. `e2e/steps/*.ts` — update Playwright-BDD steps
-4. `e2e/harness/*.ts` and `e2e/fixtures/**` — update Pi launch, temp workspace, or faux provider behavior
-5. `.github/workflows/ci.yml` and `package.json` — keep CI and local commands aligned
-
-### Reference
-
-- Pi RPC docs: `/opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/rpc.md`
-- Pi SDK docs: `/opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/sdk.md`
-- Pi JSON mode: `/opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/json.md`
-- Pi session docs: `/opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/session.md`
+1. Bump the version in `package.json` and `package-lock.json`:
+   ```bash
+   npm version <patch|minor|major> --no-git-tag-version
+   ```
+2. Verify build and tarball contents locally:
+   ```bash
+   just check
+   npm run build:web
+   npm pack --dry-run --json
+   ```
+3. Commit the version bump, tag the verified commit, and push both:
+   ```bash
+   git add package.json package-lock.json
+   git commit -m "chore: bump version to <version>"
+   git tag v<version>
+   git push origin HEAD
+   git push origin v<version>
+   ```
+4. Create a **draft** GitHub Release on that tag (`gh release create v<version> --draft --generate-notes`), share the draft URL with the maintainer, and stop without publishing. When the maintainer clicks **Publish**, [`.github/workflows/release.yml`](.github/workflows/release.yml) verifies `v<version>` matches `package.json`, runs checks + `npm run build:web`, and publishes `@kkkiio/pi-web-ui` to npm via OIDC Trusted Publishing.

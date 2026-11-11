@@ -9,3 +9,5 @@ test-results/
 pi-session-*.html
 
 .env
+AGENTS.local.md
+.scratch/
