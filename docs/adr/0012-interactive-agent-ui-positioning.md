@@ -8,8 +8,8 @@ Accepted
 
 Modern coding-specialized and long-horizon models (most notably GPT coding variants, DeepSeek, and models with similar post-training traits) exhibit a recurring set of failure modes during real-world software engineering:
 
-1. **Cryptic expression ("not speaking human")**: Responses are often terse, jargon-heavy, or elide critical assumptions, making it difficult for the user to tell whether the model actually understood the problem.
-2. **Over-literal interpretation and silent divergence**: When prompts are slightly underspecified, these models tend to interpret phrasing overly literally while diverging into tangential rabbit holes and leaving subtle traps across files.
+1. **Cryptic expression & literal interpretation ("not speaking human")**: Responses are often terse, obscure, and interpret user phrasing overly literally.
+2. **Divergent explanations that leave pitfalls**: Models like DeepSeek tend to diverge when explaining or reasoning, and combined with poor expression ability, continuously leave ambiguities and pitfalls in their responses.
 3. **High execution impulse + weak intent comprehension**: Instead of pausing to clarify ambiguity, the model rushes into multi-step tool calls and code edits that deviate from the user's actual intent.
 
 A passive terminal stream or generic multi-pane chat mirror is poorly suited to countering these behaviors:
@@ -27,9 +27,9 @@ While remaining a single-session Web UI running inside the Pi process (ADR 0006)
 
 | Capability | Problem Addressed | Interactive Mechanism |
 |------------|-------------------|-----------------------|
-| **Quote / Add to Chat** | Over-literal interpretation & divergence | Select any span in the transcript (assistant text, reasoning, or tool output) and attach it as a structured quote in the composer to pin feedback to exact words. |
-| **Git Diff + Line Comment** | Silent divergence & hidden code traps | Inspect the real workspace diff in the Right Panel and click **Comment** on specific diff lines (Codex-style) to quote file/line changes with inline feedback directly into the chat composer. |
-| **BTW / Ask in Side Chat** | Cryptic expression & high execution impulse | Open an isolated side inquiry in the Right Panel to unpack cryptic claims or ask follow-up questions without derailing the main agent or triggering unwanted edits. |
+| **Quote / Add to Chat** | Divergent explanations & literal interpretation | Select any span in the transcript (assistant text, reasoning, or tool output) and attach it as a structured quote in the composer to pin feedback to exact words. |
+| **Git Diff + Line Comment** | Code changes that deviate from intent | Inspect workspace changes in the Right Panel and click **Comment** on specific diff lines (Codex-style) to quote file/line changes with inline feedback directly into the chat composer. |
+| **BTW / Ask in Side Chat** | Cryptic, pitfall-heavy explanations & execution impulse | Open an isolated side inquiry in the Right Panel to unpack cryptic or divergent claims without derailing the main agent or triggering unwanted edits. |
 | **AskUserQuestion** | Rushing into execution on ambiguous intent | Provide structured clarification UI (multi-choice / form cards) and agent tooling so the LLM actively questions and aligns with the user before executing long tasks. |
 | **Inline Edit Message** | Prompt typos & early first-turn derailment | Edit any previous user message inline (`Save & Send`) to rewind to that point via `navigate_tree` and re-run with clarified wording. |
 | **Generative UI** *(Research)* | Dense, hard-to-parse prose explanations | Render interactive, task-specific UI views (explored via open alternatives to declarative/SFC UI dialects) when visual inspection beats walls of text. |
