@@ -1,0 +1,33 @@
+name: Codex Review Check
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  workflow_dispatch:
+    inputs:
+      pull-request:
+        description: Pull request number to recheck
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: codex-review-gate-${{ github.repository }}-${{ inputs['pull-request'] || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  codex-review-gate:
+    name: Codex Review Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check Codex review state
+        uses: kkkiio/codex-review-check@5e37a5e3234f258527157c11d8f5c074a86a3b5f
+        with:
+          github-token: ${{ github.token }}
+          pull-request: ${{ inputs['pull-request'] || github.event.pull_request.number }}
+          require-lgtm: true
