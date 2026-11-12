@@ -1,5 +1,5 @@
 import { MAX_IMAGE_DIM, VALID_IMAGE_MIME_TYPES } from "./constants";
-import type { ChatItem, PiMessage, PromptImage, Usage } from "./types";
+import type { ChatItem, PiMessage, PromptImage, SessionEntry, SessionTreeNode, Usage, UsageTotals } from "./types";
 
 export function syncToItems(
   entries: Array<{ type: string; id?: string; message?: PiMessage }>,
@@ -137,6 +137,49 @@ export function findLastUsage(entries: Array<{ type: string; message?: PiMessage
     if (usage) return usage;
   }
   return null;
+}
+
+export function createUsageTotals(): UsageTotals {
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+}
+
+/** Accumulate one usage reading into the running four-bucket totals, as the Pi TUI footer does. */
+export function addUsageToTotals(totals: UsageTotals, usage?: Usage | null): UsageTotals {
+  if (!usage) return totals;
+  return {
+    input: totals.input + (usage.input || 0),
+    output: totals.output + (usage.output || 0),
+    cacheRead: totals.cacheRead + (usage.cacheRead || 0),
+    cacheWrite: totals.cacheWrite + (usage.cacheWrite || 0),
+    cost: totals.cost + (usage.cost?.total || 0),
+  };
+}
+
+function entryUsage(entry: SessionEntry): Usage | null {
+  return entry.message?.usage ?? entry.usage ?? null;
+}
+
+/** Sum every usage reading in the session tree, including tool results, compaction and branch summaries.
+ *
+ * The whole tree is walked rather than the active branch so rewinding or switching branches keeps the
+ * session-wide billing totals, matching the Pi TUI footer which sums every session entry.
+ */
+export function sumUsageTotals(tree: SessionTreeNode[]): UsageTotals {
+  let totals = createUsageTotals();
+  const seen = new Set<string>();
+  const stack = [...tree];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node?.entry) continue;
+    const id = node.entry.id;
+    if (id) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+    }
+    totals = addUsageToTotals(totals, entryUsage(node.entry));
+    if (node.children?.length) stack.push(...node.children);
+  }
+  return totals;
 }
 
 export async function processPromptFiles(files: unknown[] | undefined): Promise<PromptImage[]> {

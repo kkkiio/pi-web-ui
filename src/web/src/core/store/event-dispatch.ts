@@ -49,6 +49,9 @@ export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
     case "auto_compaction_end":
       store.addSystemMessage(`Context compacted${event.summary ? `: ${event.summary}` : ""}`, "success");
       store.setLastUsage(null);
+      // Compaction rewrites the context window, so re-read the provider occupancy instead of
+      // keeping the pre-compaction figure.
+      void store.requestConversationSync({ debounce: true });
       break;
     case "extension_ui_request":
       if (event.id && event.method) {
@@ -75,6 +78,8 @@ export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
       break;
     case "model_select":
       if (event.model) store.setCurrentModel(event.model);
+      // The context window travels with the model, so occupancy has to be re-read.
+      void store.requestConversationSync({ debounce: true });
       break;
     default:
       break;

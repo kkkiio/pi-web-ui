@@ -1,9 +1,12 @@
 import {
+  addUsageToTotals,
+  createUsageTotals,
   extractText,
   extractThinking,
   extractToolCalls,
   findLastUsage,
   formatToolOutput,
+  sumUsageTotals,
   syncToItems,
 } from "../chat-conversion";
 import { isToolExpandable } from "../tool-summary";
@@ -32,6 +35,8 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   conversationSyncing: false,
   conversationSyncError: null,
   lastUsage: null,
+  usageTotals: createUsageTotals(),
+  contextUsage: null,
   contextWindowSize: 0,
 
   addSystemMessage: (text, tone = "info") => {
@@ -65,6 +70,8 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       error: null,
       items,
       lastUsage: findLastUsage(entries),
+      usageTotals: sumUsageTotals(tree),
+      contextUsage: sync.contextUsage ?? null,
       leafId: sync.leafId ?? null,
       modelLabel: sync.model?.id ? sync.model.id.split("/").pop() || sync.model.id : "model",
       selectedTreeEntryId,
@@ -259,6 +266,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
           : item,
       ),
       lastUsage: usage || null,
+      usageTotals: addUsageToTotals(state.usageTotals, usage),
     }));
     streamingId = null;
     streamingHasToolCall = false;

@@ -116,6 +116,20 @@ export type Usage = {
   cost?: { total?: number };
 };
 
+export type UsageTotals = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number;
+};
+
+export type ContextUsage = {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+};
+
 export type ModelInfo = {
   id: string;
   provider?: string;
@@ -159,7 +173,7 @@ export type StateSyncPayload = {
   sessionName?: string;
   sessionFile?: string;
   isStreaming?: boolean;
-  contextUsage?: { tokens?: number };
+  contextUsage?: ContextUsage | null;
 };
 
 export type SessionEntry = {
@@ -179,6 +193,7 @@ export type SessionEntry = {
   provider?: string;
   thinkingLevel?: string;
   activeToolNames?: string[];
+  usage?: Usage;
   [key: string]: unknown;
 };
 
