@@ -29,9 +29,9 @@ Per `docs/adr/0012-interactive-agent-ui-positioning.md`: Pi Web UI is an **Inter
 
 ### Product language — English only
 
-Pi Web UI ships no i18n layer: every user-facing string in `src/web/` is hardcoded English, and there is no `t()`, message catalog, or locale switch to fall back on. Copy borrowed from a reference UI (dsh, the Pi TUI) must be re-authored in English rather than carried over verbatim, including panel labels, row readings, empty states, aria labels, and `title`/tooltip text.
+`src/web/` has no i18n layer: every user-facing string is hardcoded English. Copy borrowed from a reference UI (dsh, Pi TUI) must be re-authored in English, including labels, aria text, and tooltips.
 
-**Rule**: all product-visible copy in `src/web/` is English. Chinese (or any other language) belongs in commit messages, PR descriptions, docs written for the maintainer, and test fixtures' input data — never in the interface. Adding real i18n is a separate design decision, not something a feature change may introduce piecemeal.
+**Rule**: no non-English copy in the interface. Chinese belongs in commits, PRs, and maintainer docs. Real i18n is a separate decision.
 
 ### Mandatory Skill Usage
 
