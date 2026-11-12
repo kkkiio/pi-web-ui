@@ -21,6 +21,15 @@ export function formatTime(isoTimestamp?: string) {
   }
 }
 
+// Mirrors the Pi TUI footer so both surfaces read the same: 517 / 12.2k / 517k / 1.2M / 59M.
+export function formatCompactTokens(count: number) {
+  if (count < 1000) return String(count);
+  if (count < 10_000) return `${(count / 1000).toFixed(1)}k`;
+  if (count < 1_000_000) return `${Math.round(count / 1000)}k`;
+  if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  return `${Math.round(count / 1_000_000)}M`;
+}
+
 export function formatTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;

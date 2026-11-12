@@ -1,5 +1,5 @@
 import { MAX_IMAGE_DIM, VALID_IMAGE_MIME_TYPES } from "./constants";
-import type { ChatItem, PiMessage, PromptImage, Usage } from "./types";
+import type { ChatItem, PiMessage, PromptImage, SessionEntry, Usage, UsageTotals } from "./types";
 
 export function syncToItems(
   entries: Array<{ type: string; id?: string; message?: PiMessage }>,
@@ -137,6 +137,33 @@ export function findLastUsage(entries: Array<{ type: string; message?: PiMessage
     if (usage) return usage;
   }
   return null;
+}
+
+export function createUsageTotals(): UsageTotals {
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
+}
+
+/** Accumulate one usage reading into the running four-bucket totals, as the Pi TUI footer does. */
+export function addUsageToTotals(totals: UsageTotals, usage?: Usage | null): UsageTotals {
+  if (!usage) return totals;
+  return {
+    input: totals.input + (usage.input || 0),
+    output: totals.output + (usage.output || 0),
+    cacheRead: totals.cacheRead + (usage.cacheRead || 0),
+    cacheWrite: totals.cacheWrite + (usage.cacheWrite || 0),
+    cost: totals.cost + (usage.cost?.total || 0),
+  };
+}
+
+function entryUsage(entry: SessionEntry): Usage | null {
+  return entry.message?.usage ?? entry.usage ?? null;
+}
+
+/** Sum every usage reading in the session, including tool results, compaction and branch summaries. */
+export function sumUsageTotals(entries: SessionEntry[]): UsageTotals {
+  let totals = createUsageTotals();
+  for (const entry of entries) totals = addUsageToTotals(totals, entryUsage(entry));
+  return totals;
 }
 
 export async function processPromptFiles(files: unknown[] | undefined): Promise<PromptImage[]> {

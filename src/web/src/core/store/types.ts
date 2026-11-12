@@ -4,6 +4,7 @@ import type {
   ChatItem,
   ChatSubmitStatus,
   ConnectionState,
+  ContextUsage,
   ExtensionDialog,
   GitDiffResult,
   GitStatusResult,
@@ -16,6 +17,7 @@ import type {
   SystemTone,
   ThemeMode,
   Usage,
+  UsageTotals,
 } from "../types";
 
 export type ConnectionSlice = {
@@ -40,6 +42,8 @@ export type SessionSlice = {
   conversationSyncing: boolean;
   conversationSyncError: string | null;
   lastUsage: Usage | null;
+  usageTotals: UsageTotals;
+  contextUsage: ContextUsage | null;
   contextWindowSize: number;
   addSystemMessage: (text: string, tone?: SystemTone) => void;
   applyStateSync: (sync: StateSyncPayload) => void;

@@ -7,6 +7,7 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import type { ChatSubmitStatus } from "../../core/types";
+import { ComposerStats } from "./composer-stats";
 import { PromptAttachmentButton, PromptAttachmentPreview } from "./prompt-attachments";
 import { type TranscriptQuote, TranscriptQuotePreview } from "./transcript-quote";
 
@@ -72,6 +73,7 @@ export function ChatInput({
             <PromptInputSubmit disabled={disabled} onStop={onAbort} status={chatStatus} />
           </PromptInputFooter>
         </PromptInput>
+        <ComposerStats />
       </div>
     </footer>
   );
