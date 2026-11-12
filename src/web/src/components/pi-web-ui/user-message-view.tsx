@@ -100,7 +100,9 @@ export function UserMessageView({
             </div>
           </div>
         ) : (
-          <MessageResponse>{item.text}</MessageResponse>
+          <div data-quote-source="User">
+            <MessageResponse>{item.text}</MessageResponse>
+          </div>
         )}
       </MessageContent>
       {!editing && (

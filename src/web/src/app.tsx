@@ -27,6 +27,11 @@ import {
   SettingsPanel,
   UserMessageView,
 } from "./components/pi-web-ui";
+import {
+  formatQuotedPrompt,
+  type TranscriptQuote,
+  TranscriptQuoteAction,
+} from "./components/pi-web-ui/transcript-quote";
 import { processPromptFiles } from "./core/chat-conversion";
 import { copyText, formatTokens, isEditableTarget } from "./core/format";
 import { PiClient } from "./core/pi-client";
@@ -94,6 +99,8 @@ export function App() {
   );
 
   const [draftText, setDraftText] = useState("");
+  const [quotes, setQuotes] = useState<TranscriptQuote[]>([]);
+  const transcriptRef = useRef<HTMLDivElement>(null);
 
   const [queuedMessages, setQueuedMessages] = useState<PromptCommand[]>([]);
 
@@ -180,7 +187,7 @@ export function App() {
   const submitMessage = useCallback(
     async ({ text, files }: { text: string; files?: unknown[] }) => {
       if (usePiWebUiStore.getState().loadingTreeEntryId) return;
-      const trimmed = text.trim();
+      const trimmed = formatQuotedPrompt(text, quotes);
       const images = await processPromptFiles(files);
       if (!trimmed && images.length === 0) return;
 
@@ -190,16 +197,22 @@ export function App() {
         images: images.length ? images : undefined,
       };
 
+      const clearSubmittedDraft = () => {
+        setDraftText((current) => (current === text ? "" : current));
+        setQuotes((current) => current.filter((quote) => !quotes.some((sent) => sent.id === quote.id)));
+      };
+
       if (chatStatus === "streaming" || chatStatus === "submitted") {
         setQueuedMessages((current) => [...current, command]);
-        setDraftText("");
+        clearSubmittedDraft();
         return;
       }
 
       await sendPrompt(command);
-      setDraftText("");
+      if (usePiWebUiStore.getState().error) throw new Error(usePiWebUiStore.getState().error || "Prompt failed");
+      clearSubmittedDraft();
     },
-    [chatStatus, nextPromptId, sendPrompt],
+    [chatStatus, nextPromptId, sendPrompt, quotes],
   );
 
   const openModelPicker = useCallback(async () => {
@@ -385,7 +398,7 @@ export function App() {
 
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
-            <div className="relative min-h-0 flex-1">
+            <div ref={transcriptRef} className="relative min-h-0 flex-1">
               <Conversation className="h-full">
                 <ConversationContent className="mx-auto w-full max-w-3xl gap-3 px-4 py-6">
                   {items.length === 0 ? (
@@ -422,6 +435,15 @@ export function App() {
                 </ConversationContent>
                 <ConversationScrollButton />
               </Conversation>
+
+              <TranscriptQuoteAction
+                transcriptRef={transcriptRef}
+                disabled={loadingTreeEntryId !== null}
+                onQuote={(quote) => {
+                  setQuotes((current) => [...current, quote]);
+                  document.querySelector<HTMLTextAreaElement>('textarea[name="message"]')?.focus();
+                }}
+              />
 
               {contextOpen && (
                 <ContextPopover
@@ -465,6 +487,8 @@ export function App() {
             )}
 
             <ChatInput
+              quotes={quotes}
+              onRemoveQuote={(id) => setQuotes((current) => current.filter((quote) => quote.id !== id))}
               disabled={loadingTreeEntryId !== null}
               chatStatus={chatStatus}
               onAbort={abort}
