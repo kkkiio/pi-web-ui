@@ -42,7 +42,11 @@ export function TranscriptActivity({ items, children }: { items: ChatItem[]; chi
     <Collapsible open={open ?? running} onOpenChange={setOpen}>
       <CollapsibleTrigger className="group/activity flex max-w-full items-center gap-2 rounded-md py-1 text-left text-muted-foreground text-sm hover:text-foreground">
         <ChevronRightIcon className="size-4 shrink-0 transition-transform group-data-[state=open]/activity:rotate-90" />
-        <span>{tools.length ? `${tools.length} tool calls` : `${items.length} assistant updates`}</span>
+        <span>
+          {tools.length
+            ? `${tools.length} tool call${tools.length === 1 ? "" : "s"}`
+            : `${items.length} assistant updates`}
+        </span>
         {failed > 0 && <span className="text-destructive">· {failed} failed</span>}
         {running && <span>· Running</span>}
       </CollapsibleTrigger>

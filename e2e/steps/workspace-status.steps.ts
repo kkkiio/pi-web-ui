@@ -136,9 +136,13 @@ Then("编辑失败后仍保留原对话与草稿", async ({ page }) => {
 Given("agent 会在同一消息中返回文字与多个工具调用", async () => {
   fixtureName = "edit-history";
 });
+When("我展开包含 {int} 次工具调用的活动组", async ({ page }, count: number) => {
+  await page.getByRole("button", { name: `${count} tool calls`, exact: true }).click();
+});
 Then("旧分支的文字和工具行全部移除", async ({ page }) => {
   await expect(page.getByRole("log").getByText("New branch reply", { exact: true })).toBeVisible();
   await expect(page.getByRole("log").getByText("Old branch explanation", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("log").getByText("Old branch done", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "2 tool calls", exact: true })).toHaveCount(0);
   await expect(page.getByRole("log").getByText("write", { exact: true })).toHaveCount(0);
 });

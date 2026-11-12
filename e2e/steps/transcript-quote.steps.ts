@@ -62,6 +62,7 @@ Given("a transcript with prose, reasoning and tool output", async ({ page }) => 
   // Restore the persisted transcript so later selections cannot race the end-of-turn sync.
   await page.reload();
   await expect(page.getByText("Explain the selected sentence before changing code.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "1 tool call", exact: true }).click();
   await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill(feedback);
 });
 
@@ -112,7 +113,7 @@ Then("the draft is preserved without quotes", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue(feedback);
 });
 When("I select text outside the transcript", async ({ page }) => {
-  await selectText(page.locator("footer"), "Enter sends");
+  await selectText(page.locator("header").getByText("connected", { exact: true }), "connected");
 });
 Then("no quote action is shown", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Quote / Add to Chat", exact: true })).toHaveCount(0);
