@@ -14,6 +14,7 @@ export type PiWebUiHarness = {
 
 export type PiWebUiHarnessOptions = {
   git?: boolean;
+  sessionName?: string;
   enableEditing?: boolean;
   cancelNavigation?: boolean;
 };
@@ -46,7 +47,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
       "--session-dir",
       sessionDir,
       "--name",
-      "Pi Web UI E2E",
+      options.sessionName ?? "Pi Web UI E2E",
       "--approve",
       "--no-skills",
       "--no-prompt-templates",

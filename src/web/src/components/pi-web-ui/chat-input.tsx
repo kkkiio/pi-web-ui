@@ -47,7 +47,7 @@ export function ChatInput({
       <div className="mx-auto w-full max-w-3xl">
         <PromptInput
           accept="image/*"
-          className="rounded-xl border bg-card shadow-sm"
+          className="rounded-2xl border bg-card shadow-sm"
           globalDrop={true}
           multiple
           onSubmit={onSubmit}
@@ -68,7 +68,7 @@ export function ChatInput({
             <PromptInputTools>
               <PromptAttachmentButton />
             </PromptInputTools>
-            <PromptInputSubmit disabled={disabled} onStop={onAbort} status={chatStatus} />
+            <PromptInputSubmit className="rounded-full" disabled={disabled} onStop={onAbort} status={chatStatus} />
           </PromptInputFooter>
         </PromptInput>
         <ComposerStats />

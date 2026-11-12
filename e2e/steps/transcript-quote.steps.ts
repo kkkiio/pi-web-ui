@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Locator } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
@@ -144,6 +145,58 @@ Then("Pi receives the quote without feedback", async ({ page }) => {
   await expect(page.getByRole("log").getByText(partial, { exact: true })).toBeVisible();
   expect(persistedPrompt()).toBe(`Quoted from Assistant:\n> ${partial}`);
 });
+Given("Pi is ready to discuss report exports", async ({ page }) => {
+  harness = await startPiWebUi("report-export", { sessionName: "Preview report exports" });
+  for (const name of ["export.mjs", "export.test.mjs"]) {
+    copyFileSync(path.resolve(__dirname, "../fixtures/report-export", name), path.join(harness.workspaceDir, name));
+  }
+  execFileSync("git", ["add", "export.mjs", "export.test.mjs"], { cwd: harness.workspaceDir });
+  execFileSync("git", ["commit", "-m", "Add report export command"], { cwd: harness.workspaceDir });
+  await page.goto(harness.pageUrl);
+  await expect(page.getByText("connected", { exact: true })).toBeVisible();
+});
+
+When("I ask Pi for an export preview", async ({ page }) => {
+  await page
+    .getByRole("textbox", { name: "Message Pi" })
+    .fill("Can we add `--dry-run` to the export command? I want to see which files it would write.");
+  await page.getByRole("button", { name: "Submit", exact: true }).click();
+  await expect(page.getByText(/The export command already builds/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeVisible();
+});
+
+When("I quote the proposed behavior and clarify the output paths", async ({ page }) => {
+  const quote = "I’d print those paths in dry-run mode";
+  await selectText(page.getByText(/The export command already builds/), quote);
+  await page.getByRole("button", { name: "Quote / Add to Chat", exact: true }).click();
+  await page.getByRole("textbox", { name: "Message Pi" }).fill("Make them relative to the output directory, please.");
+  await page.getByRole("button", { name: "Submit", exact: true }).click();
+});
+
+Then("the transcript shows the verified dry-run result", async ({ page }) => {
+  if (!harness) throw new Error("Pi harness is not running");
+  const result = page.getByText("The test confirms the path is relative and the output directory stays empty.", {
+    exact: true,
+  });
+  await expect(result).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeVisible();
+  expect(persistedPrompt()).toContain("Quoted from Assistant:\n> I’d print those paths in dry-run mode");
+  const testOutput = execFileSync(process.execPath, ["--test", "--test-reporter=tap", "export.test.mjs"], {
+    cwd: harness.workspaceDir,
+    encoding: "utf8",
+  });
+  expect(testOutput).toContain("# pass 1");
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: "3 tool calls", exact: true })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(page.getByRole("button", { name: "Open Changes" })).toContainText(/main.*\+\d+/);
+  await expect(result).toBeInViewport();
+  await expect(page).toHaveScreenshot("pi-web-ui-example.png");
+});
+
 After(async () => {
   await harness?.stop();
   harness = null;

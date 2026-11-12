@@ -4,11 +4,13 @@ import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
 import duplicateArtifactResponses from "./responses/duplicate-artifact.ts";
 import editHistoryResponses from "./responses/edit-history.ts";
 import externalArtifactResponses from "./responses/external-artifact.ts";
+import reportExportResponses from "./responses/report-export.ts";
 import toolFailureResponses from "./responses/tool-failure.ts";
 import transcriptQuoteResponses from "./responses/transcript-quote.ts";
 import workspaceArtifactResponses from "./responses/workspace-artifact.ts";
 
 const responsesByName = {
+  "report-export": reportExportResponses,
   "transcript-quote": transcriptQuoteResponses,
   "edit-history": editHistoryResponses,
   "chat-lifecycle": chatLifecycleResponses,
