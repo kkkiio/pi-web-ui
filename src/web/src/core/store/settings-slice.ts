@@ -15,6 +15,8 @@ export const createSettingsSlice: StoreSlice<SettingsSlice> = (set, get) => ({
   authConfigured: false,
   authEnabled: false,
   themeMode: initialThemeMode(),
+  lightPalette:
+    localStorage.getItem("pi-web-ui-light-palette") === "solarized-light" ? "solarized-light" : "warm-paper",
   showThinking: initialShowThinking(),
 
   refreshSettingsState: async () => {
@@ -67,6 +69,10 @@ export const createSettingsSlice: StoreSlice<SettingsSlice> = (set, get) => ({
   setAutoCompaction: (autoCompaction) => set({ autoCompaction }),
   setAuthEnabled: (authEnabled) => set({ authEnabled }),
   setThemeMode: (themeMode) => set({ themeMode }),
+  setLightPalette: (lightPalette) => {
+    localStorage.setItem("pi-web-ui-light-palette", lightPalette);
+    set({ lightPalette });
+  },
   setShowThinking: (showThinking) => set({ showThinking }),
 
   cycleThinking: async () => {

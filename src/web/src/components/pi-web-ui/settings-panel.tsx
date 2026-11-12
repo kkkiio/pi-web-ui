@@ -5,13 +5,21 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import { THINKING_LEVELS } from "../../core/constants";
-import type { ThemeMode } from "../../core/types";
+import type { LightPalette, ThemeMode } from "../../core/types";
 import { Modal } from "./modal";
+
+const lightPalettes = [
+  { id: "warm-paper", label: "Warm Paper" },
+  { id: "solarized-light", label: "Solarized Light" },
+] as const;
 
 export function SettingsPanel(props: {
   authConfigured: boolean;
   authEnabled: boolean;
   autoCompaction: boolean;
+  lightPalette: LightPalette;
+  onSetLightPalette: (palette: LightPalette) => void;
+  resolvedTheme: "light" | "dark";
   onClose: () => void;
   onRenameSession: (name: string) => void;
   onSetAutoCompaction: (enabled: boolean) => Promise<void>;
@@ -34,6 +42,8 @@ export function SettingsPanel(props: {
           <div className="grid grid-cols-3 gap-2">
             {(["system", "light", "dark"] as ThemeMode[]).map((theme) => (
               <Button
+                aria-pressed={props.themeMode === theme}
+                className="capitalize"
                 key={theme}
                 onClick={() => props.onSetTheme(theme)}
                 type="button"
@@ -44,6 +54,36 @@ export function SettingsPanel(props: {
             ))}
           </div>
         </section>
+
+        <fieldset className="space-y-2">
+          <legend className="font-medium text-sm">Color Palette</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {props.resolvedTheme === "dark" ? (
+              <div className="flex items-center gap-2 rounded-md border border-foreground px-2 py-1.5 text-sm">
+                <span aria-hidden="true" className="palette-swatch" data-swatch="solarized-dark" />
+                <span>Solarized Dark</span>
+              </div>
+            ) : (
+              lightPalettes.map(({ id, label }) => (
+                <label
+                  className="flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-sm has-checked:border-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring"
+                  key={id}
+                >
+                  <input
+                    checked={props.lightPalette === id}
+                    className="sr-only"
+                    name="light-palette"
+                    onChange={() => props.onSetLightPalette(id)}
+                    type="radio"
+                    value={id}
+                  />
+                  <span aria-hidden="true" className="palette-swatch" data-swatch={id} />
+                  <span>{label}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </fieldset>
 
         <section className="space-y-2">
           <h3 className="font-medium text-sm">Session</h3>

@@ -1,5 +1,5 @@
 import { DiffModeEnum, DiffView } from "@git-diff-view/react";
-import { CopyIcon, GitCompareIcon, Loader2Icon, PanelRightCloseIcon, RotateCwIcon, XIcon } from "lucide-react";
+import { CopyIcon, GitCompareIcon, Loader2Icon, RotateCwIcon, XIcon } from "lucide-react";
 import "@git-diff-view/react/styles/diff-view-pure.css";
 import {
   type CSSProperties,
@@ -29,7 +29,6 @@ export function RightPanel({
   onCloseTab,
   onRefreshTab,
   onSelectTab,
-  onToggleVisible,
   tabs,
   visible,
 }: {
@@ -37,7 +36,6 @@ export function RightPanel({
   onCloseTab: (id: string) => void;
   onRefreshTab: (tab: RightPanelTab) => void;
   onSelectTab: (id: string) => void;
-  onToggleVisible: () => void;
   tabs: RightPanelTab[];
   visible: boolean;
 }) {
@@ -95,7 +93,7 @@ export function RightPanel({
     <aside
       className={cn(
         !visible && "!hidden",
-        "fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-background shadow-xl xl:relative xl:z-auto xl:w-[var(--right-panel-width)] xl:shrink-0 xl:shadow-none",
+        "absolute inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-background shadow-xl xl:relative xl:z-auto xl:w-[var(--right-panel-width)] xl:shrink-0 xl:shadow-none",
       )}
       style={{ "--right-panel-width": `${panelWidth}px` } as CSSProperties}
     >
@@ -158,9 +156,6 @@ export function RightPanel({
             <RotateCwIcon className="size-4" />
           </Button>
         )}
-        <Button onClick={onToggleVisible} size="icon-sm" title="Hide right panel" type="button" variant="ghost">
-          <PanelRightCloseIcon className="size-4" />
-        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">

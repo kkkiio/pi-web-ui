@@ -2,6 +2,7 @@ import type { ChatStatus } from "ai";
 import type { ComponentType } from "react";
 
 export type ConnectionState = "connecting" | "connected" | "disconnected";
+export type LightPalette = "warm-paper" | "solarized-light";
 export type ThemeMode = "system" | "light" | "dark";
 export type AppView = "chat" | "projects";
 export type SystemTone = "info" | "success" | "error";

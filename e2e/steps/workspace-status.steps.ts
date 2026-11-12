@@ -25,14 +25,14 @@ Given("agent 会执行失败的 write 工具", async () => {
 When("我打开 Pi Web UI", async ({ page }) => {
   harness = await startPiWebUi(fixtureName, { git: workspaceGit, cancelNavigation });
   await page.goto(harness.pageUrl);
-  await expect(page.getByPlaceholder("Message Pi...")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();
 });
 When("我发送消息 {string}", async ({ page }, message: string) => {
-  await page.getByPlaceholder("Message Pi...").fill(message);
+  await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill(message);
   await page.getByRole("button", { name: "Submit", exact: true }).click();
 });
 When("我让 agent 更新 workspace status 文档", async ({ page }) => {
-  await page.getByPlaceholder("Message Pi...").fill("Update the workspace status docs.");
+  await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill("Update the workspace status docs.");
   await page.getByRole("button", { name: "Submit", exact: true }).click();
   await expect(page.getByText("Updated the workspace status docs.")).toBeVisible();
 });
@@ -71,7 +71,7 @@ Then("右侧详情面板显示 git diff tab", async ({ page }) => {
   await expect(panel).toContainText("The workspace float shows the current git branch");
 });
 When("我隐藏右侧详情面板", async ({ page }) => {
-  await page.getByTitle("Hide right panel").click();
+  await page.getByRole("button", { name: "Hide right panel", exact: true }).click();
   await expect(page.locator("aside")).toBeHidden();
 });
 When("我恢复右侧详情面板", async ({ page }) => {
@@ -91,7 +91,7 @@ Then("面板占满移动端宽度", async ({ page }) => {
   expect(box?.width).toBe(390);
 });
 Then("聊天输入框仍然完整可见", async ({ page }) => {
-  await expect(page.getByPlaceholder("Message Pi...")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();
 });
 Then("编辑按钮不可用", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Edit message", exact: true })).toBeDisabled();
@@ -100,7 +100,7 @@ When("我启用行内编辑", async () => {
   await harness?.enableEditing();
 });
 When("我编辑并重新发送消息", async ({ page }) => {
-  await page.getByPlaceholder("Message Pi...").fill("保留的草稿");
+  await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill("保留的草稿");
   const edit = page.getByRole("button", { name: "Edit message", exact: true });
   await expect(edit).toBeEnabled();
   await edit.click();
@@ -111,7 +111,7 @@ Then("旧问题从当前对话移除", async ({ page }) => {
   await expect(page.getByRole("log").getByText("原始问题", { exact: true })).toHaveCount(0);
 });
 Then("底部草稿保留", async ({ page }) => {
-  await expect(page.getByPlaceholder("Message Pi...")).toHaveValue("保留的草稿");
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue("保留的草稿");
 });
 After(async () => {
   await harness?.stop();
@@ -127,7 +127,7 @@ Given("导航会被 extension 取消", async () => {
 Then("编辑失败后仍保留原对话与草稿", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("Navigation cancelled");
   await expect(page.getByRole("textbox", { name: "Edit message", exact: true })).toHaveValue("修改后的问题");
-  await expect(page.getByPlaceholder("Message Pi...")).toHaveValue("保留的草稿");
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue("保留的草稿");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("log").getByText("原始问题", { exact: true })).toBeVisible();
   await expect(page.getByRole("log").getByText("修改后的问题", { exact: true })).toHaveCount(0);

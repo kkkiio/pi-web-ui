@@ -55,14 +55,14 @@ async function selectText(locator: Locator, text: string) {
 Given("a transcript with prose, reasoning and tool output", async ({ page }) => {
   harness = await startPiWebUi("transcript-quote");
   await page.goto(harness.pageUrl);
-  await page.getByPlaceholder("Message Pi...").fill("Inspect the request.");
+  await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill("Inspect the request.");
   await page.getByRole("button", { name: "Submit", exact: true }).click();
   await expect(page.getByText("Explain the selected sentence before changing code.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeVisible();
   // Restore the persisted transcript so later selections cannot race the end-of-turn sync.
   await page.reload();
   await expect(page.getByText("Explain the selected sentence before changing code.", { exact: true })).toBeVisible();
-  await page.getByPlaceholder("Message Pi...").fill(feedback);
+  await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill(feedback);
 });
 
 When("I quote a partial assistant sentence", async ({ page }) => {
@@ -70,8 +70,8 @@ When("I quote a partial assistant sentence", async ({ page }) => {
   await page.getByRole("button", { name: "Quote / Add to Chat", exact: true }).click();
 });
 Then("the draft is preserved and focused", async ({ page }) => {
-  await expect(page.getByPlaceholder("Message Pi...")).toHaveValue(feedback);
-  await expect(page.getByPlaceholder("Message Pi...")).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue(feedback);
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeFocused();
   await expect(page.getByRole("group", { name: "Quoted selections" })).toContainText(partial);
 });
 When("I add reasoning and multiline tool output quotes", async ({ page }) => {
@@ -93,7 +93,7 @@ Then("all three quotes are attached", async ({ page }) => {
 When("I submit the quoted feedback", async ({ page }) => {
   await page.getByRole("button", { name: "Submit", exact: true }).click();
   await expect(page.getByRole("group", { name: "Quoted selections" })).toHaveCount(0);
-  await expect(page.getByPlaceholder("Message Pi...")).toHaveValue("");
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue("");
 });
 Then("Pi receives the exact quotes and feedback after reload", async ({ page }) => {
   await expect(page.getByText("你好，Pi Web UI 已收到消息。", { exact: true })).toBeVisible();
@@ -109,7 +109,7 @@ When("I remove the attached quote", async ({ page }) => {
 });
 Then("the draft is preserved without quotes", async ({ page }) => {
   await expect(page.getByRole("group", { name: "Quoted selections" })).toHaveCount(0);
-  await expect(page.getByPlaceholder("Message Pi...")).toHaveValue(feedback);
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue(feedback);
 });
 When("I select text outside the transcript", async ({ page }) => {
   await selectText(page.locator("footer"), "Enter sends");
@@ -124,7 +124,7 @@ When("I dismiss a transcript selection with Escape", async ({ page }) => {
 });
 When("I use a mobile viewport and attach a quote", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByPlaceholder("Message Pi...").fill("");
+  await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill("");
   await selectText(page.getByText("The retry policy must preserve the original request.", { exact: true }), partial);
   const action = page.getByRole("button", { name: "Quote / Add to Chat", exact: true });
   await expect(action).toBeInViewport();
@@ -133,7 +133,7 @@ When("I use a mobile viewport and attach a quote", async ({ page }) => {
 Then("the quote and composer controls fit the viewport", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove quote", exact: true })).toBeInViewport();
   await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeInViewport();
-  await expect(page.getByPlaceholder("Message Pi...")).toBeInViewport();
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 When("I send only the quote", async ({ page }) => {

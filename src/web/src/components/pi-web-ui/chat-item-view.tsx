@@ -1,33 +1,36 @@
-import { CheckIcon, CopyIcon } from "lucide-react";
-import { useState } from "react";
+import { CopyIcon, EllipsisIcon, QuoteIcon } from "lucide-react";
+import { nanoid } from "nanoid";
 
-import {
-  Message,
-  MessageAction,
-  MessageActions,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
 
+import type { TranscriptQuote } from "./transcript-quote";
+
 export function ChatItemView({
   item,
   onCopy,
+  onQuote,
   onToggleTool,
   showThinking,
 }: {
   item: ChatItem;
   onCopy: (text: string) => Promise<void> | void;
+  onQuote: (quote: TranscriptQuote) => void;
   onToggleTool: (id: string, open: boolean) => void;
   showThinking: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
-
   if (item.kind === "system") {
     return (
       <div
@@ -76,19 +79,42 @@ export function ChatItemView({
   const canCopy = item.text.trim().length > 0 && item.copyable !== false && !item.streaming;
   const isActivity = item.presentation === "activity";
 
-  const copyMessage = async () => {
-    if (!canCopy) return;
-    await onCopy(item.text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  };
-
   return (
-    <Message className={cn(isActivity && "gap-1")} from={item.role}>
+    <Message
+      className={cn(
+        canCopy && "relative rounded-lg has-[>[data-slot=dropdown-menu-trigger][data-state=open]]:bg-muted/50",
+        isActivity && "gap-1",
+      )}
+      from={item.role}
+    >
+      {canCopy && (
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              aria-label="Message actions"
+              className="absolute -top-3 right-0 z-10 size-7 rounded-full bg-background shadow-xs transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+              size="icon"
+              variant="outline"
+            >
+              <EllipsisIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44 rounded-lg">
+            <DropdownMenuItem onSelect={() => onQuote({ id: nanoid(), source: "Assistant", text: item.text })}>
+              <QuoteIcon />
+              Add to Chat
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void onCopy(item.text)}>
+              <CopyIcon />
+              Copy as Markdown
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <MessageContent
         className={cn(
           "w-full",
-          isActivity && "gap-1 text-muted-foreground",
+          isActivity && "gap-1",
           item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]',
         )}
       >
@@ -101,20 +127,11 @@ export function ChatItemView({
           </Reasoning>
         )}
         <div data-quote-source="Assistant">
-          <MessageResponse
-            className={cn(isActivity && "text-muted-foreground [&_ol]:my-1 [&_p]:my-0 [&_pre]:my-1 [&_ul]:my-1")}
-          >
+          <MessageResponse className={cn(isActivity && "[&_ol]:my-1 [&_p]:my-0 [&_pre]:my-1 [&_ul]:my-1")}>
             {item.text}
           </MessageResponse>
         </div>
       </MessageContent>
-      {canCopy && (
-        <MessageActions className="self-start opacity-0 transition-opacity group-hover:opacity-100">
-          <MessageAction label="Copy message" onClick={copyMessage} tooltip="Copy">
-            {copied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
-          </MessageAction>
-        </MessageActions>
-      )}
     </Message>
   );
 }

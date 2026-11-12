@@ -8,7 +8,8 @@ import {
   SettingsIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { THINKING_LEVELS } from "../../core/constants";
 import type { ConnectionState, GitStatusResult } from "../../core/types";
 import { ConnectionDot } from "./connection-dot";
 
@@ -24,18 +25,11 @@ type AppHeaderProps = {
   modelLabel: string;
   thinkingLevel: string;
   isViewingOtherSession: boolean;
-  /** Context window size in tokens (0 = unknown). */
-  contextWindowSize: number;
-  /** Context usage percentage (0-100). */
-  contextPercent: number;
   /** Should suggest compaction (80% or higher usage). */
   shouldSuggestCompaction: boolean;
-  /** Total cost in dollars. */
-  totalCost: number;
   onReturnToLive: () => void;
   onOpenModelPicker: () => void;
-  onCycleThinking: () => void;
-  onToggleContext: () => void;
+  onSetThinking: (level: string) => void;
   onCompactContext: () => void;
   onOpenCommandPalette: () => void;
 };
@@ -52,14 +46,10 @@ export function AppHeader({
   modelLabel,
   thinkingLevel,
   isViewingOtherSession,
-  contextWindowSize,
-  contextPercent,
   shouldSuggestCompaction,
-  totalCost,
   onReturnToLive,
   onOpenModelPicker,
-  onCycleThinking,
-  onToggleContext,
+  onSetThinking,
   onCompactContext,
   onOpenCommandPalette,
 }: AppHeaderProps) {
@@ -87,26 +77,19 @@ export function AppHeader({
           <ChevronsUpDownIcon className="size-4" />
           <span className="hidden sm:inline">{modelLabel}</span>
         </Button>
-        <Button aria-label="Cycle thinking level" onClick={onCycleThinking} size="sm" type="button" variant="outline">
-          <BrainIcon className="size-4" />
-          <span className="hidden sm:inline">{thinkingLevel}</span>
-        </Button>
-        {contextWindowSize > 0 && (
-          <Button
-            className={cn(shouldSuggestCompaction && "border-amber-500 text-amber-600")}
-            onClick={onToggleContext}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {contextPercent}%
-          </Button>
-        )}
-        {totalCost > 0 && (
-          <div className="hidden rounded-md border px-2 py-1 text-muted-foreground text-xs lg:block">
-            ${totalCost.toFixed(4)}
-          </div>
-        )}
+        <Select onValueChange={onSetThinking} value={thinkingLevel}>
+          <SelectTrigger aria-label="Thinking level" size="sm">
+            <BrainIcon className="size-4" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            {THINKING_LEVELS.map((level) => (
+              <SelectItem key={level} value={level}>
+                {level}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {shouldSuggestCompaction && (
           <Button onClick={onCompactContext} size="sm" type="button" variant="secondary">
             Compact
@@ -136,6 +119,9 @@ export function AppHeader({
         <Button aria-label="Settings" onClick={onOpenSettings} size="icon-sm" type="button" variant="ghost">
           <SettingsIcon className="size-4" />
         </Button>
+        <Button aria-label="Commands" onClick={onOpenCommandPalette} size="icon-sm" type="button" variant="ghost">
+          <CommandIcon className="size-4" />
+        </Button>
         <Button
           aria-label={rightPanelOpen ? "Hide right panel" : "Show right panel"}
           aria-expanded={rightPanelOpen}
@@ -145,9 +131,6 @@ export function AppHeader({
           variant="ghost"
         >
           <PanelRightIcon className="size-4" />
-        </Button>
-        <Button aria-label="Commands" onClick={onOpenCommandPalette} size="icon-sm" type="button" variant="ghost">
-          <CommandIcon className="size-4" />
         </Button>
       </div>
     </header>
