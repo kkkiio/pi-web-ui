@@ -70,7 +70,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       error: null,
       items,
       lastUsage: findLastUsage(entries),
-      usageTotals: sumUsageTotals(entries),
+      usageTotals: sumUsageTotals(tree),
       contextUsage: sync.contextUsage ?? null,
       leafId: sync.leafId ?? null,
       modelLabel: sync.model?.id ? sync.model.id.split("/").pop() || sync.model.id : "model",
