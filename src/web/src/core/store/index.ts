@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createConnectionSlice } from "./connection-slice";
 import { createDialogSlice } from "./dialog-slice";
+import { createQuestionSlice } from "./question-slice";
 import { createRightPanelSlice } from "./right-panel-slice";
 import { createSessionSlice } from "./session-slice";
 import { createSettingsSlice } from "./settings-slice";
@@ -10,6 +11,7 @@ import { createWorkspaceSlice } from "./workspace-slice";
 export const usePiWebUiStore = create<PiWebUiStore>()((...args) => ({
   ...createConnectionSlice(...args),
   ...createSessionSlice(...args),
+  ...createQuestionSlice(...args),
   ...createSettingsSlice(...args),
   ...createWorkspaceSlice(...args),
   ...createRightPanelSlice(...args),

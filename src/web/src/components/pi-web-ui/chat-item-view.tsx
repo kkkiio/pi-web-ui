@@ -12,9 +12,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-
+import { historicalQuestion } from "../../core/ask-user-question";
+import { usePiWebUiStore } from "../../core/store";
 import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
+import { AskUserQuestionCard } from "./ask-user-question-card";
 
 import type { TranscriptQuote } from "./transcript-quote";
 
@@ -31,6 +33,7 @@ export function ChatItemView({
   onToggleTool: (id: string, open: boolean) => void;
   showThinking: boolean;
 }) {
+  const questionnaire = usePiWebUiStore((state) => state.questionnaires[item.id]);
   if (item.kind === "system") {
     return (
       <div
@@ -47,6 +50,8 @@ export function ChatItemView({
   }
 
   if (item.kind === "tool") {
+    const question = questionnaire ?? historicalQuestion(item);
+    if (question) return <AskUserQuestionCard key={item.id} questionnaire={question} />;
     const expandable = isToolExpandable(item);
     const open = expandable ? (item.open ?? false) : false;
 

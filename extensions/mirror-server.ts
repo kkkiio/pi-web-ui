@@ -16,11 +16,11 @@ import * as http from "node:http";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { WebSocket, WebSocketServer } from "ws";
+import { createQuestionTool, QUESTION_CHANNEL } from "./ask-user-question";
 
 type SettingsData = {
   port?: string | number;
   host?: string;
-  disabled?: boolean;
 };
 
 type BrowserImage = {
@@ -120,7 +120,6 @@ const AGENT_DIR = path.resolve(
 function loadSettings(): {
   port: number;
   host: string;
-  autoStart: boolean;
 } {
   let settings: SettingsData = {};
   try {
@@ -135,18 +134,12 @@ function loadSettings(): {
   return {
     port: parseInt(String(process.env.PI_WEB_UI_PORT || settings.port || "3001"), 10),
     host: process.env.PI_WEB_UI_HOST || settings.host || "127.0.0.1",
-    autoStart: !(
-      process.env.PI_WEB_UI_DISABLED === "1" ||
-      process.env.PI_WEB_UI_DISABLED === "true" ||
-      settings.disabled === true
-    ),
   };
 }
 
 const SETTINGS = loadSettings();
 const PORT = SETTINGS.port;
 const HOST = SETTINGS.host;
-const AUTO_START = SETTINGS.autoStart;
 const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
 const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
 const STATIC_DIR = process.env.PI_WEB_UI_STATIC_DIR || findStaticDir();
@@ -218,6 +211,11 @@ export default function (pi: ExtensionAPI) {
   let latestCtx: ExtensionContext | null = null;
   let advancedFeaturesEnabled = false;
   let latestExecuteCtx: ExtensionCommandContext | null = null;
+  const liveToolEvents = new Map<string, { type: "event"; event: string; payload: Record<string, unknown> }>();
+  const questionTool = createQuestionTool(pi);
+  let questionListeners: (() => void)[] = [];
+  let serverStarting: Promise<void> | null = null;
+  let cancelServerStart: ((error?: Error) => void) | null = null;
 
   // ═══════════════════════════════════════
   // Helper: send to one client
@@ -257,6 +255,13 @@ export default function (pi: ExtensionAPI) {
   // Helper: stop the server
   // ═══════════════════════════════════════
   function stopServer() {
+    questionTool.deactivate();
+    for (const unsubscribe of questionListeners) unsubscribe();
+    questionListeners = [];
+    cancelServerStart?.();
+    advancedFeaturesEnabled = false;
+    latestExecuteCtx = null;
+    liveToolEvents.clear();
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
       heartbeatTimer = null;
@@ -274,6 +279,7 @@ export default function (pi: ExtensionAPI) {
     if (server) {
       try {
         server.close();
+        server.closeAllConnections();
       } catch {}
       server = null;
     }
@@ -282,11 +288,12 @@ export default function (pi: ExtensionAPI) {
   }
 
   // ═══════════════════════════════════════
-  // /webui-stop and /webui-start commands
+  // /webui-stop command
   // ═══════════════════════════════════════
   pi.registerCommand("webui-stop", {
     description: "Stop the pi-web-ui server",
     handler: async (_args, ctx) => {
+      latestCtx = ctx;
       if (!server) {
         ctx.ui.notify("pi-web-ui is not running", "warning");
         return;
@@ -297,32 +304,45 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("webui-start", {
-    description: "Start the pi-web-ui server",
-    handler: async (_args, ctx) => {
-      if (server) {
-        ctx.ui.notify(`pi-web-ui is already running at ${mirrorUrl}`, "warning");
-        return;
-      }
-      latestCtx = ctx;
-      startServer();
-      ctx.ui.notify("pi-web-ui server starting...", "info");
-    },
-  });
-
   // ═══════════════════════════════════════
   // /webui command — open Pi Web UI in browser
   // ═══════════════════════════════════════
   pi.registerCommand("webui", {
     description: "Open Pi Web UI in browser",
     handler: async (_args, ctx) => {
-      if (!mirrorUrl) {
-        ctx.ui.notify("pi-web-ui server not running yet", "warning");
+      latestCtx = ctx;
+      if (advancedFeaturesEnabled && server?.listening) {
+        latestExecuteCtx = ctx;
+        ctx.ui.notify(`Continue this session in Pi Web UI: ${mirrorUrl}`, "info");
         return;
       }
-      const { exec } = require("node:child_process");
-      exec(`open "${mirrorUrl}"`);
-      ctx.ui.notify(`Opened ${mirrorUrl}`, "info");
+      if (!ctx.isIdle()) {
+        ctx.ui.notify("Wait for the current agent turn to finish before enabling Pi Web UI.", "warning");
+        return;
+      }
+      try {
+        await startServer();
+        if (latestCtx !== ctx) return;
+        if (questionListeners.length === 0) {
+          questionListeners = ["prompt", "blocked"].map((phase) => {
+            const event = `${QUESTION_CHANNEL}:${phase}`;
+            return pi.events.on(event, (payload: unknown) => broadcast({ type: "event", event, payload: { payload } }));
+          });
+        }
+        questionTool.activate();
+      } catch (error) {
+        stopServer();
+        latestCtx?.ui.notify(
+          `Pi Web UI could not start: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return;
+      }
+      // Open via Pi's process helper; keep extension output off stdout/stderr.
+      const opener =
+        process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer.exe" : "xdg-open";
+      if (ctx.mode !== "rpc") void pi.exec(opener, [mirrorUrl]).catch(() => {});
+      latestCtx?.ui.notify(`Continue this session in Pi Web UI: ${mirrorUrl}`, "info");
       advancedFeaturesEnabled = true;
       // Capture full ExtensionCommandContext for session-control methods (navigateTree, fork, etc.).
       // Cleared on session_start/session_shutdown; user must re-run /webui after session replacement.
@@ -356,6 +376,11 @@ export default function (pi: ExtensionAPI) {
     pi.on(eventType as Parameters<ExtensionAPI["on"]>[0], async (event: unknown, ctx: ExtensionContext) => {
       latestCtx = ctx;
       const eventPayload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
+      if (server && typeof eventPayload.toolCallId === "string") {
+        if (eventType === "tool_execution_start") {
+          liveToolEvents.set(eventPayload.toolCallId, { type: "event", event: eventType, payload: eventPayload });
+        } else if (eventType === "tool_execution_end") liveToolEvents.delete(eventPayload.toolCallId);
+      }
 
       // Forward event to all connected browser clients
       broadcast({
@@ -380,6 +405,8 @@ export default function (pi: ExtensionAPI) {
     latestCtx = ctx;
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
+    stopServer();
+    liveToolEvents.clear();
     broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
     turnCount = 0;
     titleSet = false;
@@ -415,7 +442,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("turn_end", async (_event, ctx) => {
     latestCtx = ctx;
-    if (titleSet || turnCount < 2) return;
+    if (!server || titleSet || turnCount < 2) return;
 
     const sessionName = pi.getSessionName();
     if (sessionName && sessionName !== "New Session" && sessionName !== "Untitled") {
@@ -516,6 +543,7 @@ export default function (pi: ExtensionAPI) {
         sessionFile,
         isStreaming: !ctx.isIdle(),
         contextUsage,
+        liveEvents: [...liveToolEvents.values(), ...questionTool.replay()],
       },
     };
   }
@@ -542,6 +570,10 @@ export default function (pi: ExtensionAPI) {
 
     try {
       switch (request.method) {
+        case "answer_question": {
+          sendTo(ws, success(questionTool.answer(params)));
+          break;
+        }
         case "prompt": {
           const message = typeof params.message === "string" ? params.message : "";
           if (ctx && !ctx.isIdle()) {
@@ -1162,8 +1194,21 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   // Start server function (reusable)
   // ═══════════════════════════════════════
-  function startServer() {
-    if (server) return; // Already running
+  function startServer(): Promise<void> {
+    if (serverStarting) return serverStarting;
+    if (server?.listening) return Promise.resolve();
+    let resolveStart!: () => void;
+    let rejectStart!: (error: Error) => void;
+    serverStarting = new Promise<void>((resolve, reject) => {
+      resolveStart = resolve;
+      rejectStart = reject;
+    });
+    const started = serverStarting;
+    cancelServerStart = (error = new Error("Web UI startup was cancelled.")) => {
+      serverStarting = null;
+      cancelServerStart = null;
+      rejectStart(error);
+    };
 
     server = http.createServer(serveStaticFile);
     wss = new WebSocketServer({ noServer: true });
@@ -1264,17 +1309,23 @@ export default function (pi: ExtensionAPI) {
     const tryListen = (port: number, maxAttempts = 10) => {
       const activeServer = server;
       if (!activeServer) return;
-      activeServer.listen(port, HOST, () => {
-        onListening(port);
-      });
+      try {
+        activeServer.listen(port, HOST, () => {
+          if (server !== activeServer) return;
+          onListening(port);
+        });
+      } catch (error) {
+        cancelServerStart?.(error instanceof Error ? error : new Error(String(error)));
+        stopServer();
+        return;
+      }
       activeServer.once("error", (err: NodeError) => {
         if (err.code === "EADDRINUSE" && port < PORT + maxAttempts) {
           latestCtx?.ui.setStatus("webui", `pi-web-ui: trying port ${port + 1}`);
           activeServer.removeAllListeners("error");
           tryListen(port + 1, maxAttempts);
         } else {
-          latestCtx?.ui.setStatus("webui", "");
-          latestCtx?.ui.notify(`pi-web-ui failed to start: ${err.message}`, "error");
+          cancelServerStart?.(err);
           stopServer();
         }
       });
@@ -1286,31 +1337,23 @@ export default function (pi: ExtensionAPI) {
       updateMirrorStatus();
 
       latestCtx?.ui.notify(`pi-web-ui: ${mirrorUrl}`, "info");
+      serverStarting = null;
+      cancelServerStart = null;
+      resolveStart();
     };
 
     tryListen(PORT);
+    return started;
   }
-
-  // ═══════════════════════════════════════
-  // Auto-start on session begin
-  // ═══════════════════════════════════════
-  pi.on("session_start", async (_event, ctx) => {
-    latestCtx = ctx;
-
-    if (!AUTO_START) {
-      return;
-    }
-
-    startServer();
-  });
 
   // ═══════════════════════════════════════
   // Cleanup on shutdown
   // ═══════════════════════════════════════
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    latestCtx = ctx;
+    stopServer();
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
     latestCtx = null;
-    stopServer();
   });
 }

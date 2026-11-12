@@ -93,8 +93,8 @@ Then("面板占满移动端宽度", async ({ page }) => {
 Then("聊天输入框仍然完整可见", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();
 });
-Then("编辑按钮不可用", async ({ page }) => {
-  await expect(page.getByRole("button", { name: "Edit message", exact: true })).toBeDisabled();
+Then("编辑按钮可用", async ({ page }) => {
+  await expect(page.getByRole("button", { name: "Edit message", exact: true })).toBeEnabled();
 });
 When("我启用行内编辑", async () => {
   await harness?.enableEditing();

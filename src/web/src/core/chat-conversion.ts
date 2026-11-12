@@ -59,6 +59,7 @@ export function syncToItems(
     } else if (message.role === "toolResult" && message.toolCallId) {
       const tool = tools.get(message.toolCallId);
       if (tool) {
+        tool.outputDetails = message.details;
         if (entry.id && !tool.relatedEntryIds?.includes(entry.id)) {
           tool.relatedEntryIds = [...(tool.relatedEntryIds ?? []), entry.id];
         }

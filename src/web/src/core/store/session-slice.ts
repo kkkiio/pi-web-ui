@@ -11,6 +11,7 @@ import {
 } from "../chat-conversion";
 import { isToolExpandable } from "../tool-summary";
 import type { ChatItem } from "../types";
+import { dispatchPiEvent } from "./event-dispatch";
 import type { SessionSlice, StoreSlice } from "./types";
 
 let conversationSyncInFlight = false;
@@ -69,6 +70,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       currentModel: sync.model || null,
       error: null,
       items,
+      questionnaires: {},
       lastUsage: findLastUsage(entries),
       usageTotals: sumUsageTotals(tree),
       contextUsage: sync.contextUsage ?? null,
@@ -79,6 +81,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       thinkingLevel: sync.thinkingLevel || "off",
       tree,
     });
+    for (const event of sync.liveEvents ?? []) dispatchPiEvent(get(), event);
     get().requestGitStatusRefresh({ debounce: true });
   },
 
@@ -277,7 +280,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     streamingHasToolCall = true;
     set((state) => ({
       items: [
-        ...state.items,
+        ...state.items.filter((item) => item.kind !== "tool" || item.id !== event.toolCallId),
         {
           kind: "tool",
           id: event.toolCallId as string,
@@ -311,11 +314,27 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
               ...item,
               errorText: event.isError ? String(formatToolOutput(event.result)) : undefined,
               output: event.isError ? undefined : formatToolOutput(event.result),
+              outputDetails: (event.result as { details?: unknown } | undefined)?.details,
               state: event.isError ? "output-error" : "output-available",
             }
           : item,
       ),
     }));
+    const question = get().questionnaires[event.toolCallId];
+    if (question) {
+      const details = (event.result as { details?: { cancelled?: boolean } } | undefined)?.details;
+      set((state) => ({
+        questionnaires: {
+          ...state.questionnaires,
+          [question.toolCallId]: {
+            ...question,
+            status: event.isError || details?.cancelled ? "cancelled" : "answered",
+            submitting: false,
+            summary: formatToolOutput(event.result),
+          },
+        },
+      }));
+    }
   },
 
   markPromptReady: () => {
