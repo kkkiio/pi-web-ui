@@ -146,12 +146,12 @@ function UsagePanel({
   usageTotals: UsageTotals;
 }) {
   const rows = [
-    { label: "未缓存输入", value: usageTotals.input },
-    { label: "缓存读", value: usageTotals.cacheRead },
-    ...(usageTotals.cacheWrite > 0 ? [{ label: "缓存写", value: usageTotals.cacheWrite }] : []),
-    { label: "输出", value: usageTotals.output },
-    ...(cacheHit !== null ? [{ label: "缓存命中率", text: `${cacheHit.toFixed(1)}%` }] : []),
-    ...(usageTotals.cost > 0 ? [{ label: "成本", text: `$${usageTotals.cost.toFixed(3)}` }] : []),
+    { label: "Uncached input", value: usageTotals.input },
+    { label: "Cache read", value: usageTotals.cacheRead },
+    ...(usageTotals.cacheWrite > 0 ? [{ label: "Cache write", value: usageTotals.cacheWrite }] : []),
+    { label: "Output", value: usageTotals.output },
+    ...(cacheHit !== null ? [{ label: "Cache hit", text: `${cacheHit.toFixed(1)}%` }] : []),
+    ...(usageTotals.cost > 0 ? [{ label: "Cost", text: `$${usageTotals.cost.toFixed(3)}` }] : []),
   ];
 
   return (
@@ -163,7 +163,7 @@ function UsagePanel({
       <div className="flex items-center justify-between text-xs">
         <span className="flex items-center gap-1.5 font-medium">
           <DatabaseIcon className="size-3.5" />
-          Token 用量
+          Token usage
         </span>
         <span className="text-muted-foreground tabular-nums">{formatCompactTokens(total)} tok</span>
       </div>

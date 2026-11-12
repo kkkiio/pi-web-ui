@@ -78,6 +78,8 @@ export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
       break;
     case "model_select":
       if (event.model) store.setCurrentModel(event.model);
+      // The context window travels with the model, so occupancy has to be re-read.
+      void store.requestConversationSync({ debounce: true });
       break;
     default:
       break;

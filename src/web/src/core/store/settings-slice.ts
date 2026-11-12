@@ -88,6 +88,7 @@ export const createSettingsSlice: StoreSlice<SettingsSlice> = (set, get) => ({
         modelLabel: shortModelName(model.id),
         ...(model.contextWindow && { contextWindowSize: model.contextWindow }),
       });
+      void get().requestConversationSync({ debounce: true });
     } catch (error) {
       get().setError(error instanceof Error ? error.message : "Failed to switch model");
     }
