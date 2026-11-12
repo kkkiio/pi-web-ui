@@ -27,6 +27,7 @@ jobs:
       - name: Check
         run: |
           npx tsc --noEmit
+          npm run check:extension
           npm run check
 
       - name: Build

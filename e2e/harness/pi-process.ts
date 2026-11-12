@@ -9,10 +9,13 @@ export type PiWebUiHarness = {
   port: number;
   workspaceDir: string;
   stop: () => Promise<void>;
+  enableEditing: () => Promise<void>;
 };
 
 export type PiWebUiHarnessOptions = {
   git?: boolean;
+  enableEditing?: boolean;
+  cancelNavigation?: boolean;
 };
 
 export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessOptions = {}): Promise<PiWebUiHarness> {
@@ -32,7 +35,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
 
   const processOutput: string[] = [];
   const piProcess = spawn(
-    process.env.PI_E2E_BIN || "pi",
+    process.env.PI_E2E_BIN || path.join(repoRoot, "node_modules/.bin/pi"),
     [
       "--mode",
       "rpc",
@@ -59,6 +62,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
         ...process.env,
         PI_CODING_AGENT_DIR: agentDir,
         PI_E2E: "1",
+        PI_WEB_UI_E2E_CANCEL_NAVIGATION: options.cancelNavigation ? "1" : "0",
         PI_OFFLINE: "1",
         PI_WEB_UI_HOST: "127.0.0.1",
         PI_WEB_UI_PORT: String(port),
@@ -72,7 +76,38 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   captureProcessOutput(piProcess, processOutput);
   await waitForWebUi(`http://127.0.0.1:${port}`, piProcess, processOutput);
 
+  const enableEditing = async () => {
+    const id = "enable-editing";
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        piProcess.stdout.off("data", onData);
+        reject(new Error("/webui command timed out"));
+      }, 10000);
+      let output = "";
+      const onData = (chunk: Buffer) => {
+        output += chunk.toString();
+        if (
+          output.split("\n").some((line) => {
+            try {
+              const response = JSON.parse(line);
+              return response.type === "response" && response.id === id;
+            } catch {
+              return false;
+            }
+          })
+        ) {
+          clearTimeout(timer);
+          piProcess.stdout.off("data", onData);
+          resolve();
+        }
+      };
+      piProcess.stdout.on("data", onData);
+      piProcess.stdin.write(`${JSON.stringify({ id, type: "prompt", message: "/webui" })}\n`);
+    });
+  };
+  if (options.enableEditing) await enableEditing();
   return {
+    enableEditing,
     pageUrl: `http://127.0.0.1:${port}`,
     port,
     workspaceDir,

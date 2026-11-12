@@ -99,25 +99,6 @@ type GitDiffResult = {
   diff: string;
 };
 
-type FileContentResult = {
-  path: string;
-  name: string;
-  size: number;
-  content: string;
-};
-
-type ModelCandidate = {
-  provider?: string;
-  id?: string;
-};
-
-type ExtensionAPIWithEvents = ExtensionAPI & {
-  events?: {
-    on?: (eventType: string, listener: (payload: unknown) => void) => void;
-    emit?: (eventType: string, payload: unknown) => void;
-  };
-};
-
 type AliveWebSocket = WebSocket & {
   isAlive?: boolean;
 };
@@ -168,9 +149,6 @@ const HOST = SETTINGS.host;
 const AUTO_START = SETTINGS.autoStart;
 const MAX_FILE_CONTENT_BYTES = 1024 * 1024;
 const MAX_GIT_OUTPUT_BYTES = 10 * 1024 * 1024;
-const ARTIFACT_TOOL_NAMES = new Set(["edit", "write"]);
-const MARKDOWN_EXTENSIONS = [".md", ".mdx", ".markdown"];
-// @ts-expect-error — __dirname is provided by jiti at runtime
 const STATIC_DIR = process.env.PI_WEB_UI_STATIC_DIR || findStaticDir();
 
 function findStaticDir(): string {
@@ -238,10 +216,8 @@ export default function (pi: ExtensionAPI) {
 
   // Store latest context reference for use in command handlers
   let latestCtx: ExtensionContext | null = null;
-  let archExtensionPresent = false;
   let advancedFeaturesEnabled = false;
   let latestExecuteCtx: ExtensionCommandContext | null = null;
-  const liveArtifactPaths = new Set<string>();
 
   // ═══════════════════════════════════════
   // Helper: send to one client
@@ -381,39 +357,6 @@ export default function (pi: ExtensionAPI) {
       latestCtx = ctx;
       const eventPayload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
 
-      if (eventType === "tool_execution_end" && eventPayload.isError !== true) {
-        let workspaceDir = path.resolve(process.cwd());
-        try {
-          const entries = ctx.sessionManager.getEntries() as SessionEntry[];
-          const sessionEntry = entries.find((entry) => entry.type === "session");
-          if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
-        } catch {}
-
-        const toolName = typeof eventPayload.toolName === "string" ? eventPayload.toolName.toLowerCase() : "";
-        const args =
-          eventPayload.args && typeof eventPayload.args === "object" && !Array.isArray(eventPayload.args)
-            ? (eventPayload.args as Record<string, unknown>)
-            : {};
-        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
-          .map((key) => args[key])
-          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
-        const normalizedPath = rawPath
-          ?.trim()
-          .replace(/^file:\/\//, "")
-          .replace(/\\/g, "/");
-        const lowerPath = normalizedPath?.toLowerCase() || "";
-        if (
-          ARTIFACT_TOOL_NAMES.has(toolName) &&
-          MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))
-        ) {
-          liveArtifactPaths.add(
-            path.isAbsolute(normalizedPath || "")
-              ? path.resolve(normalizedPath || "")
-              : path.resolve(workspaceDir, normalizedPath || ""),
-          );
-        }
-      }
-
       // Forward event to all connected browser clients
       broadcast({
         type: "event",
@@ -429,23 +372,6 @@ export default function (pi: ExtensionAPI) {
     broadcast({ type: "event", event: "session_tree", payload });
   });
 
-  // Forward arch-mode state changes from other extensions to browser clients
-  (pi as ExtensionAPIWithEvents).events?.on?.("arch:state-changed", (payload: unknown) => {
-    broadcast({
-      type: "event",
-      event: "arch:state-changed",
-      payload: typeof payload === "object" && payload !== null ? payload : {},
-    });
-  });
-
-  // Listen for arch-mode extension presence announcement
-  (pi as ExtensionAPIWithEvents).events?.on?.("arch:ready", () => {
-    archExtensionPresent = true;
-    broadcast({ type: "event", event: "webui_state", payload: { archAvailable: true } });
-  });
-
-  // Also capture context from session events
-  // Auto-title: collect user messages and generate a title after a few turns
   let turnCount = 0;
   let titleSet = false;
   let userMessages: string[] = [];
@@ -454,19 +380,20 @@ export default function (pi: ExtensionAPI) {
     latestCtx = ctx;
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
-    liveArtifactPaths.clear();
     broadcast({ type: "event", event: "webui_state", payload: { advancedFeatures: false } });
     turnCount = 0;
     titleSet = false;
     userMessages = [];
   });
 
-  pi.on("turn_start", async (_event, _ctx) => {
+  pi.on("turn_start", async (_event, ctx) => {
+    latestCtx = ctx;
     turnCount++;
   });
 
   // Capture user messages for title generation via message_start
-  pi.on("message_start", async (event, _ctx) => {
+  pi.on("message_start", async (event, ctx) => {
+    latestCtx = ctx;
     if (titleSet) return;
     const msg = event.message;
     if (!msg || msg.role !== "user") return;
@@ -486,7 +413,8 @@ export default function (pi: ExtensionAPI) {
     if (text) userMessages.push(text.substring(0, 300));
   });
 
-  pi.on("turn_end", async (_event, _ctx) => {
+  pi.on("turn_end", async (_event, ctx) => {
+    latestCtx = ctx;
     if (titleSet || turnCount < 2) return;
 
     const sessionName = pi.getSessionName();
@@ -629,7 +557,7 @@ export default function (pi: ExtensionAPI) {
               for (const img of images) {
                 if (!img.data || typeof img.data !== "string") continue;
                 const data = img.data.includes(",") ? img.data.split(",")[1] : img.data;
-                const mimeType = (validMimes.includes(img.mimeType) ? img.mimeType : "image/png") as
+                const mimeType = (validMimes.includes(img.mimeType || "") ? img.mimeType : "image/png") as
                   | "image/png"
                   | "image/jpeg"
                   | "image/gif"
@@ -659,18 +587,6 @@ export default function (pi: ExtensionAPI) {
 
         case "abort": {
           ctx?.abort();
-          sendTo(ws, success());
-          break;
-        }
-
-        case "enter_arch_mode": {
-          (pi as ExtensionAPIWithEvents).events?.emit?.("cmd:arch:enter", {});
-          sendTo(ws, success());
-          break;
-        }
-
-        case "exit_arch_mode": {
-          (pi as ExtensionAPIWithEvents).events?.emit?.("cmd:arch:exit", {});
           sendTo(ws, success());
           break;
         }
@@ -718,7 +634,7 @@ export default function (pi: ExtensionAPI) {
             break;
           }
           const models = await ctx.modelRegistry.getAvailable();
-          const model = (models as ModelCandidate[]).find(
+          const model = models.find(
             (candidate) => candidate.provider === params.provider && candidate.id === params.modelId,
           );
           if (!model) {
@@ -744,7 +660,7 @@ export default function (pi: ExtensionAPI) {
             sendTo(ws, success(null));
             break;
           }
-          const idx = (availModels as ModelCandidate[]).findIndex(
+          const idx = availModels.findIndex(
             (candidate) => candidate.provider === currentModel.provider && candidate.id === currentModel.id,
           );
           const nextModel = availModels[(idx + 1) % availModels.length];
@@ -768,7 +684,10 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "set_thinking_level": {
-          pi.setThinkingLevel(params.level as "off" | "minimal" | "low" | "medium" | "high" | undefined);
+          const level = params.level;
+          if (!["off", "minimal", "low", "medium", "high", "xhigh"].includes(String(level)))
+            throw new Error("Invalid thinking level");
+          pi.setThinkingLevel(level as "off" | "minimal" | "low" | "medium" | "high" | "xhigh");
           sendTo(ws, success());
           break;
         }
@@ -897,16 +816,6 @@ export default function (pi: ExtensionAPI) {
           break;
         }
 
-        case "get_file_content": {
-          const filePath = typeof params.path === "string" ? params.path : "";
-          if (!filePath) {
-            sendTo(ws, error("path required"));
-            break;
-          }
-          sendTo(ws, success(getFileContent(ctx, filePath)));
-          break;
-        }
-
         case "open_file": {
           const filePath = typeof params.filePath === "string" ? params.filePath : "";
           if (!filePath) {
@@ -960,7 +869,7 @@ export default function (pi: ExtensionAPI) {
             sendTo(ws, success({ cancelled: true }));
             break;
           }
-          sendTo(ws, success({ editorText: result.editorText, cancelled: false }));
+          sendTo(ws, success({ cancelled: false }));
           break;
         }
 
@@ -1215,107 +1124,6 @@ export default function (pi: ExtensionAPI) {
     };
   }
 
-  function getFileContent(ctx: ExtensionContext | null, requestedPath: string): FileContentResult {
-    let workspaceDir = path.resolve(process.cwd());
-    let entries: SessionEntry[] = [];
-    if (ctx) {
-      try {
-        entries = ctx.sessionManager.getEntries() as SessionEntry[];
-        const sessionEntry = entries.find((entry) => entry.type === "session");
-        if (typeof sessionEntry?.cwd === "string" && sessionEntry.cwd) workspaceDir = path.resolve(sessionEntry.cwd);
-      } catch {}
-    }
-
-    const normalizedRequest = requestedPath
-      .trim()
-      .replace(/^file:\/\//, "")
-      .replace(/\\/g, "/");
-    const absolutePath = path.isAbsolute(normalizedRequest)
-      ? path.resolve(normalizedRequest)
-      : path.resolve(workspaceDir, normalizedRequest);
-    const insideWorkspace = absolutePath === workspaceDir || absolutePath.startsWith(`${workspaceDir}${path.sep}`);
-    const artifactPaths = new Set(liveArtifactPaths);
-    const pendingToolCalls = new Map<string, string>();
-
-    for (const entry of entries) {
-      const message = entry.message;
-      if (message?.role === "assistant" && Array.isArray(message.content)) {
-        for (const block of message.content) {
-          if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-          const record = block as Record<string, unknown>;
-          if (record.type !== "toolCall" || typeof record.id !== "string") continue;
-          const tool = typeof record.name === "string" ? record.name.toLowerCase() : "";
-          const args =
-            record.arguments && typeof record.arguments === "object"
-              ? (record.arguments as Record<string, unknown>)
-              : {};
-          const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
-            .map((key) => args[key])
-            .find((value): value is string => typeof value === "string" && value.trim().length > 0);
-          const normalizedPath = rawPath
-            ?.trim()
-            .replace(/^file:\/\//, "")
-            .replace(/\\/g, "/");
-          const lowerPath = normalizedPath?.toLowerCase() || "";
-          if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
-            pendingToolCalls.set(
-              record.id,
-              path.isAbsolute(normalizedPath || "")
-                ? path.resolve(normalizedPath || "")
-                : path.resolve(workspaceDir, normalizedPath || ""),
-            );
-          }
-        }
-      }
-
-      if (message?.role === "toolResult" && typeof message.toolCallId === "string" && message.isError !== true) {
-        const artifactPath = pendingToolCalls.get(message.toolCallId);
-        if (artifactPath) artifactPaths.add(artifactPath);
-      }
-
-      const entryRecord = entry as SessionEntry & { toolName?: unknown; args?: unknown; isError?: unknown };
-      if (entry.type === "tool_execution_end" && entryRecord.isError !== true) {
-        const tool = typeof entryRecord.toolName === "string" ? entryRecord.toolName.toLowerCase() : "";
-        const args =
-          entryRecord.args && typeof entryRecord.args === "object" && !Array.isArray(entryRecord.args)
-            ? (entryRecord.args as Record<string, unknown>)
-            : {};
-        const rawPath = ["path", "filePath", "filepath", "file_path", "file", "target", "filename"]
-          .map((key) => args[key])
-          .find((value): value is string => typeof value === "string" && value.trim().length > 0);
-        const normalizedPath = rawPath
-          ?.trim()
-          .replace(/^file:\/\//, "")
-          .replace(/\\/g, "/");
-        const lowerPath = normalizedPath?.toLowerCase() || "";
-        if (ARTIFACT_TOOL_NAMES.has(tool) && MARKDOWN_EXTENSIONS.some((extension) => lowerPath.endsWith(extension))) {
-          artifactPaths.add(
-            path.isAbsolute(normalizedPath || "")
-              ? path.resolve(normalizedPath || "")
-              : path.resolve(workspaceDir, normalizedPath || ""),
-          );
-        }
-      }
-    }
-
-    if (!insideWorkspace && !artifactPaths.has(absolutePath)) {
-      throw new Error("file is not a session artifact");
-    }
-
-    const stat = fs.statSync(absolutePath);
-    if (!stat.isFile()) throw new Error("Not a file");
-    if (stat.size > MAX_FILE_CONTENT_BYTES) throw new Error("File is too large to preview");
-    const content = fs.readFileSync(absolutePath, "utf8");
-    if (content.includes("\0")) throw new Error("Binary file cannot be previewed");
-    const relativePath = path.relative(workspaceDir, absolutePath).replace(/\\/g, "/");
-    return {
-      path: relativePath || path.basename(absolutePath),
-      name: path.basename(absolutePath),
-      size: stat.size,
-      content,
-    };
-  }
-
   function getFileList(dirPath: string) {
     if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
       throw new Error("Not a directory");
@@ -1391,7 +1199,6 @@ export default function (pi: ExtensionAPI) {
         event: "webui_state",
         payload: {
           advancedFeatures: advancedFeaturesEnabled && !!latestExecuteCtx,
-          archAvailable: archExtensionPresent,
         },
       });
 
@@ -1504,7 +1311,6 @@ export default function (pi: ExtensionAPI) {
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
     latestCtx = null;
-    liveArtifactPaths.clear();
     stopServer();
   });
 }
