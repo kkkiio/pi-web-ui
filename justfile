@@ -5,6 +5,7 @@ fmt:
 
 check:
     npx tsc --noEmit
+    npm run check:extension
     npm run check
 
 build:

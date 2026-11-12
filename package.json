@@ -34,7 +34,8 @@
     "check:write": "biome check --write .",
     "ci:biome": "biome ci .",
     "prepare": "npm run build:web",
-    "prepack": "npm run build:web"
+    "prepack": "npm run build:web",
+    "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --types node extensions/mirror-server.ts"
   },
   "dependencies": {
     "@git-diff-view/react": "^0.1.6",
@@ -42,7 +43,7 @@
     "zustand": "^5.0.14"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "^1.5.2"
   },
   "devDependencies": {
     "@ai-sdk/react": "^3.0.193",
@@ -57,6 +58,7 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.0.2",
     "ai": "^6.0.191",
     "class-variance-authority": "^0.7.1",
@@ -79,7 +81,7 @@
     "vite": "^8.0.14"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.19.0"
   },
   "files": [
     "extensions/",

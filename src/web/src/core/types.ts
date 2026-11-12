@@ -30,7 +30,7 @@ export type ChatItem =
       presentation?: "normal" | "activity";
       cost?: number;
       images?: PromptImage[];
-      /** Session entry tree node ID, used for Branch actions via navigate_tree. */
+      /** Session entry tree node ID, used for inline editing via navigate_tree. */
       entryId?: string;
       relatedEntryIds?: string[];
     }
@@ -227,45 +227,17 @@ export type GitDiffResult = {
   diff: string;
 };
 
-export type FileContentResult = {
-  path: string;
-  name: string;
-  size: number;
-  content: string;
-};
-
-export type WorkspaceArtifact = {
-  id: string;
-  path: string;
-  name: string;
-  directory: string;
-  tool: "edit" | "write";
+export type RightPanelTab = {
+  id: "git-diff";
+  kind: "git-diff";
+  title: string;
+  branch: string | null;
+  diff?: string;
+  isRepo?: boolean;
+  loading?: boolean;
+  error?: string;
   updatedAt: number;
 };
-
-export type RightPanelTab =
-  | {
-      id: "git-diff";
-      kind: "git-diff";
-      title: string;
-      branch: string | null;
-      diff?: string;
-      isRepo?: boolean;
-      loading?: boolean;
-      error?: string;
-      updatedAt: number;
-    }
-  | {
-      id: `artifact:${string}`;
-      kind: "artifact-file";
-      title: string;
-      path: string;
-      content?: string;
-      size?: number;
-      loading?: boolean;
-      error?: string;
-      updatedAt: number;
-    };
 
 export type ExtensionDialog = {
   id: string;

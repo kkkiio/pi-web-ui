@@ -4,9 +4,11 @@
 
 An **interactive agent UI** for the [Pi](https://pi.dev/) coding agent.
 
-> Renamed to pi-web-ui with significant changes including single-session scope, removed auth, redesigned sidebar, and an interactive agent steering focus.
+> Renamed to pi-web-ui with significant changes including single-session scope, removed auth, a single-column chat with an on-demand Changes panel, and an interactive agent steering focus.
 
 ## Install
+
+Requires Node.js 22.19.0+ and Pi coding agent 1.5.2 or newer in the 1.x series. See [compatibility notes](docs/pi-compatibility.md).
 
 Install from GitHub:
 
@@ -34,7 +36,7 @@ See [docs/configuration.md](docs/configuration.md) for environment variables, `s
 - [x] Real-time bidirectional sync with Pi TUI
 - [x] Model picker, thinking level control, and context usage indicator
 - [x] Git diff panel
-- [ ] Edit Message (inline rollback & resend)
+- [x] Edit Message (inline rollback & resend; enabled by `/webui`)
 - [ ] Quote / Add to Chat
 - [ ] Git Diff Comment
 - [ ] BTW / Ask in Side Chat

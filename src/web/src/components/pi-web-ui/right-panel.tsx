@@ -1,14 +1,5 @@
 import { DiffModeEnum, DiffView } from "@git-diff-view/react";
-import {
-  CopyIcon,
-  FileTextIcon,
-  GitCompareIcon,
-  Loader2Icon,
-  PanelRightCloseIcon,
-  PanelRightOpenIcon,
-  RotateCwIcon,
-  XIcon,
-} from "lucide-react";
+import { CopyIcon, GitCompareIcon, Loader2Icon, PanelRightCloseIcon, RotateCwIcon, XIcon } from "lucide-react";
 import "@git-diff-view/react/styles/diff-view-pure.css";
 import {
   type CSSProperties,
@@ -19,7 +10,6 @@ import {
   useState,
 } from "react";
 
-import { MessageResponse } from "@/components/ai-elements/message";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -100,24 +90,13 @@ export function RightPanel({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  if (!visible) {
-    return (
-      <Button
-        className="fixed right-3 top-16 z-40 shadow-lg"
-        onClick={onToggleVisible}
-        size="icon-sm"
-        title="Show right panel"
-        type="button"
-        variant="outline"
-      >
-        <PanelRightOpenIcon className="size-4" />
-      </Button>
-    );
-  }
-
+  // Keep the panel mounted while hidden so its scroll position survives.
   return (
     <aside
-      className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-background shadow-xl xl:relative xl:z-auto xl:w-[var(--right-panel-width)] xl:shrink-0 xl:shadow-none"
+      className={cn(
+        !visible && "!hidden",
+        "fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l bg-background shadow-xl xl:relative xl:z-auto xl:w-[var(--right-panel-width)] xl:shrink-0 xl:shadow-none",
+      )}
       style={{ "--right-panel-width": `${panelWidth}px` } as CSSProperties}
     >
       <button
@@ -153,11 +132,7 @@ export function RightPanel({
                   onClick={() => onSelectTab(tab.id)}
                   type="button"
                 >
-                  {tab.kind === "git-diff" ? (
-                    <GitCompareIcon className="size-3.5 shrink-0" />
-                  ) : (
-                    <FileTextIcon className="size-3.5 shrink-0" />
-                  )}
+                  <GitCompareIcon className="size-3.5 shrink-0" />
                   <span className="truncate">{tab.title}</span>
                 </button>
                 <button
@@ -196,10 +171,9 @@ export function RightPanel({
 }
 
 function RightPanelTabContent({ tab }: { tab: RightPanelTab }) {
-  if (tab.loading) return <LoadingPanel label={tab.kind === "git-diff" ? "Loading diff" : "Loading file"} />;
+  if (tab.loading) return <LoadingPanel label={"Loading diff"} />;
   if (tab.error) return <PanelMessage tone="error" title="Unable to load" body={tab.error} />;
-  if (tab.kind === "git-diff") return <GitDiffTab tab={tab} />;
-  return <ArtifactFileTab tab={tab} />;
+  return <GitDiffTab tab={tab} />;
 }
 
 function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }> }) {
@@ -293,37 +267,6 @@ function GitDiffTab({ tab }: { tab: Extract<RightPanelTab, { kind: "git-diff" }>
   );
 }
 
-function ArtifactFileTab({ tab }: { tab: Extract<RightPanelTab, { kind: "artifact-file" }> }) {
-  if (!tab.content?.trim()) {
-    return <PanelMessage title={tab.title} body="This artifact file is empty." />;
-  }
-
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate font-medium text-sm">{tab.title}</div>
-          <div className="truncate text-muted-foreground text-xs">{tab.path}</div>
-        </div>
-        <Button
-          onClick={() => void copyText(tab.content || "")}
-          size="icon-sm"
-          title="Copy file content"
-          type="button"
-          variant="ghost"
-        >
-          <CopyIcon className="size-4" />
-        </Button>
-      </div>
-      <div className="rounded-md border bg-card p-3">
-        <MessageResponse className="break-words text-sm leading-6 [&_pre]:overflow-x-auto">
-          {tab.content}
-        </MessageResponse>
-      </div>
-    </section>
-  );
-}
-
 function LoadingPanel({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground text-sm">
@@ -348,7 +291,7 @@ function PanelMessage({ body, title, tone = "muted" }: { body: string; title: st
 }
 
 function EmptyPanel() {
-  return <PanelMessage title="No tab selected" body="Open changes or an artifact from the workspace float." />;
+  return <PanelMessage title="No tab selected" body="Open Changes from the header." />;
 }
 
 type DiffPanelFile = {

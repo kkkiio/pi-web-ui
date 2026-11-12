@@ -8,7 +8,6 @@ import {
 } from "../chat-conversion";
 import { isToolExpandable } from "../tool-summary";
 import type { ChatItem } from "../types";
-import { artifactsFromEntries } from "../workspace-artifacts";
 import type { SessionSlice, StoreSlice } from "./types";
 
 let conversationSyncInFlight = false;
@@ -42,7 +41,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   applyStateSync: (sync) => {
     const entries = sync.entries ?? [];
     const items = syncToItems(entries, nextId);
-    const artifacts = artifactsFromEntries(entries);
     const tree = sync.tree ?? [];
     const currentSelection = get().selectedTreeEntryId;
     let selectedTreeEntryId: string | null = sync.leafId ?? null;
@@ -60,7 +58,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     }
 
     set({
-      artifacts,
       chatStatus: sync.isStreaming ? "streaming" : "ready",
       connection: "connected",
       contextWindowSize: sync.model?.contextWindow || get().contextWindowSize,
@@ -297,7 +294,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   },
 
   applyToolExecutionEnd: (event) => {
-    get().mergeArtifactsFromToolEvent(event);
     get().requestGitStatusRefresh({ debounce: true });
     if (!event.toolCallId) return;
     set((state) => ({
