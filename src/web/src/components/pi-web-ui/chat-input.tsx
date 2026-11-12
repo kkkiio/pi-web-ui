@@ -8,8 +8,11 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import type { ChatSubmitStatus } from "../../core/types";
 import { PromptAttachmentButton, PromptAttachmentPreview } from "./prompt-attachments";
+import { type TranscriptQuote, TranscriptQuotePreview } from "./transcript-quote";
 
 type ChatInputProps = {
+  quotes: TranscriptQuote[];
+  onRemoveQuote: (id: string) => void;
   viewingHistory: boolean;
   disabled?: boolean;
   chatStatus: ChatSubmitStatus;
@@ -20,6 +23,8 @@ type ChatInputProps = {
 };
 
 export function ChatInput({
+  quotes,
+  onRemoveQuote,
   viewingHistory,
   disabled,
   chatStatus,
@@ -46,6 +51,7 @@ export function ChatInput({
           multiple
           onSubmit={onSubmit}
         >
+          <TranscriptQuotePreview quotes={quotes} onRemove={onRemoveQuote} />
           <PromptAttachmentPreview />
           <PromptInputBody>
             <PromptInputTextarea

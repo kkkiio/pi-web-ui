@@ -60,7 +60,11 @@ export function ChatItemView({
           {expandable && (
             <ToolContent>
               <ToolInput input={item.input as never} />
-              <ToolOutput errorText={item.errorText} output={item.output as never} />
+              <ToolOutput
+                data-quote-source={`${item.name} output`}
+                errorText={item.errorText}
+                output={item.output as never}
+              />
             </ToolContent>
           )}
         </Tool>
@@ -91,14 +95,18 @@ export function ChatItemView({
         {showThinking && item.reasoning && (
           <Reasoning className={cn(isActivity && "mb-1")} isStreaming={Boolean(item.streaming)}>
             <ReasoningTrigger className={cn(isActivity && "text-xs")} />
-            <ReasoningContent className={cn(isActivity && "mt-1 text-xs")}>{item.reasoning}</ReasoningContent>
+            <ReasoningContent data-quote-source="Assistant reasoning" className={cn(isActivity && "mt-1 text-xs")}>
+              {item.reasoning}
+            </ReasoningContent>
           </Reasoning>
         )}
-        <MessageResponse
-          className={cn(isActivity && "text-muted-foreground [&_ol]:my-1 [&_p]:my-0 [&_pre]:my-1 [&_ul]:my-1")}
-        >
-          {item.text}
-        </MessageResponse>
+        <div data-quote-source="Assistant">
+          <MessageResponse
+            className={cn(isActivity && "text-muted-foreground [&_ol]:my-1 [&_p]:my-0 [&_pre]:my-1 [&_ul]:my-1")}
+          >
+            {item.text}
+          </MessageResponse>
+        </div>
       </MessageContent>
       {canCopy && (
         <MessageActions className="self-start opacity-0 transition-opacity group-hover:opacity-100">
