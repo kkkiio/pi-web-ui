@@ -73,9 +73,6 @@ export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
     case "auth_changed":
       store.setAuthEnabled(Boolean(event.enabled));
       break;
-    case "arch:state-changed":
-      store.setArchModeEnabled(Boolean(event.enabled));
-      break;
     case "model_select":
       if (event.model) store.setCurrentModel(event.model);
       break;

@@ -74,6 +74,12 @@ export class PiClient {
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.ws = null;
+      // A lost response must not leave navigation or Save & Send waiting forever.
+      // Never replay a mutation whose result is unknown after reconnecting.
+      for (const pending of this.pendingRequests.values())
+        pending.reject(new Error("Connection lost; reconnect before retrying"));
+      this.pendingRequests.clear();
+      this.queuedRequests.length = 0;
       this.options.onConnectionChange("disconnected");
       if (!this.intentionallyClosed) {
         this.reconnectTimer = window.setTimeout(() => {

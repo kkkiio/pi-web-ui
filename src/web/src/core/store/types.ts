@@ -5,7 +5,6 @@ import type {
   ChatSubmitStatus,
   ConnectionState,
   ExtensionDialog,
-  FileContentResult,
   GitDiffResult,
   GitStatusResult,
   ModelInfo,
@@ -17,7 +16,6 @@ import type {
   SystemTone,
   ThemeMode,
   Usage,
-  WorkspaceArtifact,
 } from "../types";
 
 export type ConnectionSlice = {
@@ -25,7 +23,6 @@ export type ConnectionSlice = {
   connection: ConnectionState;
   error: string | null;
   advancedFeatures: boolean;
-  archAvailable: boolean;
   setClient: (client: PiClient | null) => void;
   send: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
   setConnection: (connection: ConnectionState) => void;
@@ -77,7 +74,6 @@ export type SettingsSlice = {
   autoCompaction: boolean;
   authConfigured: boolean;
   authEnabled: boolean;
-  archModeEnabled: boolean;
   themeMode: ThemeMode;
   showThinking: boolean;
   refreshSettingsState: () => Promise<void>;
@@ -88,23 +84,18 @@ export type SettingsSlice = {
   setSessionName: (name: string) => void;
   setAutoCompaction: (enabled: boolean) => void;
   setAuthEnabled: (enabled: boolean) => void;
-  setArchModeEnabled: (enabled: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setShowThinking: (show: boolean) => void;
   cycleThinking: () => Promise<void>;
   selectModel: (model: ModelInfo) => Promise<void>;
   setAutoCompactionRemote: (enabled: boolean) => Promise<void>;
   toggleAuth: () => Promise<void>;
-  toggleArchMode: () => void;
   renameActiveSession: (name: string) => Promise<void>;
 };
 
 export type WorkspaceSlice = {
   gitStatus: GitStatusResult | null;
   gitLoading: boolean;
-  artifacts: WorkspaceArtifact[];
-  setArtifacts: (artifacts: WorkspaceArtifact[]) => void;
-  mergeArtifactsFromToolEvent: (event: RpcEvent) => void;
   refreshGitStatus: () => Promise<void>;
   requestGitStatusRefresh: (options?: { debounce?: boolean }) => void;
   clearWorkspaceTimers: () => void;
@@ -117,7 +108,6 @@ export type RightPanelSlice = {
   rightPanelHasOpened: boolean;
   upsertRightPanelTab: (tab: RightPanelTab) => void;
   openGitDiff: () => Promise<void>;
-  openArtifact: (artifact: WorkspaceArtifact) => Promise<void>;
   refreshRightPanelTab: (tab: RightPanelTab) => void;
   closeRightPanelTab: (id: string) => void;
   setActiveRightPanelTabId: (id: string | null) => void;
@@ -159,4 +149,4 @@ export type SessionStatsResult = {
   tokens?: { input?: number; total?: number };
 };
 
-export type { FileContentResult, GitDiffResult };
+export type { GitDiffResult };

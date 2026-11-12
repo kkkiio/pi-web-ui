@@ -14,7 +14,6 @@ export const createSettingsSlice: StoreSlice<SettingsSlice> = (set, get) => ({
   autoCompaction: true,
   authConfigured: false,
   authEnabled: false,
-  archModeEnabled: false,
   themeMode: initialThemeMode(),
   showThinking: initialShowThinking(),
 
@@ -67,7 +66,6 @@ export const createSettingsSlice: StoreSlice<SettingsSlice> = (set, get) => ({
   setSessionName: (sessionName) => set({ sessionName }),
   setAutoCompaction: (autoCompaction) => set({ autoCompaction }),
   setAuthEnabled: (authEnabled) => set({ authEnabled }),
-  setArchModeEnabled: (archModeEnabled) => set({ archModeEnabled }),
   setThemeMode: (themeMode) => set({ themeMode }),
   setShowThinking: (showThinking) => set({ showThinking }),
 
@@ -109,12 +107,6 @@ export const createSettingsSlice: StoreSlice<SettingsSlice> = (set, get) => ({
     } catch (error) {
       get().setError(error instanceof Error ? error.message : "Failed to update auth");
     }
-  },
-
-  toggleArchMode: () => {
-    get()
-      .send(get().archModeEnabled ? "exit_arch_mode" : "enter_arch_mode")
-      .catch((error) => get().setError(error instanceof Error ? error.message : "Arch mode toggle failed"));
   },
 
   renameActiveSession: async (name) => {
