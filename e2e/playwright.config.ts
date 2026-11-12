@@ -23,7 +23,25 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      grepInvert: /@readme/,
       use: { ...devices["Desktop Chrome"] },
     },
+    ...(process.env.PI_WEB_UI_README_SNAPSHOT === "1"
+      ? [
+          {
+            name: "readme",
+            grep: /@readme/,
+            use: {
+              ...devices["Desktop Chrome"],
+              viewport: { width: 1120, height: 780 },
+              colorScheme: "light" as const,
+              deviceScaleFactor: 1,
+            },
+            expect: {
+              toHaveScreenshot: { pathTemplate: "../docs/images/{arg}{ext}" },
+            },
+          },
+        ]
+      : []),
   ],
 });

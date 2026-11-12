@@ -1,6 +1,6 @@
 # Pi Web UI
 
-![Pi Web UI example](docs/images/pi-web-ui-example.png)
+![Pi Web UI showing a follow-up quoted from an export plan](docs/images/pi-web-ui-example.png)
 
 An **interactive agent UI** for the [Pi](https://pi.dev/) coding agent.
 

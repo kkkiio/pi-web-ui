@@ -38,3 +38,28 @@ jobs:
 
       - name: Run real Pi E2E
         run: npm run e2e
+
+  readme-snapshot:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.61.1-noble
+    env:
+      PI_WEB_UI_README_SNAPSHOT: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies and build
+        run: npm ci
+
+      - name: Compare the README screenshot
+        run: |
+          npm run e2e:gen
+          npx playwright test -c e2e/playwright.config.ts --project=readme
+
+      - name: Upload screenshot differences
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: readme-snapshot-diff
+          path: test-results/
+          if-no-files-found: ignore
