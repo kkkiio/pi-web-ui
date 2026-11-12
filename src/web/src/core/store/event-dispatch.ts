@@ -3,6 +3,10 @@ import type { PiWebUiStore } from "./types";
 
 export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
   const payload = data.payload ?? {};
+  if (data.event === "pi-web-ui:ask-user:prompt" || data.event === "pi-web-ui:ask-user:blocked") {
+    store.applyQuestionEvent(data.event, payload);
+    return;
+  }
   if (data.event === "state_sync") {
     store.applyStateSync(payload as StateSyncPayload);
     return;

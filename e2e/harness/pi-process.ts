@@ -10,6 +10,7 @@ export type PiWebUiHarness = {
   workspaceDir: string;
   stop: () => Promise<void>;
   enableEditing: () => Promise<void>;
+  command: (message: string) => Promise<void>;
 };
 
 export type PiWebUiHarnessOptions = {
@@ -17,6 +18,9 @@ export type PiWebUiHarnessOptions = {
   sessionName?: string;
   enableEditing?: boolean;
   cancelNavigation?: boolean;
+  autoStart?: boolean;
+  conflictTool?: "before" | "after" | "inactive";
+  host?: string;
 };
 
 export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessOptions = {}): Promise<PiWebUiHarness> {
@@ -54,8 +58,14 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
       "--no-context-files",
       "--extension",
       path.join(repoRoot, "e2e/fixtures/faux-provider-extension.ts"),
+      ...(options.conflictTool === "before" || options.conflictTool === "inactive"
+        ? ["--extension", path.join(repoRoot, "e2e/fixtures/conflicting-question-extension.ts")]
+        : []),
       "--extension",
       path.join(repoRoot, "extensions/mirror-server.ts"),
+      ...(options.conflictTool === "after"
+        ? ["--extension", path.join(repoRoot, "e2e/fixtures/conflicting-question-extension.ts")]
+        : []),
     ],
     {
       cwd: workspaceDir,
@@ -64,8 +74,9 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
         PI_CODING_AGENT_DIR: agentDir,
         PI_E2E: "1",
         PI_WEB_UI_E2E_CANCEL_NAVIGATION: options.cancelNavigation ? "1" : "0",
+        PI_WEB_UI_E2E_CONFLICT_INACTIVE: options.conflictTool === "inactive" ? "1" : "0",
         PI_OFFLINE: "1",
-        PI_WEB_UI_HOST: "127.0.0.1",
+        PI_WEB_UI_HOST: options.host ?? "127.0.0.1",
         PI_WEB_UI_PORT: String(port),
         PI_WEB_UI_STATIC_DIR: path.join(repoRoot, "dist"),
         PI_WEB_UI_E2E_FIXTURE: fixtureName,
@@ -75,39 +86,45 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   );
 
   captureProcessOutput(piProcess, processOutput);
-  await waitForWebUi(`http://127.0.0.1:${port}`, piProcess, processOutput);
 
-  const enableEditing = async () => {
-    const id = "enable-editing";
+  let commandId = 0;
+  const command = async (message: string) => {
+    const id = `command-${++commandId}`;
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         piProcess.stdout.off("data", onData);
-        reject(new Error("/webui command timed out"));
+        reject(new Error(`${message} command timed out:\n${processOutput.join("")}`));
       }, 10000);
       let output = "";
       const onData = (chunk: Buffer) => {
         output += chunk.toString();
-        if (
-          output.split("\n").some((line) => {
-            try {
-              const response = JSON.parse(line);
-              return response.type === "response" && response.id === id;
-            } catch {
-              return false;
-            }
-          })
-        ) {
+        for (const line of output.split("\n")) {
+          let response: { type?: string; id?: string; success?: boolean; error?: string };
+          try {
+            response = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (response.type !== "response" || response.id !== id) continue;
           clearTimeout(timer);
           piProcess.stdout.off("data", onData);
-          resolve();
+          if (response.success === false) reject(new Error(response.error || `${message} failed`));
+          else resolve();
+          return;
         }
       };
       piProcess.stdout.on("data", onData);
-      piProcess.stdin.write(`${JSON.stringify({ id, type: "prompt", message: "/webui" })}\n`);
+      piProcess.stdin.write(`${JSON.stringify({ id, type: "prompt", message })}\n`);
     });
   };
+  const enableEditing = () => command("/webui");
+  if (options.autoStart !== false) {
+    await command("/webui");
+    await waitForWebUi(`http://127.0.0.1:${port}`, piProcess, processOutput);
+  }
   if (options.enableEditing) await enableEditing();
   return {
+    command,
     enableEditing,
     pageUrl: `http://127.0.0.1:${port}`,
     port,

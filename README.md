@@ -23,9 +23,9 @@ pi install npm:@kkkiio/pi-web-ui
 ## Usage
 
 1. Start Pi in terminal
-2. Enter `/webui` and the extension will open the web ui in the browser
+2. Enter `/webui` to start the server and open the browser.
 
-The server starts automatically when a Pi session begins and shuts down when the session ends.
+Use `/webui-stop` to stop the server.
 
 See [docs/configuration.md](docs/configuration.md) for environment variables, `settings.json`, and remote access setup.
 
@@ -38,12 +38,12 @@ See [docs/configuration.md](docs/configuration.md) for environment variables, `s
 - [ ] Quote / Add to Chat
 - [ ] Git Diff Comment
 - [ ] BTW / Ask in Side Chat
-- [ ] AskUserQuestion
+- [x] AskUserQuestion
 - [ ] Generative UI
 
 ## How it works
 
-Pi Web UI is a [Pi extension](https://github.com/badlogic/pi-mono#extensions). When Pi starts a session, the extension starts an HTTP + WebSocket server inside the Pi process. The extension subscribes to Pi events and forwards them to the browser. Commands from the browser execute via the extension API using the `ExtensionContext` that Pi provides.
+Pi Web UI is a [Pi extension](https://github.com/badlogic/pi-mono#extensions). Running `/webui` starts an HTTP + WebSocket server inside the Pi process. The extension forwards Pi events to the browser, and browser commands execute through Pi's extension API.
 
 ```mermaid
 graph LR

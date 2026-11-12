@@ -31,6 +31,17 @@ Per `docs/adr/0012-interactive-agent-ui-positioning.md`: Pi Web UI is an **Inter
 
 **Rule**: All UI text is English.
 
+### Explicit Web UI activation
+
+Per `docs/adr/0013-explicit-webui-session-activation.md`: before `/webui`, do not
+start servers, register Web UI agent tools, or change existing tools, model
+instructions, or conversation context. After activation, Web UI owns its
+interactive features; use `webui_ask_user_question` and disable explicitly known
+conflict names (`ask_user_question`). Stop and session lifecycle changes clean
+up resources and restore affected tool activation without rolling back history
+or LLM context. New, switched, or forked sessions and `/reload` require explicit
+activation again. Recommend continuing activated sessions in Web UI.
+
 ### Mandatory Skill Usage
 
 #### `$webui-visual-check`

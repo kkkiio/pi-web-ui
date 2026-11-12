@@ -41,6 +41,7 @@ export type ChatItem =
       name: string;
       input: unknown;
       output?: unknown;
+      outputDetails?: unknown;
       errorText?: string;
       state: ToolState;
       open?: boolean;
@@ -166,6 +167,7 @@ export type WsError = {
 };
 
 export type StateSyncPayload = {
+  liveEvents?: WsEvent[];
   entries?: SessionEntry[];
   tree?: SessionTreeNode[];
   leafId?: string | null;
