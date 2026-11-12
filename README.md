@@ -8,7 +8,7 @@ An **interactive agent UI** for the [Pi](https://pi.dev/) coding agent.
 
 ## Install
 
-Requires Pi coding agent 1.5.2 or newer in the 1.x series. See [compatibility notes](docs/pi-compatibility.md).
+Requires Node.js 22.19.0+ and Pi coding agent 1.5.2 or newer in the 1.x series. See [compatibility notes](docs/pi-compatibility.md).
 
 Install from GitHub:
 

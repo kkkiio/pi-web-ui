@@ -1,6 +1,7 @@
 # Pi compatibility
 
 Pi Web UI targets `@earendil-works/pi-coding-agent` 1.5.2 through the 1.x series.
+Node.js 22.19.0 or newer is required, matching the upstream runtime requirement.
 The lockfile records the tested version. Older 0.x versions are no longer supported.
 
 ## API audit
