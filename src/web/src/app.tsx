@@ -20,13 +20,14 @@ import {
   ChatInput,
   ChatItemView,
   CommandPalette,
-  ContextPopover,
   ExtensionDialogView,
   ModelPicker,
   RightPanel,
   SettingsPanel,
   UserMessageView,
 } from "./components/pi-web-ui";
+import { ConversationOutline } from "./components/pi-web-ui/conversation-outline";
+import { groupConversationActivity, TranscriptActivity } from "./components/pi-web-ui/transcript-activity";
 import {
   formatQuotedPrompt,
   type TranscriptQuote,
@@ -41,6 +42,7 @@ import type { PromptCommand, StateSyncPayload } from "./core/types";
 
 export function App() {
   const items = usePiWebUiStore((state) => state.items);
+  const transcriptGroups = useMemo(() => groupConversationActivity(items), [items]);
   const connection = usePiWebUiStore((state) => state.connection);
   const chatStatus = usePiWebUiStore((state) => state.chatStatus);
   const modelLabel = usePiWebUiStore((state) => state.modelLabel);
@@ -63,13 +65,14 @@ export function App() {
   const rightPanelVisible = usePiWebUiStore((state) => state.rightPanelVisible);
   const lastUsage = usePiWebUiStore((state) => state.lastUsage);
   const contextWindowSize = usePiWebUiStore((state) => state.contextWindowSize);
+  const lightPalette = usePiWebUiStore((state) => state.lightPalette);
+  const setLightPalette = usePiWebUiStore((state) => state.setLightPalette);
   const themeMode = usePiWebUiStore((state) => state.themeMode);
   const abort = usePiWebUiStore((state) => state.abort);
   const addSystemMessage = usePiWebUiStore((state) => state.addSystemMessage);
   const clearConversationTimers = usePiWebUiStore((state) => state.clearConversationTimers);
   const clearWorkspaceTimers = usePiWebUiStore((state) => state.clearWorkspaceTimers);
   const compactSend = usePiWebUiStore((state) => state.send);
-  const cycleThinking = usePiWebUiStore((state) => state.cycleThinking);
   const openGitDiff = usePiWebUiStore((state) => state.openGitDiff);
   const refreshAuthState = usePiWebUiStore((state) => state.refreshAuthState);
   const refreshRightPanelTab = usePiWebUiStore((state) => state.refreshRightPanelTab);
@@ -90,6 +93,7 @@ export function App() {
   const setAutoCompactionRemote = usePiWebUiStore((state) => state.setAutoCompactionRemote);
   const closeRightPanelTab = usePiWebUiStore((state) => state.closeRightPanelTab);
   const toggleAllTools = usePiWebUiStore((state) => state.toggleAllTools);
+  const [toolExpansion, setToolExpansion] = useState<{ open: boolean } | null>(null);
   const toggleAuth = usePiWebUiStore((state) => state.toggleAuth);
   const toggleRightPanelVisible = usePiWebUiStore((state) => state.toggleRightPanelVisible);
   const toggleTool = usePiWebUiStore((state) => state.toggleTool);
@@ -101,6 +105,10 @@ export function App() {
   const [draftText, setDraftText] = useState("");
   const [quotes, setQuotes] = useState<TranscriptQuote[]>([]);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const addQuote = (quote: TranscriptQuote) => {
+    setQuotes((current) => [...current, quote]);
+    document.querySelector<HTMLTextAreaElement>('textarea[name="message"]')?.focus();
+  };
 
   const [queuedMessages, setQueuedMessages] = useState<PromptCommand[]>([]);
 
@@ -108,7 +116,6 @@ export function App() {
   const [modelSearch, setModelSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
-  const [contextOpen, setContextOpen] = useState(false);
 
   const promptCounterRef = useRef(0);
 
@@ -129,8 +136,9 @@ export function App() {
   useEffect(() => {
     localStorage.setItem("pi-web-ui-theme-mode", themeMode);
     document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
+    document.documentElement.dataset.palette = resolvedTheme === "dark" ? "solarized-dark" : lightPalette;
     document.documentElement.style.colorScheme = resolvedTheme;
-  }, [resolvedTheme, themeMode]);
+  }, [lightPalette, resolvedTheme, themeMode]);
 
   useEffect(() => {
     localStorage.setItem("pi-web-ui-show-thinking", String(showThinking));
@@ -326,10 +334,14 @@ export function App() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [abort, chatStatus, commandOpen, modelOpen, settingsOpen]);
 
-  const totalCost = useMemo(
-    () => items.reduce((sum, item) => sum + (item.kind === "message" ? item.cost || 0 : 0), 0),
-    [items],
-  );
+  const selectThinking = async (level: string) => {
+    try {
+      await compactSend("set_thinking_level", { level });
+      setThinkingLevel(level);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to change thinking level");
+    }
+  };
 
   const usedContextTokens = (lastUsage?.input || 0) + (lastUsage?.cacheRead || 0);
   const contextPercent = contextWindowSize > 0 ? Math.round((usedContextTokens / contextWindowSize) * 100) : 0;
@@ -359,13 +371,19 @@ export function App() {
       label: "Expand All Tools",
       desc: "Open every tool card",
       icon: PanelLeftOpenIcon,
-      action: () => toggleAllTools(true),
+      action: () => {
+        toggleAllTools(true);
+        setToolExpansion({ open: true });
+      },
     },
     {
       label: "Collapse All Tools",
       desc: "Close every tool card",
       icon: PanelLeftCloseIcon,
-      action: () => toggleAllTools(false),
+      action: () => {
+        toggleAllTools(false);
+        setToolExpansion({ open: false });
+      },
     },
   ];
 
@@ -380,23 +398,19 @@ export function App() {
           onOpenSettings={openSettings}
           onToggleRightPanel={() => (rightPanelTabs.length ? toggleRightPanelVisible() : void openGitDiff())}
           rightPanelOpen={rightPanelOpen}
-          contextPercent={contextPercent}
-          contextWindowSize={contextWindowSize}
           isViewingOtherSession={false}
           modelLabel={modelLabel}
           onCompactContext={compactContext}
-          onCycleThinking={cycleThinking}
+          onSetThinking={selectThinking}
           onOpenCommandPalette={() => setCommandOpen(true)}
           onOpenModelPicker={openModelPicker}
           onReturnToLive={() => void requestConversationSync()}
-          onToggleContext={() => setContextOpen((open) => !open)}
           shouldSuggestCompaction={shouldSuggestCompaction}
           thinkingLevel={thinkingLevel}
           title={sessionName}
-          totalCost={totalCost}
         />
 
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
             <div ref={transcriptRef} className="relative min-h-0 flex-1">
               <Conversation className="h-full">
@@ -408,9 +422,12 @@ export function App() {
                       title="Pi Web UI"
                     />
                   ) : (
-                    items.map((item) => {
-                      return (
-                        <div key={`${item.kind}:${item.kind === "tool" ? item.id : item.entryId || item.id}`}>
+                    transcriptGroups.map((group) => {
+                      const rows = group.map((item) => (
+                        <div
+                          id={item.kind === "message" && item.role === "user" ? `user-message-${item.id}` : undefined}
+                          key={`${item.kind}:${item.kind === "tool" ? item.id : item.entryId || item.id}`}
+                        >
                           {item.kind === "message" && item.role === "user" ? (
                             <UserMessageView
                               item={item as typeof item & { kind: "message"; role: "user" }}
@@ -424,34 +441,37 @@ export function App() {
                             <ChatItemView
                               item={item}
                               onCopy={(text) => copyText(text)}
+                              onQuote={addQuote}
                               onToggleTool={toggleTool}
                               showThinking={showThinking}
                             />
                           )}
                         </div>
+                      ));
+                      const first = group[0];
+                      return group.length > 1 ? (
+                        <TranscriptActivity
+                          items={group}
+                          toolExpansion={toolExpansion}
+                          key={`activity:${first.kind === "tool" ? first.id : (first.entryId ?? first.id)}`}
+                        >
+                          {rows}
+                        </TranscriptActivity>
+                      ) : (
+                        rows
                       );
                     })
                   )}
                 </ConversationContent>
                 <ConversationScrollButton />
+                <ConversationOutline items={items} />
               </Conversation>
 
               <TranscriptQuoteAction
                 transcriptRef={transcriptRef}
                 disabled={loadingTreeEntryId !== null}
-                onQuote={(quote) => {
-                  setQuotes((current) => [...current, quote]);
-                  document.querySelector<HTMLTextAreaElement>('textarea[name="message"]')?.focus();
-                }}
+                onQuote={addQuote}
               />
-
-              {contextOpen && (
-                <ContextPopover
-                  contextWindowSize={contextWindowSize}
-                  lastUsage={lastUsage}
-                  onClose={() => setContextOpen(false)}
-                />
-              )}
             </div>
 
             {queuedMessages.length > 0 && (
@@ -505,7 +525,6 @@ export function App() {
               onCloseTab={closeRightPanelTab}
               onRefreshTab={refreshRightPanelTab}
               onSelectTab={setActiveRightPanelTabId}
-              onToggleVisible={toggleRightPanelVisible}
               tabs={rightPanelTabs}
               visible={rightPanelVisible}
             />
@@ -530,11 +549,11 @@ export function App() {
             onClose={() => setSettingsOpen(false)}
             onRenameSession={renameActiveSession}
             onSetAutoCompaction={setAutoCompactionRemote}
+            lightPalette={lightPalette}
+            onSetLightPalette={setLightPalette}
             onSetTheme={setThemeMode}
-            onSetThinking={async (level) => {
-              await compactSend("set_thinking_level", { level });
-              setThinkingLevel(level);
-            }}
+            resolvedTheme={resolvedTheme}
+            onSetThinking={selectThinking}
             onToggleAuth={toggleAuth}
             sessionName={sessionName}
             showThinking={showThinking}

@@ -36,14 +36,14 @@ export function ChatInput({
 }: ChatInputProps) {
   if (viewingHistory) {
     return (
-      <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
+      <footer className="shrink-0 bg-background/95 px-4 py-3">
         <div className="mx-auto w-full max-w-3xl text-center text-muted-foreground text-sm py-4">Viewing history</div>
       </footer>
     );
   }
 
   return (
-    <footer className="shrink-0 border-t bg-background/95 px-4 py-3">
+    <footer className="shrink-0 bg-background/95 px-4 py-3">
       <div className="mx-auto w-full max-w-3xl">
         <PromptInput
           accept="image/*"
@@ -56,19 +56,17 @@ export function ChatInput({
           <PromptAttachmentPreview />
           <PromptInputBody>
             <PromptInputTextarea
+              aria-label="Message Pi"
               disabled={disabled}
               className="min-h-20 resize-none"
               onChange={(event) => onValueChange(event.currentTarget.value)}
-              placeholder="Message Pi..."
+              placeholder=""
               value={value}
             />
           </PromptInputBody>
           <PromptInputFooter>
             <PromptInputTools>
               <PromptAttachmentButton />
-              <div className="hidden items-center gap-1 px-2 text-muted-foreground text-xs sm:flex">
-                Enter sends, Shift+Enter inserts a newline
-              </div>
             </PromptInputTools>
             <PromptInputSubmit disabled={disabled} onStop={onAbort} status={chatStatus} />
           </PromptInputFooter>

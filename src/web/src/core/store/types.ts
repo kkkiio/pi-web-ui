@@ -8,6 +8,7 @@ import type {
   ExtensionDialog,
   GitDiffResult,
   GitStatusResult,
+  LightPalette,
   ModelInfo,
   PromptCommand,
   RightPanelTab,
@@ -79,6 +80,7 @@ export type SettingsSlice = {
   authConfigured: boolean;
   authEnabled: boolean;
   themeMode: ThemeMode;
+  lightPalette: LightPalette;
   showThinking: boolean;
   refreshSettingsState: () => Promise<void>;
   refreshAuthState: () => Promise<void>;
@@ -89,6 +91,7 @@ export type SettingsSlice = {
   setAutoCompaction: (enabled: boolean) => void;
   setAuthEnabled: (enabled: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setLightPalette: (palette: LightPalette) => void;
   setShowThinking: (show: boolean) => void;
   cycleThinking: () => Promise<void>;
   selectModel: (model: ModelInfo) => Promise<void>;

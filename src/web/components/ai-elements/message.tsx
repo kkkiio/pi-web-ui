@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { usePiWebUiStore } from "@/src/core/store";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -259,13 +260,19 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn("size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
-      plugins={streamdownPlugins}
-      {...props}
-    />
-  ),
+  ({ className, ...props }: MessageResponseProps) => {
+    const lightPalette = usePiWebUiStore((state) => state.lightPalette);
+
+    return (
+      <Streamdown
+        className={cn("message-markdown size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
+        lineNumbers={false}
+        plugins={streamdownPlugins}
+        shikiTheme={[lightPalette === "solarized-light" ? "solarized-light" : "github-light", "solarized-dark"]}
+        {...props}
+      />
+    );
+  },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children && nextProps.isAnimating === prevProps.isAnimating,
 );

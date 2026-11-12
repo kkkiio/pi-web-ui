@@ -1,4 +1,4 @@
-import { ImageIcon, XIcon } from "lucide-react";
+import { PaperclipIcon, XIcon } from "lucide-react";
 
 import { PromptInputButton, PromptInputHeader, usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
 
@@ -7,7 +7,7 @@ export function PromptAttachmentButton({ disabled = false }: { disabled?: boolea
 
   return (
     <PromptInputButton disabled={disabled} onClick={attachments.openFileDialog} tooltip="Attach images" type="button">
-      <ImageIcon className="size-4" />
+      <PaperclipIcon className="size-4" />
     </PromptInputButton>
   );
 }
