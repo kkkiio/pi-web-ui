@@ -397,7 +397,7 @@ export function App() {
                   ) : (
                     items.map((item) => {
                       return (
-                        <div key={item.entryId || item.id}>
+                        <div key={`${item.kind}:${item.kind === "tool" ? item.id : item.entryId || item.id}`}>
                           {item.kind === "message" && item.role === "user" ? (
                             <UserMessageView
                               item={item as typeof item & { kind: "message"; role: "user" }}
