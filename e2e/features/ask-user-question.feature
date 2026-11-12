@@ -40,6 +40,15 @@ Feature: Structured agent clarification
     And I submit the clarification answers
     Then the agent receives my answers
 
+  Scenario: Answer drafts survive a dropped WebSocket connection
+    Given an activated question session through a TCP proxy
+    When I ask the agent to clarify
+    And I enter custom clarification answers
+    And the network connection drops and reconnects
+    Then my clarification draft is preserved
+    When I submit the clarification answers
+    Then the agent receives my answers
+
   Scenario: Reject invalid answers atomically and refuse a second answer
     Given an activated question session
     When I ask the agent to clarify

@@ -82,6 +82,11 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       tree,
     });
     for (const event of sync.liveEvents ?? []) dispatchPiEvent(get(), event);
+    set((state) => ({
+      questionDrafts: Object.fromEntries(
+        Object.entries(state.questionDrafts).filter(([id]) => state.questionnaires[id]?.status === "pending"),
+      ),
+    }));
     get().requestGitStatusRefresh({ debounce: true });
   },
 

@@ -7,6 +7,7 @@ export type Question = {
   options: { label: string; description: string; preview?: string }[];
 };
 export type QuestionAnswer = { questionIndex: number; optionIndexes?: number[]; text?: string };
+export type QuestionDraft = { indexes: number[]; text: string; custom: boolean; preview?: number };
 export type AskUserQuestion = {
   toolCallId: string;
   questions: Question[];

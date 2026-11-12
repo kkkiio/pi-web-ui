@@ -3,6 +3,21 @@ import type { QuestionSlice, StoreSlice } from "./types";
 
 export const createQuestionSlice: StoreSlice<QuestionSlice> = (set, get) => ({
   questionnaires: {},
+  questionDrafts: {},
+  updateQuestionDraft: (id, index, changes) => {
+    set((state) => {
+      const drafts = state.questionDrafts[id] ?? {};
+      return {
+        questionDrafts: {
+          ...state.questionDrafts,
+          [id]: {
+            ...drafts,
+            [index]: { ...(drafts[index] ?? { indexes: [], text: "", custom: false }), ...changes },
+          },
+        },
+      };
+    });
+  },
   applyQuestionEvent: (event, raw) => {
     const payload = (raw.payload ?? raw) as Record<string, unknown>;
     const id = payload.toolCallId;
@@ -35,6 +50,7 @@ export const createQuestionSlice: StoreSlice<QuestionSlice> = (set, get) => ({
       const current = get().questionnaires[id];
       if (current?.status === "pending") {
         set((state) => ({
+          questionDrafts: Object.fromEntries(Object.entries(state.questionDrafts).filter(([key]) => key !== id)),
           questionnaires: {
             ...state.questionnaires,
             [id]: { ...current, status: payload.cancelled ? "cancelled" : "answered", submitting: false },

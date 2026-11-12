@@ -1,3 +1,4 @@
+import net from "node:net";
 import { expect, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import WebSocket from "ws";
@@ -6,6 +7,8 @@ import { type PiWebUiHarness, startPiWebUi } from "../harness/pi-process";
 const { Given, When, Then, After } = createBdd();
 let harness: PiWebUiHarness | undefined;
 let otherPage: Page | undefined;
+let proxy: net.Server | undefined;
+const proxySockets = new Set<net.Socket>();
 const card = (page: Page) => page.getByTestId("ask-user-question");
 
 Given("an untouched terminal session", async () => {
@@ -34,6 +37,42 @@ Given("an activated question session", async ({ page }) => {
   harness = await startPiWebUi("ask-user-question");
   await page.goto(harness.pageUrl);
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();
+});
+Given("an activated question session through a TCP proxy", async ({ page }) => {
+  harness = await startPiWebUi("ask-user-question");
+  const upstreamPort = harness.port;
+  proxy = net.createServer((client) => {
+    const upstream = net.connect(upstreamPort, "127.0.0.1");
+    proxySockets.add(client);
+    client.pipe(upstream).pipe(client);
+    client.on("close", () => {
+      proxySockets.delete(client);
+      upstream.destroy();
+    });
+    client.on("error", () => upstream.destroy());
+    upstream.on("error", () => client.destroy());
+  });
+  await new Promise<void>((resolve) => proxy?.listen(0, "127.0.0.1", resolve));
+  const address = proxy.address();
+  if (!address || typeof address === "string") throw new Error("TCP proxy has no port");
+  await page.goto(`http://127.0.0.1:${address.port}`);
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();
+});
+When("the network connection drops and reconnects", async ({ page }) => {
+  const reconnected = page.waitForEvent("websocket");
+  for (const socket of proxySockets) socket.destroy();
+  const socket = await reconnected;
+  await socket.waitForEvent("framereceived", {
+    predicate: (frame) => JSON.parse(String(frame.payload)).event === "state_sync",
+  });
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  await expect(page.getByText("connected", { exact: true })).toBeVisible();
+  await expect(card(page)).toContainText("Waiting for your answer");
+});
+Then("my clarification draft is preserved", async ({ page }) => {
+  await expect(card(page).getByLabel("Custom answer: Storage")).toHaveValue("Use an encrypted local file.");
+  await expect(card(page).getByLabel("Custom answer: Features")).toHaveValue("Add offline access.");
+  await expect(card(page).getByRole("checkbox", { name: /Search/ })).toBeChecked();
 });
 Given("a lazy Web UI session with an unavailable bind address", async () => {
   harness = await startPiWebUi("ask-user-question", { autoStart: false, host: "203.0.113.123" });
@@ -200,6 +239,9 @@ function wsRequest(method: string, params?: Record<string, unknown>): Promise<un
 }
 
 After(async () => {
+  for (const socket of proxySockets) socket.destroy();
+  if (proxy) await new Promise<void>((resolve) => proxy?.close(() => resolve()));
+  proxy = undefined;
   await otherPage?.close();
   otherPage = undefined;
   await harness?.stop();

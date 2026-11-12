@@ -1,25 +1,21 @@
 import { MessageCircleQuestionIcon } from "lucide-react";
-import { useState } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { AskUserQuestion, QuestionAnswer } from "../../core/ask-user-question";
+import type { AskUserQuestion, QuestionAnswer, QuestionDraft } from "../../core/ask-user-question";
 import { usePiWebUiStore } from "../../core/store";
 
-type Draft = { indexes: number[]; text: string; custom: boolean; preview?: number };
+const EMPTY_DRAFTS: Record<number, QuestionDraft> = {};
 
 export function AskUserQuestionCard({ questionnaire }: { questionnaire: AskUserQuestion }) {
   const { toolCallId, questions, status, submitting, error, summary } = questionnaire;
-  const [drafts, setDrafts] = useState<Record<number, Draft>>({});
+  const drafts = usePiWebUiStore((state) => state.questionDrafts[toolCallId] ?? EMPTY_DRAFTS);
+  const updateDraft = usePiWebUiStore((state) => state.updateQuestionDraft);
   const connection = usePiWebUiStore((state) => state.connection);
   const submit = usePiWebUiStore((state) => state.submitQuestion);
   const disabled = status !== "pending" || submitting || connection !== "connected";
-  const draftFor = (i: number): Draft => drafts[i] ?? { indexes: [], text: "", custom: false };
-  const update = (i: number, value: Partial<Draft>) =>
-    setDrafts((current) => ({
-      ...current,
-      [i]: { ...(current[i] ?? { indexes: [], text: "", custom: false }), ...value },
-    }));
+  const draftFor = (i: number): QuestionDraft => drafts[i] ?? { indexes: [], text: "", custom: false };
+  const update = (i: number, value: Partial<QuestionDraft>) => updateDraft(toolCallId, i, value);
   const complete = questions.every((question, i) => {
     const draft = draftFor(i);
     return question.multiSelect
