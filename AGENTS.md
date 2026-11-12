@@ -27,9 +27,9 @@ Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards e
 
 Per `docs/adr/0012-interactive-agent-ui-positioning.md`: Pi Web UI is an **Interactive Agent UI** built to steer high-impulse, cryptic coding models (e.g., GPT coding variants, DeepSeek) that tend to interpret prompts overly literally, diverge into rabbit holes, or rush into execution before clarifying intent. When designing or implementing UI features (such as `Quote / Add to Chat`, `Git Diff Comment`, `BTW / Ask in Side Chat`, `AskUserQuestion`, `Edit Message`, or `Generative UI`), keep session scope single-process (`docs/adr/0006-project-scope-single-session-web-ui.md`) and keep product-level UI interpretation in `src/web/` (`docs/adr/0002-web-ui-extension-event-protocol.md`).
 
-### Product language — English only
+### Product language
 
-**Rule**: all UI copy in `src/web/` is English. Copy borrowed from dsh or the Pi TUI is re-authored in English, not carried over verbatim.
+**Rule**: All UI text is English.
 
 ### Mandatory Skill Usage
 
