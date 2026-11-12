@@ -41,7 +41,7 @@
     而且 我发送消息 "原始问题"
     那么 聊天区显示消息 "Old branch done"
     当 我刷新 Pi Web UI
-    而且 我展开包含 2 次工具调用的活动组
+    而且 我从 Commands 展开所有工具
     那么 聊天区显示消息 "Old branch explanation"
     当 我启用行内编辑
     而且 我编辑并重新发送消息

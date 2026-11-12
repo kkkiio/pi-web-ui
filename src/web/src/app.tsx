@@ -93,6 +93,7 @@ export function App() {
   const setAutoCompactionRemote = usePiWebUiStore((state) => state.setAutoCompactionRemote);
   const closeRightPanelTab = usePiWebUiStore((state) => state.closeRightPanelTab);
   const toggleAllTools = usePiWebUiStore((state) => state.toggleAllTools);
+  const [toolExpansion, setToolExpansion] = useState<{ open: boolean } | null>(null);
   const toggleAuth = usePiWebUiStore((state) => state.toggleAuth);
   const toggleRightPanelVisible = usePiWebUiStore((state) => state.toggleRightPanelVisible);
   const toggleTool = usePiWebUiStore((state) => state.toggleTool);
@@ -370,13 +371,19 @@ export function App() {
       label: "Expand All Tools",
       desc: "Open every tool card",
       icon: PanelLeftOpenIcon,
-      action: () => toggleAllTools(true),
+      action: () => {
+        toggleAllTools(true);
+        setToolExpansion({ open: true });
+      },
     },
     {
       label: "Collapse All Tools",
       desc: "Close every tool card",
       icon: PanelLeftCloseIcon,
-      action: () => toggleAllTools(false),
+      action: () => {
+        toggleAllTools(false);
+        setToolExpansion({ open: false });
+      },
     },
   ];
 
@@ -445,6 +452,7 @@ export function App() {
                       return group.length > 1 ? (
                         <TranscriptActivity
                           items={group}
+                          toolExpansion={toolExpansion}
                           key={`activity:${first.kind === "tool" ? first.id : (first.entryId ?? first.id)}`}
                         >
                           {rows}

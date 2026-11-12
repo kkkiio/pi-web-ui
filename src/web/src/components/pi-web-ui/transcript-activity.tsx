@@ -28,8 +28,18 @@ export function groupConversationActivity(items: ChatItem[]) {
   return groups;
 }
 
-export function TranscriptActivity({ items, children }: { items: ChatItem[]; children: ReactNode }) {
-  const [open, setOpen] = useState<boolean>();
+export function TranscriptActivity({
+  items,
+  children,
+  toolExpansion,
+}: {
+  items: ChatItem[];
+  children: ReactNode;
+  toolExpansion: { open: boolean } | null;
+}) {
+  const [selection, setSelection] = useState<{ command: typeof toolExpansion; open?: boolean }>({
+    command: toolExpansion,
+  });
   const tools = items.filter((item) => item.kind === "tool");
   const running = items.some((item) =>
     item.kind === "tool"
@@ -37,9 +47,10 @@ export function TranscriptActivity({ items, children }: { items: ChatItem[]; chi
       : item.kind === "message" && item.streaming,
   );
   const failed = tools.filter((tool) => tool.state === "output-error").length;
+  const open = tools.length && selection.command !== toolExpansion ? toolExpansion?.open : selection.open;
 
   return (
-    <Collapsible open={open ?? running} onOpenChange={setOpen}>
+    <Collapsible open={open ?? running} onOpenChange={(open) => setSelection({ command: toolExpansion, open })}>
       <CollapsibleTrigger className="group/activity flex max-w-full items-center gap-2 rounded-md py-1 text-left text-muted-foreground text-sm hover:text-foreground">
         <ChevronRightIcon className="size-4 shrink-0 transition-transform group-data-[state=open]/activity:rotate-90" />
         <span>
