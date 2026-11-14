@@ -5,6 +5,7 @@ import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
 import duplicateArtifactResponses from "./responses/duplicate-artifact.ts";
 import editHistoryResponses from "./responses/edit-history.ts";
 import externalArtifactResponses from "./responses/external-artifact.ts";
+import processGroupResponses from "./responses/process-group.ts";
 import reportExportResponses from "./responses/report-export.ts";
 import toolFailureResponses from "./responses/tool-failure.ts";
 import transcriptQuoteResponses from "./responses/transcript-quote.ts";
@@ -12,6 +13,7 @@ import workspaceArtifactResponses from "./responses/workspace-artifact.ts";
 
 const responsesByName = {
   "ask-user-question": askUserQuestionResponses,
+  "process-group": processGroupResponses,
   "report-export": reportExportResponses,
   "transcript-quote": transcriptQuoteResponses,
   "edit-history": editHistoryResponses,
@@ -86,12 +88,13 @@ export default function (pi: ExtensionAPI) {
       await ctx.waitForIdle();
     },
   });
+  const fixtureName = process.env.PI_WEB_UI_E2E_FIXTURE || "chat-lifecycle";
   const faux = fauxProvider({
     provider: "faux",
     models: [{ id: "faux-1", name: "Faux E2E", reasoning: false }],
-    tokenSize: { min: 64, max: 64 },
+    tokenSize: fixtureName === "process-group" ? { min: 8, max: 8 } : { min: 64, max: 64 },
+    ...(fixtureName === "process-group" && { tokensPerSecond: 6 }),
   });
-  const fixtureName = process.env.PI_WEB_UI_E2E_FIXTURE || "chat-lifecycle";
   const responses = responsesByName[fixtureName as keyof typeof responsesByName] || chatLifecycleResponses;
 
   faux.setResponses([...responses, ...chatLifecycleResponses]);

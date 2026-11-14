@@ -43,10 +43,13 @@ Then("聊天区显示消息 {string}", async ({ page }, text: string) => {
   await expect(page.getByRole("log").getByText(text, { exact: true })).toBeVisible();
 });
 Then("聊天区显示工具调用 {string}", async ({ page }, name: string) => {
-  await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+  const group = page.getByRole("button", { name: /^1 tool call(?: · 1 failed)?$/ });
+  await expect(group).toHaveAttribute("aria-expanded", "false");
+  await group.click();
+  await expect(page.getByRole("log").getByText(name, { exact: true })).toBeVisible();
 });
 Then("聊天区显示工具错误状态", async ({ page }) => {
-  await expect(page.getByText(/error|failed|EISDIR|directory/i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 tool call · 1 failed", exact: true })).toBeVisible();
 });
 Then("输入框恢复可提交状态", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeEnabled();

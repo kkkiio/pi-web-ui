@@ -4,8 +4,19 @@ import type { ChatItem, PiMessage, PromptImage, SessionEntry, SessionTreeNode, U
 export function syncToItems(
   entries: Array<{ type: string; id?: string; message?: PiMessage }>,
   nextId: (prefix: string) => string,
+  previousItems: ChatItem[],
 ): ChatItem[] {
   const items: ChatItem[] = [];
+  const liveMessages = new Map<number, Array<Extract<ChatItem, { kind: "message" }>>>();
+  const previousTools = new Map<string, Extract<ChatItem, { kind: "tool" }>>();
+  for (const item of previousItems) {
+    if (item.kind === "tool") previousTools.set(item.id, item);
+    if (item.kind === "message" && item.role === "assistant" && item.timestamp !== undefined) {
+      const messages = liveMessages.get(item.timestamp) ?? [];
+      messages.push(item);
+      liveMessages.set(item.timestamp, messages);
+    }
+  }
   const tools = new Map<string, ChatItem & { kind: "tool" }>();
 
   for (const entry of entries) {
@@ -29,15 +40,18 @@ export function syncToItems(
       const text = extractText(message.content);
       const reasoning = extractThinking(message.content);
       const toolCalls = extractToolCalls(message.content);
+      const previous = liveMessages.get(message.timestamp ?? Number.NaN);
+      const previousIndex = previous?.findIndex((item) => item.entryId === entry.id || !item.entryId) ?? -1;
+      const prior = previousIndex >= 0 ? previous?.splice(previousIndex, 1)[0] : undefined;
       if (text || reasoning) {
         items.push({
           kind: "message",
-          id: message.id || nextId("assistant"),
+          id: message.id || prior?.id || entry.id || nextId("assistant"),
           role: "assistant",
           text,
           reasoning,
           copyable: toolCalls.length === 0,
-          presentation: toolCalls.length > 0 ? "activity" : "normal",
+          timestamp: message.timestamp,
           cost: message.usage?.cost?.total,
           entryId: entry.id,
         });
@@ -50,6 +64,7 @@ export function syncToItems(
           name: call.name || "tool",
           input: call.arguments,
           state: "input-available",
+          open: call.id ? previousTools.get(call.id)?.open : undefined,
           entryId: entry.id,
           relatedEntryIds: entry.id ? [entry.id] : [],
         };

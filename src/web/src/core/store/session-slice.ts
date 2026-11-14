@@ -20,6 +20,7 @@ let conversationSyncTimer: number | null = null;
 let streamingId: string | null = null;
 let streamingHasToolCall = false;
 let itemCounter = 0;
+let sessionFile: string | undefined;
 
 function nextId(prefix: string) {
   itemCounter += 1;
@@ -46,7 +47,14 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
 
   applyStateSync: (sync) => {
     const entries = sync.entries ?? [];
-    const items = syncToItems(entries, nextId);
+    const sameSession = sessionFile === sync.sessionFile;
+    sessionFile = sync.sessionFile;
+    const currentItems = sameSession ? get().items : [];
+    const items = syncToItems(entries, nextId, currentItems);
+    const liveMessage = currentItems.find((item) => item.kind === "message" && item.id === streamingId);
+    if (sync.isStreaming && liveMessage && !items.some((item) => item.id === liveMessage.id)) {
+      items.push(liveMessage);
+    }
     const tree = sync.tree ?? [];
     const currentSelection = get().selectedTreeEntryId;
     let selectedTreeEntryId: string | null = sync.leafId ?? null;
@@ -180,7 +188,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
           ? {
               ...item,
               copyable: !hadToolCall,
-              presentation: hadToolCall ? "activity" : "normal",
+              thinking: false,
               streaming: false,
             }
           : item,
@@ -194,7 +202,8 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
 
   applyMessageStart: (event) => {
     if (event.message?.role === "assistant") {
-      const id = event.message.id || nextId("assistant");
+      const { id: messageId, timestamp } = event.message;
+      const id = messageId || nextId("assistant");
       const hasInitialToolCall = extractToolCalls(event.message.content).length > 0;
       streamingId = id;
       streamingHasToolCall = hasInitialToolCall;
@@ -209,7 +218,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
             reasoning: extractThinking(event.message?.content),
             streaming: true,
             copyable: false,
-            presentation: hasInitialToolCall ? "activity" : "normal",
+            timestamp,
           },
         ],
       }));
@@ -230,22 +239,20 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     const delta = messageEvent?.delta || "";
     const id = streamingId;
     if (!id) return;
-    if (messageEvent?.type === "toolcall_delta") {
-      streamingHasToolCall = true;
-      set((state) => ({
-        items: state.items.map((item) =>
-          item.kind === "message" && item.id === id ? { ...item, copyable: false, presentation: "activity" } : item,
-        ),
-      }));
+    if (messageEvent?.type.startsWith("toolcall_")) streamingHasToolCall = true;
+    const type = messageEvent?.type;
+    if (type !== "thinking_start" && type !== "thinking_delta" && type !== "thinking_end" && type !== "text_delta") {
       return;
     }
-    if (!delta || (messageEvent?.type !== "text_delta" && messageEvent?.type !== "thinking_delta")) return;
 
     set((state) => ({
       items: state.items.map((item) => {
         if (item.kind !== "message" || item.id !== id) return item;
-        if (messageEvent.type === "thinking_delta") return { ...item, reasoning: `${item.reasoning || ""}${delta}` };
-        return { ...item, text: `${item.text}${delta}` };
+        if (type === "text_delta") return { ...item, text: `${item.text}${delta}` };
+        if (type === "thinking_delta") {
+          return { ...item, thinking: true, reasoning: `${item.reasoning || ""}${delta}` };
+        }
+        return { ...item, thinking: type === "thinking_start" };
       }),
     }));
   },
@@ -268,7 +275,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
               ...(finalText !== undefined && { text: finalText }),
               copyable: !hasToolCalls,
               cost: usage?.cost?.total,
-              presentation: hasToolCalls ? "activity" : "normal",
+              thinking: false,
               streaming: false,
             }
           : item,
@@ -283,19 +290,18 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   applyToolExecutionStart: (event) => {
     if (!event.toolCallId) return;
     streamingHasToolCall = true;
-    set((state) => ({
-      items: [
-        ...state.items.filter((item) => item.kind !== "tool" || item.id !== event.toolCallId),
-        {
-          kind: "tool",
-          id: event.toolCallId as string,
-          name: event.toolName || "tool",
-          input: event.args,
-          state: "input-streaming",
-          open: false,
-        } satisfies ChatItem,
-      ],
-    }));
+    const id = event.toolCallId;
+    const name = event.toolName || "tool";
+    set((state) => {
+      const tool = { kind: "tool", id, name, input: event.args, state: "input-streaming" } satisfies ChatItem;
+      const existing = state.items.findIndex((item) => item.kind === "tool" && item.id === id);
+      return {
+        items:
+          existing < 0
+            ? [...state.items, tool]
+            : state.items.map((item, index) => (index === existing ? { ...item, ...tool } : item)),
+      };
+    });
   },
 
   applyToolExecutionUpdate: (event) => {

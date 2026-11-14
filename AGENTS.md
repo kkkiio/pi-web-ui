@@ -57,6 +57,8 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, Right Panel,
 - **AskUserQuestion** — Structured clarification interaction where the agent presents multi-choice or form questions to align on intent before executing tasks.
 - **Edit Message** — Inline editing of a previous user message (`Save & Send`) that rewinds the session via `navigate_tree` and re-sends the updated prompt.
 - **Generative UI** — Task-specific interactive visual views rendered in place of dense prose explanations.
+- **Process Group** — A collapsible transcript section for a contiguous sequence of assistant reasoning and tool calls within a turn.
+- **Row** — A transcript line representing one reasoning block or tool call, with expandable details when available.
 
 ## Project Structure Guide
 

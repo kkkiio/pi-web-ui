@@ -27,7 +27,7 @@ import {
   UserMessageView,
 } from "./components/pi-web-ui";
 import { ConversationOutline } from "./components/pi-web-ui/conversation-outline";
-import { groupConversationActivity, TranscriptActivity } from "./components/pi-web-ui/transcript-activity";
+import { groupTranscript, ProcessGroup } from "./components/pi-web-ui/process-group";
 import {
   formatQuotedPrompt,
   type TranscriptQuote,
@@ -42,7 +42,6 @@ import type { PromptCommand, StateSyncPayload } from "./core/types";
 
 export function App() {
   const items = usePiWebUiStore((state) => state.items);
-  const transcriptGroups = useMemo(() => groupConversationActivity(items), [items]);
   const connection = usePiWebUiStore((state) => state.connection);
   const chatStatus = usePiWebUiStore((state) => state.chatStatus);
   const modelLabel = usePiWebUiStore((state) => state.modelLabel);
@@ -54,6 +53,7 @@ export function App() {
   const loadingTreeEntryId = usePiWebUiStore((state) => state.loadingTreeEntryId);
   const availableModels = usePiWebUiStore((state) => state.availableModels);
   const showThinking = usePiWebUiStore((state) => state.showThinking);
+  const transcriptSections = useMemo(() => groupTranscript(items, showThinking), [items, showThinking]);
   const autoCompaction = usePiWebUiStore((state) => state.autoCompaction);
   const authConfigured = usePiWebUiStore((state) => state.authConfigured);
   const authEnabled = usePiWebUiStore((state) => state.authEnabled);
@@ -422,43 +422,50 @@ export function App() {
                       title="Pi Web UI"
                     />
                   ) : (
-                    transcriptGroups.map((group) => {
-                      const rows = group.map((item) => (
-                        <div
-                          id={item.kind === "message" && item.role === "user" ? `user-message-${item.id}` : undefined}
-                          key={`${item.kind}:${item.kind === "tool" ? item.id : item.entryId || item.id}`}
-                        >
-                          {item.kind === "message" && item.role === "user" ? (
-                            <UserMessageView
-                              item={item as typeof item & { kind: "message"; role: "user" }}
-                              onEdit={advancedFeatures && item.entryId ? editMessage : undefined}
-                              editDisabled={
-                                chatStatus !== "ready" || loadingTreeEntryId !== null || connection !== "connected"
-                              }
-                              onCopy={(text) => copyText(text)}
-                            />
-                          ) : (
-                            <ChatItemView
-                              item={item}
-                              onCopy={(text) => copyText(text)}
-                              onQuote={addQuote}
-                              onToggleTool={toggleTool}
-                              showThinking={showThinking}
-                            />
-                          )}
+                    transcriptSections.map((section, index) => {
+                      if (section.kind === "process") {
+                        const first = section.rows[0];
+                        return (
+                          <ProcessGroup
+                            active={index === transcriptSections.length - 1 && chatStatus === "streaming"}
+                            rows={section.rows}
+                            key={`process:${first.kind}:${first.id}`}
+                            toolExpansion={toolExpansion}
+                          >
+                            {section.rows.map((item) => (
+                              <ChatItemView
+                                item={item}
+                                key={`${item.kind}:${item.id}`}
+                                onCopy={copyText}
+                                onQuote={addQuote}
+                                onToggleTool={toggleTool}
+                                reasoningRow={item.kind === "message"}
+                              />
+                            ))}
+                          </ProcessGroup>
+                        );
+                      }
+
+                      const { item } = section;
+                      return item.kind === "message" && item.role === "user" ? (
+                        <div id={`user-message-${item.id}`} key={`user:${item.entryId ?? item.id}`}>
+                          <UserMessageView
+                            item={item as typeof item & { kind: "message"; role: "user" }}
+                            onEdit={advancedFeatures && item.entryId ? editMessage : undefined}
+                            editDisabled={
+                              chatStatus !== "ready" || loadingTreeEntryId !== null || connection !== "connected"
+                            }
+                            onCopy={copyText}
+                          />
                         </div>
-                      ));
-                      const first = group[0];
-                      return group.length > 1 ? (
-                        <TranscriptActivity
-                          items={group}
-                          toolExpansion={toolExpansion}
-                          key={`activity:${first.kind === "tool" ? first.id : (first.entryId ?? first.id)}`}
-                        >
-                          {rows}
-                        </TranscriptActivity>
                       ) : (
-                        rows
+                        <ChatItemView
+                          item={item}
+                          key={`${item.kind}:${item.id}`}
+                          onCopy={copyText}
+                          onQuote={addQuote}
+                          onToggleTool={toggleTool}
+                        />
                       );
                     })
                   )}

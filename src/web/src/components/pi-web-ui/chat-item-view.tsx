@@ -25,13 +25,13 @@ export function ChatItemView({
   onCopy,
   onQuote,
   onToggleTool,
-  showThinking,
+  reasoningRow = false,
 }: {
   item: ChatItem;
   onCopy: (text: string) => Promise<void> | void;
   onQuote: (quote: TranscriptQuote) => void;
   onToggleTool: (id: string, open: boolean) => void;
-  showThinking: boolean;
+  reasoningRow?: boolean;
 }) {
   const questionnaire = usePiWebUiStore((state) => state.questionnaires[item.id]);
   if (item.kind === "system") {
@@ -80,15 +80,22 @@ export function ChatItemView({
     );
   }
 
+  if (reasoningRow) {
+    return (
+      <Reasoning className="mb-0" isStreaming={Boolean(item.thinking)}>
+        <ReasoningTrigger reasoning={item.reasoning} />
+        <ReasoningContent data-quote-source="Assistant reasoning">{item.reasoning ?? ""}</ReasoningContent>
+      </Reasoning>
+    );
+  }
+
   // item.kind === "message" and role is "assistant" (user messages handled by UserMessageView)
   const canCopy = item.text.trim().length > 0 && item.copyable !== false && !item.streaming;
-  const isActivity = item.presentation === "activity";
 
   return (
     <Message
       className={cn(
         canCopy && "relative rounded-lg has-[>[data-slot=dropdown-menu-trigger][data-state=open]]:bg-muted/50",
-        isActivity && "gap-1",
       )}
       from={item.role}
     >
@@ -116,25 +123,9 @@ export function ChatItemView({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <MessageContent
-        className={cn(
-          "w-full",
-          isActivity && "gap-1",
-          item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]',
-        )}
-      >
-        {showThinking && item.reasoning && (
-          <Reasoning className={cn(isActivity && "mb-1")} isStreaming={Boolean(item.streaming)}>
-            <ReasoningTrigger className={cn(isActivity && "text-xs")} />
-            <ReasoningContent data-quote-source="Assistant reasoning" className={cn(isActivity && "mt-1 text-xs")}>
-              {item.reasoning}
-            </ReasoningContent>
-          </Reasoning>
-        )}
+      <MessageContent className={cn("w-full", item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]')}>
         <div data-quote-source="Assistant">
-          <MessageResponse className={cn(isActivity && "[&_ol]:my-1 [&_p]:my-0 [&_pre]:my-1 [&_ul]:my-1")}>
-            {item.text}
-          </MessageResponse>
+          <MessageResponse>{item.text}</MessageResponse>
         </div>
       </MessageContent>
     </Message>
