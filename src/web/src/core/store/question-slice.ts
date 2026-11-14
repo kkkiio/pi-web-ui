@@ -12,7 +12,7 @@ export const createQuestionSlice: StoreSlice<QuestionSlice> = (set, get) => ({
           ...state.questionDrafts,
           [id]: {
             ...drafts,
-            [index]: { ...(drafts[index] ?? { indexes: [], text: "", custom: false }), ...changes },
+            [index]: { ...(drafts[index] ?? { indexes: [], text: "" }), ...changes },
           },
         },
       };

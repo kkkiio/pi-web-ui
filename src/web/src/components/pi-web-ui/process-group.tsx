@@ -26,8 +26,7 @@ export function groupTranscript(items: ChatItem[], showThinking: boolean): Trans
   for (const item of items) {
     const assistant = item.kind === "message" && item.role === "assistant";
     const reasoning = assistant && showThinking && (item.thinking || item.reasoning?.trim());
-    const tool =
-      item.kind === "tool" && item.name !== "webui_ask_user_question" && !/^sub[-_]?agents?$/i.test(item.name);
+    const tool = item.kind === "tool" && !/^sub[-_]?agents?$/i.test(item.name);
 
     if (reasoning || tool) {
       if (!process) {
@@ -37,7 +36,10 @@ export function groupTranscript(items: ChatItem[], showThinking: boolean): Trans
       process.push(item);
     }
 
-    if (!tool && (!assistant || item.text.trim())) {
+    if (
+      (!tool && (!assistant || item.text.trim())) ||
+      (item.kind === "tool" && item.name === "webui_ask_user_question")
+    ) {
       process = undefined;
       sections.push({ kind: "standalone", item });
     }
@@ -73,9 +75,11 @@ export function ProcessGroup({
   const open =
     (tools.length > 0 && selection.command !== toolExpansion ? toolExpansion?.open : selection.open) ?? false;
 
-  const toolDetail = runningTool && formatToolSummary(runningTool);
+  const toolDetail = runningTool && runningTool.name !== "webui_ask_user_question" && formatToolSummary(runningTool);
   const toolAction =
-    runningTool && (TOOL_ACTIONS.get(runningTool.name) ?? `Running ${formatToolInvocationTitle(runningTool.name)}`);
+    runningTool?.name === "webui_ask_user_question"
+      ? "Waiting for your answer"
+      : runningTool && (TOOL_ACTIONS.get(runningTool.name) ?? `Running ${formatToolInvocationTitle(runningTool.name)}`);
   const title = active
     ? runningTool
       ? [toolAction, toolDetail].filter(Boolean).join(" ")
