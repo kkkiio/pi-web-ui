@@ -13,6 +13,7 @@ Modern coding-specialized and long-horizon models (most notably GPT coding varia
 3. **High execution impulse + weak intent comprehension**: Instead of pausing to clarify ambiguity, the model rushes into multi-step tool calls and code edits that deviate from the user's actual intent.
 
 A passive terminal stream or generic multi-pane chat mirror is poorly suited to countering these behaviors:
+
 - Pointing out a flaw in a single sentence, tool output, or changed code hunk requires manually copying text and explaining where it came from.
 - Asking "what did you mean by X?" in the main thread often triggers the model's execution impulse to rewrite code or pollutes the main context window with side discussions.
 - Text-only prompts rarely induce high-impulse models to stop and discuss trade-offs with the user before acting.
@@ -25,18 +26,19 @@ While remaining a single-session Web UI running inside the Pi process (ADR 0006)
 
 ### Core Interactive Capabilities
 
-| Capability | Problem Addressed | Interactive Mechanism |
-|------------|-------------------|-----------------------|
-| **Quote / Add to Chat** | Divergent explanations & literal interpretation | Select any span in the transcript (assistant text, reasoning, or tool output) and attach it as a structured quote in the composer to pin feedback to exact words. |
-| **Git Diff + Line Comment** | Code changes that deviate from intent | Inspect workspace changes in the Right Panel and click **Comment** on specific diff lines (Codex-style) to quote file/line changes with inline feedback directly into the chat composer. |
-| **BTW / Ask in Side Chat** | Cryptic, pitfall-heavy explanations & execution impulse | Open an isolated side inquiry in the Right Panel to unpack cryptic or divergent claims without derailing the main agent or triggering unwanted edits. |
-| **AskUserQuestion** | Rushing into execution on ambiguous intent | Provide structured clarification UI (multi-choice / form cards) and agent tooling so the LLM actively questions and aligns with the user before executing long tasks. |
-| **Inline Edit Message** | Prompt typos & early first-turn derailment | Edit any previous user message inline (`Save & Send`) to rewind to that point via `navigate_tree` and re-run with clarified wording. |
-| **Generative UI** *(Research)* | Dense, hard-to-parse prose explanations | Render interactive, task-specific UI views (explored via open alternatives to declarative/SFC UI dialects) when visual inspection beats walls of text. |
+| Capability                     | Problem Addressed                                       | Interactive Mechanism                                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Add to Chat**                | Divergent explanations & literal interpretation         | Select any span in the transcript (assistant text, reasoning, or tool output) and attach it as a structured quote in the composer to pin feedback to exact words.                        |
+| **Git Diff + Line Comment**    | Code changes that deviate from intent                   | Inspect workspace changes in the Right Panel and click **Comment** on specific diff lines (Codex-style) to quote file/line changes with inline feedback directly into the chat composer. |
+| **BTW / Ask in Side Chat**     | Cryptic, pitfall-heavy explanations & execution impulse | Open an isolated side inquiry in the Right Panel to unpack cryptic or divergent claims without derailing the main agent or triggering unwanted edits.                                    |
+| **AskUserQuestion**            | Rushing into execution on ambiguous intent              | Provide structured clarification UI (multi-choice / form cards) and agent tooling so the LLM actively questions and aligns with the user before executing long tasks.                    |
+| **Inline Edit Message**        | Prompt typos & early first-turn derailment              | Edit any previous user message inline (`Save & Send`) to rewind to that point via `navigate_tree` and re-run with clarified wording.                                                     |
+| **Generative UI** _(Research)_ | Dense, hard-to-parse prose explanations                 | Render interactive, task-specific UI views (explored via open alternatives to declarative/SFC UI dialects) when visual inspection beats walls of text.                                   |
 
 ### Feature Cuts & UI Simplification
 
 To keep the interface focused and unobstructed:
+
 - **Cut Left Sidebar & Session Tree Sidebar**: Single-session scope does not need a session switcher, and exposing raw tree branching (`Branch` / `Continue`) adds cognitive overhead. Layout simplifies to **Single-Column Main Chat + On-Demand Right Panel**.
 - **Revert `Branch` to Inline `Edit Message`**: Users want to fix typos or rephrase a prompt in place (`Save & Send`), not manage tree branches manually.
 - **Cut Workspace Status Float**: Floating overlays in the chat viewport occlude transcript text. Git diff summary moves into the top header bar as a clean button that toggles the Right Panel.

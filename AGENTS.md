@@ -25,7 +25,7 @@ Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards e
 
 ### Interactive Agent UI positioning
 
-Per `docs/adr/0012-interactive-agent-ui-positioning.md`: Pi Web UI is an **Interactive Agent UI** built to steer high-impulse, cryptic coding models (e.g., GPT coding variants, DeepSeek) that tend to interpret prompts overly literally, diverge into rabbit holes, or rush into execution before clarifying intent. When designing or implementing UI features (such as `Quote / Add to Chat`, `Git Diff Comment`, `BTW / Ask in Side Chat`, `AskUserQuestion`, `Edit Message`, or `Generative UI`), keep session scope single-process (`docs/adr/0006-project-scope-single-session-web-ui.md`) and keep product-level UI interpretation in `src/web/` (`docs/adr/0002-web-ui-extension-event-protocol.md`).
+Per `docs/adr/0012-interactive-agent-ui-positioning.md`: Pi Web UI is an **Interactive Agent UI** built to steer high-impulse, cryptic coding models (e.g., GPT coding variants, DeepSeek) that tend to interpret prompts overly literally, diverge into rabbit holes, or rush into execution before clarifying intent. When designing or implementing UI features (such as `Add to Chat`, `Git Diff Comment`, `BTW / Ask in Side Chat`, `AskUserQuestion`, `Edit Message`, or `Generative UI`), keep session scope single-process (`docs/adr/0006-project-scope-single-session-web-ui.md`) and keep product-level UI interpretation in `src/web/` (`docs/adr/0002-web-ui-extension-event-protocol.md`).
 
 ### Product language
 
@@ -51,7 +51,7 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, Right Panel,
 ## Domain Language
 
 - **Interactive Agent UI** — Browser interface designed to interrogate, clarify, and steer high-agency coding models rather than passively mirroring terminal text.
-- **Quote / Add to Chat** — Transcript selection attachment that pins user feedback to exact assistant prose, reasoning, or tool output spans.
+- **Add to Chat** — Transcript selection attachment that pins user feedback to exact assistant prose, reasoning, or tool output spans.
 - **Git Diff Comment** — Line-level comment/quote action inside the Right Panel Git Diff view (Codex-style) that attaches specific file/line changes and user feedback to the chat composer.
 - **Side Chat (BTW)** — Isolated side inquiry in the Right Panel used to unpack cryptic model output without polluting the main session trajectory or triggering main-agent execution.
 - **AskUserQuestion** — Structured clarification interaction where the agent presents multi-choice or form questions to align on intent before executing tasks.

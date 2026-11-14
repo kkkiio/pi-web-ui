@@ -35,7 +35,7 @@ See [docs/configuration.md](docs/configuration.md) for environment variables, `s
 - [x] Model picker, thinking level control, and context usage indicator
 - [x] Git diff panel
 - [x] Edit Message (inline rollback & resend; enabled by `/webui`)
-- [ ] Quote / Add to Chat
+- [x] Add to Chat
 - [ ] Git Diff Comment
 - [ ] BTW / Ask in Side Chat
 - [x] AskUserQuestion

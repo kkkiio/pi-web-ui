@@ -69,7 +69,7 @@ Given("a transcript with prose, reasoning and tool output", async ({ page }) => 
 
 When("I quote a partial assistant sentence", async ({ page }) => {
   await selectText(page.getByText("The retry policy must preserve the original request.", { exact: true }), partial);
-  await page.getByRole("button", { name: "Quote / Add to Chat", exact: true }).click();
+  await page.getByRole("button", { name: "Add to Chat", exact: true }).click();
 });
 Then("the draft is preserved and focused", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue(feedback);
@@ -82,10 +82,10 @@ When("I add reasoning and multiline tool output quotes", async ({ page }) => {
     page.getByText("Inspect the exact failure before making changes.", { exact: true }),
     "exact failure",
   );
-  await page.getByRole("button", { name: "Quote / Add to Chat", exact: true }).click();
+  await page.getByRole("button", { name: "Add to Chat", exact: true }).click();
   await page.getByRole("button", { name: /bash/ }).click();
   await selectText(page.locator('[data-quote-source="bash output"] code'), "first output line\nsecond output line");
-  await page.getByRole("button", { name: "Quote / Add to Chat", exact: true }).click();
+  await page.getByRole("button", { name: "Add to Chat", exact: true }).click();
 });
 Then("all three quotes are attached", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove quote", exact: true })).toHaveCount(3);
@@ -117,18 +117,18 @@ When("I select text outside the transcript", async ({ page }) => {
   await selectText(page.locator("header").getByText("connected", { exact: true }), "connected");
 });
 Then("no quote action is shown", async ({ page }) => {
-  await expect(page.getByRole("button", { name: "Quote / Add to Chat", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add to Chat", exact: true })).toHaveCount(0);
 });
 When("I dismiss a transcript selection with Escape", async ({ page }) => {
   await selectText(page.getByText("The retry policy must preserve the original request.", { exact: true }), partial);
-  await expect(page.getByRole("button", { name: "Quote / Add to Chat", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add to Chat", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
 });
 When("I use a mobile viewport and attach a quote", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill("");
   await selectText(page.getByText("The retry policy must preserve the original request.", { exact: true }), partial);
-  const action = page.getByRole("button", { name: "Quote / Add to Chat", exact: true });
+  const action = page.getByRole("button", { name: "Add to Chat", exact: true });
   await expect(action).toBeInViewport();
   await action.click();
 });
@@ -168,7 +168,7 @@ When("I ask Pi for an export preview", async ({ page }) => {
 When("I quote the proposed behavior and clarify the output paths", async ({ page }) => {
   const quote = "I’d print those paths in dry-run mode";
   await selectText(page.getByText(/The export command already builds/), quote);
-  await page.getByRole("button", { name: "Quote / Add to Chat", exact: true }).click();
+  await page.getByRole("button", { name: "Add to Chat", exact: true }).click();
   await page.getByRole("textbox", { name: "Message Pi" }).fill("Make them relative to the output directory, please.");
   await page.getByRole("button", { name: "Submit", exact: true }).click();
 });

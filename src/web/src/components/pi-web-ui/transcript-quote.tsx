@@ -107,7 +107,7 @@ export function TranscriptQuoteAction({
         window.getSelection()?.removeAllRanges();
       }}
     >
-      <QuoteIcon className="size-4" /> Quote / Add to Chat
+      <QuoteIcon className="size-4" /> Add to Chat
     </Button>,
     document.body,
   );

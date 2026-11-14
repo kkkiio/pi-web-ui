@@ -3,6 +3,7 @@
 ## Problem Statement
 
 在针对偏科 Coding、长任务模型（如 GPT coding 变体、DeepSeek）的 **Interactive Agent UI** 中，用户经常面临两类交互需求：
+
 1. **从代码变更视角核对并纠偏**：模型理解人话能力差但执行冲动强，容易做出偏离意图的修改；同时模型自然语言解释晦涩，直接看 **Git Diff** 能从代码变更角度看清现状，并在发现不符合预期的改动时，直接对具体代码行点击 **Comment** 引用到对话中要求修正。
 2. **对发散、留坑的晦涩表达做旁路追问**：模型（如 DeepSeek）回答时喜欢发散，叠加糟糕的表达能力后在解释里不断留坑，用户需要旁路追问（`BTW / Ask in Side Chat`）把问题聊清楚，而不污染主线上下文或触发主 agent 的执行冲动。
 
@@ -11,10 +12,11 @@
 ## Solution
 
 提供按需展开的右侧 Tabbed Panel：
+
 - **Git Status Header 入口**：顶部 Header 显示紧凑的 Git 分支与变更统计（如 `main +42 -15`），取代原来会遮挡聊天内容的 Workspace Status Float。点击该入口打开或聚焦 Right Panel 的 `Changes (git-diff)` tab。
 - **Git Diff 视图 + 行级 Comment（Codex 风格）**：
   - 使用 `@git-diff-view/react` 按文件展示当前工作区的 staged / unstaged / untracked 文本变更。
-  - 支持在 Diff 视图中针对具体文件/代码行点击 **Comment**（或选中行添加评论），将该处代码变更的位置（文件路径、行号范围、diff 片段）及用户的批注直接附加/发送到主对话输入框（与 `Quote / Add to Chat` 机制贯通），精准指导 Agent 修正代码。
+  - 支持在 Diff 视图中针对具体文件/代码行点击 **Comment**（或选中行添加评论），将该处代码变更的位置（文件路径、行号范围、diff 片段）及用户的批注直接附加/发送到主对话输入框（与 `Add to Chat` 机制贯通），精准指导 Agent 修正代码。
 - **预留 Side Chat (BTW) 容器**：后续支持从主对话选中晦涩内容并在 Right Panel 打开独立的 `Side Chat` tab。
 
 ## User Stories
@@ -43,6 +45,7 @@ type RightPanelTab =
 
 前端主动向 extension 请求 Git 状态（`get_git_status` / `get_git_diff`），不在 `state_sync` 中耦合。
 防抖刷新时机：
+
 - WebSocket 连接/重连成功
 - Session 同步完成
 - 工具执行结束（`tool_execution_end`）
