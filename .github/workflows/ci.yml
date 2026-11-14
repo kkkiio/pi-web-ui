@@ -61,5 +61,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: readme-snapshot-diff
-          path: test-results/
+          path: e2e/test-results/
           if-no-files-found: ignore

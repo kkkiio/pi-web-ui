@@ -16,13 +16,9 @@ Define **Visual validation** as a separate testing and review layer.
 
 Visual validation answers one question: "Does the rendered Web UI look usable to a real user in the browser?" It uses Browser screenshots and visible inspection. It does not prove the full Pi agent product path and should not be labeled E2E.
 
-The Codex skill for this workflow is named:
-
-```text
-webui-visual-check
-```
-
-Use it after UI/layout/rendering changes where DOM-only checks can miss visible regressions.
+Run this after UI/layout/rendering changes where DOM-only checks can miss visible
+regressions. The rule is stated in `AGENTS.md` (Testing & Checks); the dedicated
+`webui-visual-check` skill was folded into it.
 
 ## Scope
 
@@ -55,9 +51,9 @@ Visual validation may inspect:
 
 Only the first two include real Pi. A frontend-only visual harness is useful, but it remains Visual validation, not E2E.
 
-## Skill Behavior
+## Visual Validation Behavior
 
-`webui-visual-check` should:
+Visual validation should:
 
 - open the real rendered page in the Browser tool;
 - use screenshots or visible bounding boxes for layout-sensitive claims;
@@ -65,7 +61,7 @@ Only the first two include real Pi. A frontend-only visual harness is useful, bu
 - report visible defects such as overlap, clipping, hidden controls, unreadable text, wrong active state, blank content, or squeezed mobile layout;
 - avoid treating selector matches as proof of visibility.
 
-The skill should not describe how to run faux provider, Playwright-BDD, or E2E harness setup. Those belong to `AGENTS.md` and ADR 0010.
+It should not describe how to run faux provider, Playwright-BDD, or E2E harness setup. Those belong to `AGENTS.md` and ADR 0010.
 
 ## Consequences
 
@@ -84,4 +80,3 @@ The skill should not describe how to run faux provider, Playwright-BDD, or E2E h
 
 - `AGENTS.md`
 - `docs/adr/0010-real-pi-web-ui-e2e.md`
-- `.agents/skills/webui-visual-check/SKILL.md`

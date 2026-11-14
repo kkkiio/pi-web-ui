@@ -2,6 +2,8 @@ node_modules/
 dist/
 .DS_Store
 e2e/.features-gen/
+e2e/test-results*/
+e2e/report-out*/
 playwright-report/
 test-results/
 

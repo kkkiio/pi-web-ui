@@ -99,7 +99,7 @@ When("I submit the quoted feedback", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue("");
 });
 Then("Pi receives the exact quotes and feedback after reload", async ({ page }) => {
-  await expect(page.getByText("你好，Pi Web UI 已收到消息。", { exact: true })).toBeVisible();
+  await expect(page.getByText("Hello, Pi Web UI received your message.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("log").getByText(feedback, { exact: true })).toBeVisible();
   const sent = persistedPrompt();
@@ -195,6 +195,19 @@ Then("the transcript shows the verified dry-run result", async ({ page }) => {
   );
   await expect(page.getByRole("button", { name: "Open Changes" })).toContainText(/main.*\+\d+/);
   await expect(result).toBeInViewport();
+  // Shiki highlights code blocks asynchronously after render; a screenshot taken too
+  // early captures plain text and fails the snapshot.
+  await expect
+    .poll(
+      () =>
+        page
+          .locator("pre code span")
+          .evaluateAll((nodes) =>
+            nodes.some((node) => getComputedStyle(node).getPropertyValue("--sdm-c").trim() !== "inherit"),
+          ),
+      { timeout: 10_000 },
+    )
+    .toBe(true);
   await expect(page).toHaveScreenshot("pi-web-ui-example.png");
 });
 

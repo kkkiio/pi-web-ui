@@ -28,6 +28,11 @@
     "preview:web": "vite preview --host 127.0.0.1",
     "e2e:gen": "bddgen test -c e2e/playwright.config.ts",
     "e2e": "npm run build:web && npm run e2e:gen && playwright test -c e2e/playwright.config.ts",
+    "e2e:storyboard": "node e2e/report/record.mjs",
+    "e2e:gallery": "node e2e/report/build-report.mjs",
+    "e2e:gallery:merge": "node e2e/report/build-report.mjs --merge",
+    "e2e:trace": "npx playwright show-trace \"$(ls -td e2e/test-results/*/trace.zip | head -1)\"",
+    "e2e:storyboard:all": "npm run build:web && npm run e2e:gen && npm run e2e:storyboard -- --full",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "check": "biome check .",
@@ -35,7 +40,8 @@
     "ci:biome": "biome ci .",
     "prepare": "npm run build:web",
     "prepack": "npm run build:web",
-    "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --types node extensions/mirror-server.ts"
+    "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --types node extensions/mirror-server.ts",
+    "e2e:preview": "node e2e/report/serve.mjs e2e/report-out"
   },
   "dependencies": {
     "@git-diff-view/react": "^0.1.6",

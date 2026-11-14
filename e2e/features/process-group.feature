@@ -1,6 +1,10 @@
-Feature: Process Group
+Feature: Process group
 
-  Scenario: Inspect a running process without losing the open rows
-    Given Pi will think and run a command before replying
-    When I send a prompt and open the Thinking process group
-    Then the group stays open as the command starts and completes
+  @p0
+  Scenario: A row I opened stays open when a new row streams in
+    Why: I open the row to read along; it closing hides what I was reading.
+
+    Given Pi thinks for a moment, then runs a two second command
+    When I open the reasoning row while Pi is thinking
+    And I open the bash row when it arrives
+    Then the rows I opened are still open when the command finishes
