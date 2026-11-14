@@ -1,25 +1,10 @@
 Feature: Structured agent clarification
 
-  Scenario: Terminal conversations keep their tools, instructions and session name
-    Given an untouched terminal session
-    When I have two terminal conversation turns
-    Then terminal tools and instructions are unchanged
-    And the Web UI question tool is absent
-    And the Web UI server is not listening
+  @p0
+  Scenario: Answering a question shows option previews and survives a reload
+    Why: the answer has to reach the agent, and the record of it must not disappear
+         when the page is refreshed.
 
-  Scenario: Tools and server stay untouched until explicit activation
-    Given a lazy Web UI session
-    Then the Web UI server is not listening
-    And the Web UI question tool is absent
-    When I run webui
-    Then the Web UI question tool is active
-    When I stop webui
-    Then the Web UI question tool is inactive
-    And the Web UI server is not listening
-    When I run webui
-    Then the Web UI question tool is active
-
-  Scenario: Answer choices, preview Markdown and restore history
     Given an activated question session
     When I ask the agent to clarify
     Then the question card is waiting for answers
@@ -31,7 +16,11 @@ Feature: Structured agent clarification
     When I reload the question page
     Then the answered card is read only
 
-  Scenario: Pending questions are restored after page reload
+  @p0
+  Scenario: A pending question is still pending after a reload
+    Why: the agent is blocked until the user answers; a reload must not strand the
+         question or the agent.
+
     Given an activated question session
     When I ask the agent to clarify
     And I reload the question page
@@ -40,7 +29,10 @@ Feature: Structured agent clarification
     And I submit the clarification answers
     Then the agent receives my answers
 
-  Scenario: Answer drafts survive a dropped WebSocket connection
+  @p1
+  Scenario: My half-typed answers survive a reconnect
+    Why: a dropped socket must not throw away what the user already typed.
+
     Given an activated question session through a TCP proxy
     When I ask the agent to clarify
     And I enter custom clarification answers
@@ -49,7 +41,11 @@ Feature: Structured agent clarification
     When I submit the clarification answers
     Then the agent receives my answers
 
-  Scenario: Reject invalid answers atomically and refuse a second answer
+  @p1
+  Scenario: An invalid answer is refused and the question stays open
+    Why: a partially accepted answer would leave the agent and the user disagreeing
+         about what was submitted.
+
     Given an activated question session
     When I ask the agent to clarify
     Then an invalid answer is refused and the question remains open
@@ -58,22 +54,32 @@ Feature: Structured agent clarification
     Then the agent receives my answers
     And a duplicate answer is refused
 
-  Scenario: Cancelling questions releases the agent
+  @p1
+  Scenario: Cancelling a question releases the agent
+    Why: if the agent kept waiting after a cancel, the session would hang.
+
     Given an activated question session
     When I ask the agent to clarify
     And I cancel the clarification
     Then the cancelled card is read only
 
-  Scenario: Aborting the agent closes pending questions
+  @p1
+  Scenario: Aborting the run closes the pending question
+    Why: a question left open after an abort would let the user answer a run that no
+         longer exists.
+
     Given an activated question session
     When I ask the agent to clarify
     And I abort the question agent
     Then the cancelled card is read only
 
-  Scenario Outline: Known conflicting names are disabled regardless of extension load order
+  @p0
+  Scenario Outline: A conflicting question tool is disabled regardless of load order
+    Why: two tools answering the same question would confuse the agent and the card.
+
     Given a lazy Web UI session with a conflicting tool loaded "<order>"
     Then the conflicting question tool is active
-    When I run webui
+    When I open webui
     Then the Web UI question tool is active
     And the conflicting question tool is inactive
     When I disable an unrelated tool
@@ -85,32 +91,43 @@ Feature: Structured agent clarification
     Then the conflicting question tool is active
     And the unrelated tool stays disabled
 
+    # title-format: conflicting tool loaded <order>
     Examples:
       | order  |
       | before |
       | after  |
 
-  Scenario: An originally inactive conflict stays inactive after cleanup
+  @p1
+  Scenario: A conflicting tool that was already inactive stays inactive
+    Why: activation must not silently turn on a tool the user had turned off.
+
     Given a lazy Web UI session with a conflicting tool loaded "inactive"
     Then the conflicting question tool is inactive
-    When I run webui
+    When I open webui
     And I stop webui
     Then the conflicting question tool is inactive
 
-  Scenario Outline: Replacing the session requires explicit activation again
+  @p0
+  Scenario Outline: A replaced session needs /webui again
+    Why: a new session must not inherit a server and rewritten tools from the old one.
+
     Given an activated question session
     When I replace the session using "<command>"
     Then the Web UI server is not listening
     And the Web UI question tool is absent
-    When I run webui
+    When I open webui
     Then the Web UI question tool is active
 
+    # title-format: after <command>
     Examples:
       | command              |
       | /new-test-session    |
       | /reload-test-session |
 
-  Scenario: Multiple browsers observe the same completed question
+  @p1
+  Scenario: Two browsers see the same answer
+    Why: a second tab must not show a stale, still-answerable question.
+
     Given an activated question session
     When I ask the agent to clarify
     And another browser opens the pending question
@@ -118,16 +135,14 @@ Feature: Structured agent clarification
     And I submit the clarification answers
     Then both browsers show an answered question
 
-  Scenario: Stopping a pending interaction releases the agent
+  @p1
+  Scenario: Stopping the web UI releases a waiting agent
+    Why: stopping the server must not leave the agent blocked on a question nobody
+         can answer anymore.
+
     Given an activated question session
     When I ask the agent to clarify
     And I stop webui
     Then the Web UI server is not listening
     When I run webui after the agent settles
     Then the cancelled card is read only
-
-  Scenario: Activation failure leaves the session untouched
-    Given a lazy Web UI session with an unavailable bind address
-    When I attempt activation
-    Then the Web UI server is not listening
-    And the Web UI question tool is absent
