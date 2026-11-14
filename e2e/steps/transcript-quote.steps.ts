@@ -63,7 +63,6 @@ Given("a transcript with prose, reasoning and tool output", async ({ page }) => 
   // Restore the persisted transcript so later selections cannot race the end-of-turn sync.
   await page.reload();
   await expect(page.getByText("Explain the selected sentence before changing code.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "1 tool call", exact: true }).click();
   await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill(feedback);
 });
 
@@ -77,12 +76,14 @@ Then("the draft is preserved and focused", async ({ page }) => {
   await expect(page.getByRole("group", { name: "Quoted selections" })).toContainText(partial);
 });
 When("I add reasoning and multiline tool output quotes", async ({ page }) => {
+  await page.getByRole("button", { name: "Thinking", exact: true }).click();
   await page.getByRole("button", { name: /Thought for/ }).click();
   await selectText(
     page.getByText("Inspect the exact failure before making changes.", { exact: true }),
     "exact failure",
   );
   await page.getByRole("button", { name: "Add to Chat", exact: true }).click();
+  await page.getByRole("button", { name: "1 tool call", exact: true }).click();
   await page.getByRole("button", { name: /bash/ }).click();
   await selectText(page.locator('[data-quote-source="bash output"] code'), "first output line\nsecond output line");
   await page.getByRole("button", { name: "Add to Chat", exact: true }).click();

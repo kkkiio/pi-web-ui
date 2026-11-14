@@ -28,7 +28,8 @@ export type ChatItem =
       reasoning?: string;
       streaming?: boolean;
       copyable?: boolean;
-      presentation?: "normal" | "activity";
+      thinking?: boolean;
+      timestamp?: number;
       cost?: number;
       images?: PromptImage[];
       /** Session entry tree node ID, used for inline editing via navigate_tree. */
@@ -88,6 +89,7 @@ export type RpcEvent = {
 
 export type PiMessage = {
   id?: string;
+  timestamp?: number;
   role: "user" | "assistant" | "toolResult" | string;
   content?: string | PiContentBlock[];
   customType?: string;
