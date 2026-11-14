@@ -575,44 +575,35 @@ export default function (pi: ExtensionAPI) {
           break;
         }
         case "prompt": {
-          const message = typeof params.message === "string" ? params.message : "";
-          if (ctx && !ctx.isIdle()) {
-            const behavior = typeof params.streamingBehavior === "string" ? params.streamingBehavior : "steer";
-            pi.sendUserMessage(message, { deliverAs: behavior === "followUp" ? "followUp" : "steer" });
-          } else {
-            const images = Array.isArray(params.images) ? (params.images as BrowserImage[]) : [];
-            if (images.length) {
-              const validMimes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-              const content: Array<TextContentBlock | ImageContentBlock> = [
-                { type: "text", text: message || "(see attached image)" },
-              ];
-              for (const img of images) {
-                if (!img.data || typeof img.data !== "string") continue;
-                const data = img.data.includes(",") ? img.data.split(",")[1] : img.data;
-                const mimeType = (validMimes.includes(img.mimeType || "") ? img.mimeType : "image/png") as
-                  | "image/png"
-                  | "image/jpeg"
-                  | "image/gif"
-                  | "image/webp";
-                content.push({ type: "image", data, mimeType });
-              }
-              pi.sendUserMessage(content.some((block) => block.type === "image") ? content : message);
-            } else {
-              pi.sendUserMessage(message);
-            }
+          if (!ctx) {
+            sendTo(ws, error("No context available"));
+            break;
           }
-          sendTo(ws, success());
-          break;
-        }
-
-        case "steer": {
-          pi.sendUserMessage(typeof params.message === "string" ? params.message : "", { deliverAs: "steer" });
-          sendTo(ws, success());
-          break;
-        }
-
-        case "follow_up": {
-          pi.sendUserMessage(typeof params.message === "string" ? params.message : "", { deliverAs: "followUp" });
+          if (!ctx.isIdle() || ctx.hasPendingMessages()) {
+            sendTo(ws, error("Agent is busy. Wait for Pi to finish before sending."));
+            break;
+          }
+          const message = typeof params.message === "string" ? params.message : "";
+          const images = Array.isArray(params.images) ? (params.images as BrowserImage[]) : [];
+          if (images.length) {
+            const validMimes = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+            const content: Array<TextContentBlock | ImageContentBlock> = [
+              { type: "text", text: message || "(see attached image)" },
+            ];
+            for (const img of images) {
+              if (!img.data || typeof img.data !== "string") continue;
+              const data = img.data.includes(",") ? img.data.split(",")[1] : img.data;
+              const mimeType = (validMimes.includes(img.mimeType || "") ? img.mimeType : "image/png") as
+                | "image/png"
+                | "image/jpeg"
+                | "image/gif"
+                | "image/webp";
+              content.push({ type: "image", data, mimeType });
+            }
+            pi.sendUserMessage(content.some((block) => block.type === "image") ? content : message);
+          } else {
+            pi.sendUserMessage(message);
+          }
           sendTo(ws, success());
           break;
         }

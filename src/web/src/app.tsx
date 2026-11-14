@@ -5,7 +5,6 @@ import {
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   TerminalIcon,
-  XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -38,7 +37,7 @@ import { copyText, formatTokens, isEditableTarget } from "./core/format";
 import { PiClient } from "./core/pi-client";
 import { usePiWebUiStore } from "./core/store";
 import { dispatchPiEvent } from "./core/store/event-dispatch";
-import type { PromptCommand, StateSyncPayload } from "./core/types";
+import type { StateSyncPayload } from "./core/types";
 
 export function App() {
   const items = usePiWebUiStore((state) => state.items);
@@ -110,21 +109,12 @@ export function App() {
     document.querySelector<HTMLTextAreaElement>('textarea[name="message"]')?.focus();
   };
 
-  const [queuedMessages, setQueuedMessages] = useState<PromptCommand[]>([]);
-
   const [modelOpen, setModelOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
 
-  const promptCounterRef = useRef(0);
-
   const resolvedTheme = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
-
-  const nextPromptId = useCallback(() => {
-    promptCounterRef.current += 1;
-    return `prompt-${Date.now()}-${promptCounterRef.current}`;
-  }, []);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -185,42 +175,21 @@ export function App() {
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
-  useEffect(() => {
-    if (chatStatus !== "ready" || queuedMessages.length === 0 || loadingTreeEntryId) return;
-    const [next, ...rest] = queuedMessages;
-    setQueuedMessages(rest);
-    sendPrompt(next);
-  }, [chatStatus, queuedMessages, sendPrompt, loadingTreeEntryId]);
-
   const submitMessage = useCallback(
     async ({ text, files }: { text: string; files?: unknown[] }) => {
-      if (usePiWebUiStore.getState().loadingTreeEntryId) return;
       const trimmed = formatQuotedPrompt(text, quotes);
       const images = await processPromptFiles(files);
       if (!trimmed && images.length === 0) return;
+      if (usePiWebUiStore.getState().loadingTreeEntryId) throw new Error("Wait for the current operation to finish");
 
-      const command: PromptCommand = {
-        id: nextPromptId(),
+      await sendPrompt({
         message: trimmed || "(see attached image)",
         images: images.length ? images : undefined,
-      };
-
-      const clearSubmittedDraft = () => {
-        setDraftText((current) => (current === text ? "" : current));
-        setQuotes((current) => current.filter((quote) => !quotes.some((sent) => sent.id === quote.id)));
-      };
-
-      if (chatStatus === "streaming" || chatStatus === "submitted") {
-        setQueuedMessages((current) => [...current, command]);
-        clearSubmittedDraft();
-        return;
-      }
-
-      await sendPrompt(command);
-      if (usePiWebUiStore.getState().error) throw new Error(usePiWebUiStore.getState().error || "Prompt failed");
-      clearSubmittedDraft();
+      });
+      setDraftText((current) => (current === text ? "" : current));
+      setQuotes((current) => current.filter((quote) => !quotes.some((sent) => sent.id === quote.id)));
     },
-    [chatStatus, nextPromptId, sendPrompt, quotes],
+    [sendPrompt, quotes],
   );
 
   const openModelPicker = useCallback(async () => {
@@ -304,14 +273,12 @@ export function App() {
         if (result?.cancelled) throw new Error("Navigation cancelled");
         const sync = await compactSend("sync_request");
         usePiWebUiStore.getState().applyStateSync(sync as StateSyncPayload);
-        await sendPrompt({ id: nextPromptId(), message, images });
-        const promptError = usePiWebUiStore.getState().error;
-        if (promptError) throw new Error(promptError);
+        await sendPrompt({ message, images });
       } finally {
         setLoadingTreeEntryId(null);
       }
     },
-    [compactSend, nextPromptId, sendPrompt, setLoadingTreeEntryId],
+    [compactSend, sendPrompt, setLoadingTreeEntryId],
   );
 
   useEffect(() => {
@@ -481,30 +448,6 @@ export function App() {
               />
             </div>
 
-            {queuedMessages.length > 0 && (
-              <div className="mx-auto w-full max-w-3xl px-4 pt-2">
-                <div className="flex flex-wrap gap-2">
-                  {queuedMessages.map((queued) => (
-                    <div
-                      className="flex items-center gap-2 rounded-md border bg-muted px-2 py-1 text-xs"
-                      key={queued.id}
-                    >
-                      <span className="text-muted-foreground">Queued</span>
-                      <span className="max-w-72 truncate">{queued.message}</span>
-                      <button
-                        onClick={() =>
-                          setQueuedMessages((current) => current.filter((candidate) => candidate.id !== queued.id))
-                        }
-                        type="button"
-                      >
-                        <XIcon className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {error && (
               <div className="mx-auto w-full max-w-3xl px-4 py-2">
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
@@ -514,6 +457,7 @@ export function App() {
             )}
 
             <ChatInput
+              connection={connection}
               quotes={quotes}
               onRemoveQuote={(id) => setQuotes((current) => current.filter((quote) => quote.id !== id))}
               disabled={loadingTreeEntryId !== null}

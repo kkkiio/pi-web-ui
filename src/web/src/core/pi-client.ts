@@ -92,6 +92,10 @@ export class PiClient {
 
   send(method: string, params?: Record<string, unknown>) {
     return new Promise<unknown>((resolve, reject) => {
+      if (method === "prompt" && this.ws?.readyState !== WebSocket.OPEN) {
+        reject(new Error("Not connected to Pi"));
+        return;
+      }
       this.requestCounter += 1;
       const request: WsRequest = {
         type: "req",
