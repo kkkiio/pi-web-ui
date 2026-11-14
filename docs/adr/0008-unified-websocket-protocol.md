@@ -169,9 +169,7 @@ All current commands become methods under the unified `req`/`res` pattern:
 
 | Current Command/HTTP | New Method | Params |
 |---------------------|------------|--------|
-| `prompt` | `prompt` | `{ message, images?, streamingBehavior? }` |
-| `steer` | `steer` | `{ message }` |
-| `follow_up` | `follow_up` | `{ message }` |
+| `prompt` | `prompt` | `{ message, images? }` |
 | `abort` | `abort` | — |
 | `enter_arch_mode` | `enter_arch_mode` | — |
 | `exit_arch_mode` | `exit_arch_mode` | — |
@@ -204,6 +202,23 @@ All current commands become methods under the unified `req`/`res` pattern:
 | `GET /api/search` | Deleted (ADR 0007) | — |
 | `GET /api/sessions/:dir/:file` | Deleted (ADR 0007) | — |
 | `POST /api/sessions/switch` | Deleted (ADR 0007) | — |
+
+### Prompt submission
+
+The browser keeps one editable draft and does not queue prompts. While Pi is
+working, Enter leaves the draft, quotes, and images in the composer; Stop only
+requests cancellation. Completion and cancellation never send the draft.
+The user submits it explicitly once Pi is idle and the connection is open.
+
+The `prompt` handler rejects requests when there is no extension context, Pi is
+busy, or `ctx.hasPendingMessages()` is true. It does not convert a request into
+steering or follow-up. The WebSocket methods `steer` and `follow_up`, and the
+`streamingBehavior` prompt option, have been removed. Pi's native queue and
+other extensions' use of it are unchanged.
+
+Generic WebSocket request buffering remains, but disconnected prompt submissions
+are blocked before they reach that buffer. A successful `prompt` response still
+acknowledges the extension call, not completion of the asynchronous Pi turn.
 
 ### Frontend Changes
 

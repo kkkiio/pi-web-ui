@@ -158,6 +158,12 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   setContextWindowSize: (contextWindowSize) => set({ contextWindowSize }),
 
   sendPrompt: async (command) => {
+    const { connection, chatStatus } = get();
+    if (connection !== "connected" || chatStatus === "submitted" || chatStatus === "streaming") {
+      const error = new Error(connection !== "connected" ? "Not connected to Pi" : "Agent is busy");
+      set({ error: error.message });
+      throw error;
+    }
     set({ chatStatus: "submitted", error: null });
     try {
       await get().send("prompt", {
@@ -165,14 +171,17 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
         ...(command.images?.length && { images: command.images }),
       });
     } catch (error) {
-      set({ chatStatus: "error", error: error instanceof Error ? error.message : "Prompt failed" });
+      set((state) => ({
+        chatStatus: state.chatStatus === "submitted" ? "error" : state.chatStatus,
+        error: error instanceof Error ? error.message : "Prompt failed",
+      }));
+      throw error;
     }
   },
 
   abort: async () => {
     try {
       await get().send("abort");
-      set({ chatStatus: "ready" });
       get().addSystemMessage("Aborted by user", "error");
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Abort failed" });

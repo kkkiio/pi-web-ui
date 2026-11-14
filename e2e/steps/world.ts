@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { type PiWebUiHarness, startPiWebUi } from "../harness/pi-process";
 
-export type FixtureName = "chat-lifecycle" | "workspace-artifact" | "tool-failure" | "edit-history";
+export type FixtureName = "prompt-draft" | "chat-lifecycle" | "workspace-artifact" | "tool-failure" | "edit-history";
 
 /** Shared state for one scenario. Step files read and write this instead of keeping
  * their own copies, because every step file is registered globally. */
