@@ -19,7 +19,7 @@ When("I submit this formatted user prompt:", async ({ page }, text: string) => {
   prompt = text;
   await page.getByRole("textbox", { name: "Message Pi", exact: true }).fill(prompt);
   await page.getByRole("button", { name: "Submit", exact: true }).click();
-  await expect(page.getByText("你好，Pi Web UI 已收到消息。", { exact: true })).toBeVisible();
+  await expect(page.getByText("Hello, Pi Web UI received your message.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeVisible();
 });
 
