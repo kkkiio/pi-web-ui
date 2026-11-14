@@ -1,5 +1,5 @@
 import { type ChildProcessWithoutNullStreams, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -11,6 +11,10 @@ export type PiWebUiHarness = {
   stop: () => Promise<void>;
   enableEditing: () => Promise<void>;
   command: (message: string) => Promise<void>;
+  /** Wait until the session file on disk contains `text`. Rewinds are persisted
+   * asynchronously, so a reload right after them can otherwise snapshot an older
+   * session and render an empty transcript. */
+  waitForSessionText: (text: string) => Promise<void>;
 };
 
 export type PiWebUiHarnessOptions = {
@@ -123,9 +127,25 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
     await waitForWebUi(`http://127.0.0.1:${port}`, piProcess, processOutput);
   }
   if (options.enableEditing) await enableEditing();
+  const waitForSessionText = async (text: string) => {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const files = readdirSync(sessionDir, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => path.join(entry.parentPath ?? sessionDir, entry.name));
+      for (const file of files) {
+        if (!file.endsWith(".jsonl")) continue;
+        if (readFileSync(file, "utf8").includes(text)) return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`session did not persist: ${text}`);
+  };
+
   return {
     command,
     enableEditing,
+    waitForSessionText,
     pageUrl: `http://127.0.0.1:${port}`,
     port,
     workspaceDir,

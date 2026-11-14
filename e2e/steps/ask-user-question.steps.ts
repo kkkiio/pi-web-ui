@@ -77,11 +77,11 @@ Then("my clarification draft is preserved", async ({ page }) => {
 Given("a lazy Web UI session with an unavailable bind address", async () => {
   harness = await startPiWebUi("ask-user-question", { autoStart: false, host: "203.0.113.123" });
 });
-When("I attempt activation", async () => {
+When("I run webui", async () => {
   await harness?.command("/webui");
 });
 
-When("I run webui", async ({ page }) => {
+When("I open webui", async ({ page }) => {
   await harness?.command("/webui");
   await page.goto(harness?.pageUrl ?? "");
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();

@@ -42,12 +42,6 @@ up resources and restore affected tool activation without rolling back history
 or LLM context. New, switched, or forked sessions and `/reload` require explicit
 activation again. Recommend continuing activated sessions in Web UI.
 
-### Mandatory Skill Usage
-
-#### `$webui-visual-check`
-
-Run `$webui-visual-check` after UI, WebSocket-driven visible state, Right Panel, Git Diff, or mobile sheet changes where DOM-only checks can miss visible regressions. Skip for docs-only changes unless the docs change this skill or visual validation requirements. This skill is visual validation, not E2E.
-
 ## Domain Language
 
 - **Interactive Agent UI** — Browser interface designed to interrogate, clarify, and steer high-agency coding models rather than passively mirroring terminal text.
@@ -79,7 +73,9 @@ Run `$webui-visual-check` after UI, WebSocket-driven visible state, Right Panel,
 │   │   ├── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
 │   │   ├── 0010-real-pi-web-ui-e2e.md                  # Real Pi agent Web UI E2E tests
 │   │   ├── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
-│   │   └── 0012-interactive-agent-ui-positioning.md    # Interactive Agent UI positioning & feature cuts
+│   │   ├── 0012-interactive-agent-ui-positioning.md    # Interactive Agent UI positioning & feature cuts
+│   │   ├── 0013-explicit-webui-session-activation.md   # Activation boundary before/after /webui
+│   │   └── 0014-web-ui-test-storyboard.md              # Storyboard previews for web E2E scenarios (local)
 │   ├── prd/                     # Product Requirement Documents (功能设计)
 │   │   ├── columns-layout.md        # Single-column default + on-demand two-column layout
 │   │   ├── edit-message.md          # Inline edit user message + Save & Send
@@ -199,69 +195,34 @@ PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
 
 ### Testing & Checks
 
-Testing has three layers:
+| Layer | What it proves | Command |
+| --- | --- | --- |
+| Check | types, lint, build | `just check`, `npm run build:web` |
+| E2E | the real Pi Web UI path works | `npm run e2e` |
+| Storyboard | what a scenario looks like | `npm run e2e:storyboard -- e2e/features/x.feature`, then `npm run e2e:preview` |
 
-| Layer             | Purpose                                        | Includes Pi agent? | Primary tool                                     |
-| ----------------- | ---------------------------------------------- | ------------------ | ------------------------------------------------ |
-| Check             | Fast local static/build validation             | No                 | `just check`, `npm run build:web`                |
-| E2E               | Validate the real Pi Web UI product path       | Yes                | Playwright-BDD + `pi --mode rpc` + faux provider |
-| Visual validation | Inspect rendered UI for visible layout defects | Optional           | Browser screenshots via `$webui-visual-check`    |
+E2E drives a real browser through the real product path: `pi --mode rpc` with
+`extensions/mirror-server.ts`, real tools, and a temp git workspace; only the model is
+replaced by the faux provider. Rules and rationale live in
+[ADR 0010](docs/adr/0010-real-pi-web-ui-e2e.md) — do not mock `/ws`, set React state
+directly, or accept a DOM selector as proof of behavior.
 
-E2E means the test includes the real Pi product path:
+Storyboards exist so a reviewer can understand a scenario without reading step
+definitions: video, one screenshot per Gherkin step, step chapters, and the scenario's
+`Why` line. Record the features you touched; use `--full` after UI or step changes. See
+[ADR 0014](docs/adr/0014-web-ui-test-storyboard.md).
 
-```text
-Playwright Browser
-  -> Pi mirror-server static UI + /ws
-  -> pi --mode rpc
-  -> Pi agent session
-  -> faux LLM provider
-  -> real tools / real temp workspace / real git
-```
+Visual validation is not E2E: prove what a user sees with screenshots or visible bounds
+(desktop and mobile), or with a storyboard's per-step screenshots. A selector match is
+not proof that something is visible. See
+[ADR 0011](docs/adr/0011-web-ui-visual-validation.md).
 
-E2E rules:
-
-- Put E2E tests under `e2e/`.
-- Use Playwright-BDD feature files for product-level flows.
-- Start a real `pi --mode rpc` process for each scenario.
-- Load the local `extensions/mirror-server.ts` extension normally.
-- Use built `dist` assets served by mirror-server in CI.
-- Use a faux LLM provider only to make model responses deterministic.
-- Use real Pi `write` / `edit` tools when testing Markdown artifacts.
-- Use real git repositories in temp workspaces when testing git status or diff.
-- Do not mock `/ws`, set React state directly, or call component props in E2E.
-
-Run the real Pi E2E suite with:
+CI runs `npm run e2e` on every PR; local `just check` does not.
 
 ```bash
-npm run e2e
-```
-
-Regenerate Playwright tests from feature files without running the browser with:
-
-```bash
-npm run e2e:gen
-```
-
-GitHub Actions runs E2E on every PR after `npm run build:web`. Local default checks do not run E2E unless the developer explicitly invokes the E2E command or is changing E2E harness/tests.
-
-Visual validation checks what the user can actually see. Run `$webui-visual-check` after UI, WebSocket-driven visible state, Right Panel, Git Diff, or mobile sheet changes where DOM-only checks can miss visual regressions. It may inspect a real E2E-created state, a real local Pi session, or a future frontend visual harness. A frontend-only visual harness is not E2E.
-
-Run before committing:
-
-```bash
-just check
-```
-
-This runs `npx tsc --noEmit` and then `npm run check` (`biome check .`). To format only:
-
-```bash
-just fmt
-```
-
-To lint only:
-
-```bash
-npm run lint
+just check   # npx tsc --noEmit + biome check .
+just fmt     # biome check --write
+npm run lint # biome lint
 ```
 
 ### PR Workflow

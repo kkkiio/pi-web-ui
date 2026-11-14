@@ -1,7 +1,10 @@
-@readme
+@readme @docs
 Feature: Preview report exports
 
   Scenario: Refine the export plan by quoting the assistant
+    Why: the README shows this exact flow, so the snapshot must fail when the quoting
+         UI or the dry-run result changes.
+
     Given Pi is ready to discuss report exports
     When I ask Pi for an export preview
     And I quote the proposed behavior and clarify the output paths

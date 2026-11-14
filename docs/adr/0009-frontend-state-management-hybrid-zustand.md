@@ -137,7 +137,7 @@ The implemented migration is covered by:
 - `npx tsc --noEmit`
 - `npm run check`
 - `npm run e2e`
-- `$webui-visual-check` screenshots for Workspace Status Float and Right Panel on desktop and mobile viewports
+- Storyboard screenshots (`npm run e2e:storyboard`) for Workspace Status Float and Right Panel on desktop and mobile viewports
 
 ## References
 
