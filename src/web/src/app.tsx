@@ -448,7 +448,7 @@ export function App() {
 
                       const { item } = section;
                       return item.kind === "message" && item.role === "user" ? (
-                        <div id={`user-message-${item.id}`} key={`user:${item.id}`}>
+                        <div id={`user-message-${item.id}`} key={`user:${item.entryId ?? item.id}`}>
                           <UserMessageView
                             item={item as typeof item & { kind: "message"; role: "user" }}
                             onEdit={advancedFeatures && item.entryId ? editMessage : undefined}
