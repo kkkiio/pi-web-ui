@@ -172,6 +172,64 @@
   scrollbar-color: color-mix(in oklab, var(--foreground) 45%, transparent) transparent;
 }
 
+.user-message-content {
+  & > * + * {
+    margin-top: 1rem;
+  }
+
+  & blockquote {
+    border-left: 4px solid var(--border);
+    padding-left: 1rem;
+    color: var(--muted-foreground);
+    font-style: italic;
+  }
+
+  & ul,
+  & ol {
+    padding-left: 1.5em;
+  }
+
+  & ul {
+    list-style: disc;
+  }
+
+  & ol {
+    list-style: decimal;
+  }
+
+  & a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  & pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  & code {
+    border-radius: 0.25rem;
+    background: var(--muted);
+    padding: 0.125rem 0.375rem;
+    font-size: 0.875rem;
+  }
+
+  & pre {
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius);
+    background: var(--muted);
+    padding: 0.75em;
+    white-space: pre;
+  }
+
+  & .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+}
+
 .message-markdown [data-streamdown="code-block"],
 .message-markdown [data-streamdown="table-wrapper"] {
   position: relative;
