@@ -63,7 +63,7 @@ Zustand lives under `src/web/src/core/store/`.
 
 - left sidebar width and open state
 - system dark-mode media query result
-- current input draft and queued prompt drafts
+- current input draft
 - model/settings/command/context popover open state
 - model search text
 - highlighted entry id and focus refs

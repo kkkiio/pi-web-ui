@@ -6,24 +6,26 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
-import type { ChatSubmitStatus } from "../../core/types";
+import type { ChatSubmitStatus, ConnectionState } from "../../core/types";
 import { ComposerStats } from "./composer-stats";
 import { PromptAttachmentButton, PromptAttachmentPreview } from "./prompt-attachments";
 import { type TranscriptQuote, TranscriptQuotePreview } from "./transcript-quote";
 
 type ChatInputProps = {
+  connection: ConnectionState;
   quotes: TranscriptQuote[];
   onRemoveQuote: (id: string) => void;
   viewingHistory: boolean;
   disabled?: boolean;
   chatStatus: ChatSubmitStatus;
   value: string;
-  onSubmit: (opts: { text: string; files?: unknown[] }) => void;
+  onSubmit: (opts: { text: string; files?: unknown[] }) => Promise<void>;
   onAbort: () => void;
   onValueChange: (value: string) => void;
 };
 
 export function ChatInput({
+  connection,
   quotes,
   onRemoveQuote,
   viewingHistory,
@@ -42,6 +44,9 @@ export function ChatInput({
     );
   }
 
+  const busy = chatStatus === "submitted" || chatStatus === "streaming";
+  const canSubmit = !disabled && connection === "connected" && !busy;
+
   return (
     <footer className="shrink-0 bg-background/95 px-4 py-3">
       <div className="mx-auto w-full max-w-3xl">
@@ -51,6 +56,12 @@ export function ChatInput({
           globalDrop={!disabled}
           multiple
           onSubmit={onSubmit}
+          onSubmitCapture={(event) => {
+            if (!canSubmit) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
         >
           <TranscriptQuotePreview quotes={quotes} onRemove={onRemoveQuote} />
           <PromptAttachmentPreview />
@@ -60,6 +71,9 @@ export function ChatInput({
               disabled={disabled}
               className="min-h-20 resize-none"
               onChange={(event) => onValueChange(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (!canSubmit && event.key === "Enter" && !event.shiftKey) event.preventDefault();
+              }}
               placeholder=""
               value={value}
             />
@@ -68,7 +82,12 @@ export function ChatInput({
             <PromptInputTools>
               <PromptAttachmentButton />
             </PromptInputTools>
-            <PromptInputSubmit className="rounded-full" disabled={disabled} onStop={onAbort} status={chatStatus} />
+            <PromptInputSubmit
+              className="rounded-full"
+              disabled={disabled || connection !== "connected"}
+              onStop={onAbort}
+              status={chatStatus}
+            />
           </PromptInputFooter>
         </PromptInput>
         <ComposerStats />

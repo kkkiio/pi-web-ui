@@ -14,7 +14,6 @@ export type PromptImage = {
 };
 
 export type PromptCommand = {
-  id: string;
   message: string;
   images?: PromptImage[];
 };

@@ -6,12 +6,14 @@ import duplicateArtifactResponses from "./responses/duplicate-artifact.ts";
 import editHistoryResponses from "./responses/edit-history.ts";
 import externalArtifactResponses from "./responses/external-artifact.ts";
 import processGroupResponses from "./responses/process-group.ts";
+import promptDraftResponses from "./responses/prompt-draft.ts";
 import reportExportResponses from "./responses/report-export.ts";
 import toolFailureResponses from "./responses/tool-failure.ts";
 import transcriptQuoteResponses from "./responses/transcript-quote.ts";
 import workspaceArtifactResponses from "./responses/workspace-artifact.ts";
 
 const responsesByName = {
+  "prompt-draft": promptDraftResponses,
   "ask-user-question": askUserQuestionResponses,
   "process-group": processGroupResponses,
   "report-export": reportExportResponses,
