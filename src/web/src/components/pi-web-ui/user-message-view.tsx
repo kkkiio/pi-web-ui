@@ -1,16 +1,11 @@
 import { CheckIcon, CopyIcon, PencilIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import {
-  Message,
-  MessageAction,
-  MessageActions,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
+import { Message, MessageAction, MessageActions, MessageContent } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatItem } from "../../core/types";
 import { ImagePreviewStrip } from "./image-preview-strip";
+import { UserMessageContent } from "./user-message-content";
 
 export function UserMessageView({
   item,
@@ -101,7 +96,7 @@ export function UserMessageView({
           </div>
         ) : (
           <div data-quote-source="User">
-            <MessageResponse>{item.text}</MessageResponse>
+            <UserMessageContent>{item.text}</UserMessageContent>
           </div>
         )}
       </MessageContent>
