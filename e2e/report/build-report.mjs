@@ -198,7 +198,9 @@ function walk(suite, trail) {
       // Playwright JSON strips the leading "@" from tags.
       tags: (spec.tags ?? []).map((tag) => (tag.startsWith("@") ? tag : `@${tag}`)),
       ...(() => {
-        const doc = featureDocs.get(String(spec.file ?? "").replace(/\.spec\.[cm]?[jt]s$/, ""))?.get(spec.title);
+        // Outline examples are keyed by the parent outline title, not the example label.
+        const docTitle = chain.length > 1 ? chain[1] : spec.title;
+        const doc = featureDocs.get(String(spec.file ?? "").replace(/\.spec\.[cm]?[jt]s$/, ""))?.get(docTitle);
         return {
           intent: doc?.intent.join(" ") || null,
           fields: doc?.fields ?? [],
