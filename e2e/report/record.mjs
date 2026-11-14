@@ -12,7 +12,7 @@
  * would no longer match the code.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,6 +39,16 @@ for (const feature of features) {
   }
 }
 
+function newestMtime(dir) {
+  let newest = 0;
+  for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const file = path.join(entry.parentPath ?? dir, entry.name);
+    newest = Math.max(newest, statSync(file).mtimeMs);
+  }
+  return newest;
+}
+
 const run = (command, commandArgs, env = {}) => {
   const result = spawnSync(command, commandArgs, {
     cwd: repoRoot,
@@ -47,6 +57,16 @@ const run = (command, commandArgs, env = {}) => {
   });
   return result.status ?? 1;
 };
+
+// The gallery hashes the current source, so the recording must be produced from the
+// current build and the current generated tests.
+const distIndex = path.join(repoRoot, "dist", "index.html");
+const stale = !existsSync(distIndex) || newestMtime(path.join(repoRoot, "src/web")) > statSync(distIndex).mtimeMs;
+if (stale) {
+  console.log("[record] dist/ is missing or stale; building the web UI first");
+  if (run("npm", ["run", "build:web"]) !== 0) process.exit(1);
+}
+if (run("npm", ["run", "e2e:gen"]) !== 0) process.exit(1);
 
 const record = (targets) =>
   run("npx", ["playwright", "test", "-c", "e2e/playwright.config.ts", "--project=chromium", ...targets], {

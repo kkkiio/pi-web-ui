@@ -790,7 +790,16 @@ ${steps}
 <script>
 (() => {
   const video = document.querySelector(".video-panel video");
-  if (video) startAtContent(video);
+  if (video) {
+    const fromEnd = Number(video.dataset.fromEnd || 0);
+    if (fromEnd) {
+      const seek = () => {
+        video.currentTime = Math.max(0, video.duration - fromEnd / 1000);
+      };
+      if (video.readyState >= 1) seek();
+      else video.addEventListener("loadedmetadata", seek, { once: true });
+    }
+  }
   const data = JSON.parse(document.getElementById("timings").textContent || "null");
   if (!video || !data) return;
   const steps = data.steps;
