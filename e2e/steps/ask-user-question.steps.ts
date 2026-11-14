@@ -10,6 +10,7 @@ let otherPage: Page | undefined;
 let proxy: net.Server | undefined;
 const proxySockets = new Set<net.Socket>();
 const card = (page: Page) => page.getByTestId("ask-user-question");
+const history = (page: Page) => page.getByTestId("ask-user-question-history");
 
 Given("an untouched terminal session", async () => {
   harness = await startPiWebUi("chat-lifecycle", { autoStart: false, sessionName: "Untitled" });
@@ -67,10 +68,12 @@ When("the network connection drops and reconnects", async ({ page }) => {
   });
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   await expect(page.getByText("connected", { exact: true })).toBeVisible();
-  await expect(card(page)).toContainText("Waiting for your answer");
+  await expect(card(page)).toBeVisible();
 });
 Then("my clarification draft is preserved", async ({ page }) => {
+  await card(page).getByRole("button", { name: "Previous question" }).click();
   await expect(card(page).getByLabel("Custom answer: Storage")).toHaveValue("Use an encrypted local file.");
+  await card(page).getByRole("button", { name: "Next question" }).click();
   await expect(card(page).getByLabel("Custom answer: Features")).toHaveValue("Add offline access.");
   await expect(card(page).getByRole("checkbox", { name: /Search/ })).toBeChecked();
 });
@@ -133,19 +136,20 @@ When("I ask the agent to clarify", async ({ page }) => {
     .getByRole("textbox", { name: "Message Pi", exact: true })
     .fill("Clarify storage and features before implementing.");
   await page.getByRole("button", { name: "Submit", exact: true }).click();
-  await expect(card(page)).toContainText("Waiting for your answer");
+  await expect(card(page)).toBeVisible();
 });
 Then("the question card is waiting for answers", async ({ page }) => {
-  await expect(card(page)).toContainText("Waiting for your answer");
+  await expect(card(page)).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeHidden();
   await expect(card(page).getByText("Where should we store the project data?")).toBeVisible();
 });
 Then("submitting unanswered questions is disabled", async ({ page }) => {
-  await expect(card(page).getByRole("button", { name: "Submit answers" })).toBeDisabled();
+  await expect(card(page).getByRole("button", { name: "Continue" })).toBeDisabled();
 });
 When("I choose project storage and features", async ({ page }) => {
   await card(page)
     .getByRole("radio", { name: /SQLite/ })
-    .check();
+    .click();
   await card(page)
     .getByRole("checkbox", { name: /Search/ })
     .check();
@@ -154,10 +158,15 @@ When("I choose project storage and features", async ({ page }) => {
     .check();
 });
 Then("the option Markdown preview is visible", async ({ page }) => {
-  await expect(card(page).getByRole("region", { name: "Option preview" })).toContainText("CREATE TABLE projects");
+  await card(page).getByText("Preview", { exact: true }).first().click();
+  await expect(card(page).getByRole("region", { name: "Option preview" }).first()).toBeVisible();
+  await expect(card(page).getByRole("region", { name: "Option preview" }).first()).toContainText(
+    "CREATE TABLE projects",
+  );
 });
 When("I enter custom clarification answers", async ({ page }) => {
   await card(page).getByLabel("Custom answer: Storage").fill("Use an encrypted local file.");
+  await card(page).getByRole("button", { name: "Continue" }).click();
   await card(page)
     .getByRole("checkbox", { name: /Search/ })
     .check();
@@ -168,24 +177,25 @@ When("I submit the clarification answers", async ({ page }) => {
 });
 Then("the agent receives my answers", async ({ page }) => {
   await expect(page.getByText("I received your clarification and can continue.", { exact: true })).toBeVisible();
-  await expect(card(page)).toContainText("User has answered your questions:");
+  await expect(history(page)).toContainText("Answered");
 });
 When("I reload the question page", async ({ page }) => {
   await page.reload();
 });
 Then("the answered card is read only", async ({ page }) => {
-  await expect(card(page)).toContainText("Answered");
-  await expect(card(page).getByRole("button", { name: "Submit answers" })).toHaveCount(0);
+  await expect(history(page)).toContainText("Answered");
+  await expect(card(page)).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();
 });
 When("I cancel the clarification", async ({ page }) => {
   await card(page).getByRole("button", { name: "Cancel questions" }).click();
 });
-When("I abort the question agent", async () => {
-  await wsRequest("abort");
+When("I abort the question agent", async ({ page }) => {
+  await card(page).getByRole("button", { name: "Stop run" }).click();
 });
 Then("the cancelled card is read only", async ({ page }) => {
-  await expect(card(page)).toContainText("Cancelled");
-  await expect(card(page).getByRole("button", { name: "Submit answers" })).toHaveCount(0);
+  await expect(history(page)).toContainText("Cancelled");
+  await expect(card(page)).toHaveCount(0);
 });
 Then("an invalid answer is refused and the question remains open", async ({ page }) => {
   const verdict = await answer([
@@ -193,7 +203,7 @@ Then("an invalid answer is refused and the question remains open", async ({ page
     { questionIndex: 1, optionIndexes: [0] },
   ]);
   expect(verdict).toMatchObject({ ok: false, code: "invalid_answer" });
-  await expect(card(page)).toContainText("Waiting for your answer");
+  await expect(card(page)).toBeVisible();
 });
 Then("a duplicate answer is refused", async () => {
   expect(await answer([])).toMatchObject({ ok: false, code: "not_found" });
@@ -201,12 +211,12 @@ Then("a duplicate answer is refused", async () => {
 When("another browser opens the pending question", async ({ context }) => {
   otherPage = await context.newPage();
   await otherPage.goto(harness?.pageUrl ?? "");
-  await expect(card(otherPage)).toContainText("Waiting for your answer");
+  await expect(card(otherPage)).toBeVisible();
 });
 Then("both browsers show an answered question", async ({ page }) => {
-  await expect(card(page)).toContainText("Answered");
+  await expect(history(page)).toContainText("Answered");
   if (!otherPage) throw new Error("Second browser was not opened");
-  await expect(card(otherPage)).toContainText("Answered");
+  await expect(history(otherPage)).toContainText("Answered");
 });
 
 function answer(answers: unknown[]) {
@@ -246,4 +256,28 @@ After(async () => {
   otherPage = undefined;
   await harness?.stop();
   harness = undefined;
+});
+
+When("I use a narrow viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+});
+When("I collapse and reopen the question card", async ({ page }) => {
+  await card(page).getByLabel("Custom answer: Storage").fill("Use an encrypted local file.");
+  await card(page).getByRole("button", { name: "Collapse questions" }).click();
+  await expect(card(page).getByRole("button", { name: "Skip" })).toBeHidden();
+  await card(page).getByRole("button", { name: "Expand questions" }).click();
+  await expect(card(page).getByLabel("Custom answer: Storage")).toHaveValue("Use an encrypted local file.");
+});
+When("I skip storage and select Search", async ({ page }) => {
+  const skip = card(page).getByRole("button", { name: "Skip" });
+  await expect(skip).toBeInViewport({ ratio: 1 });
+  await skip.click();
+  await card(page)
+    .getByRole("checkbox", { name: /Search/ })
+    .check();
+});
+Then("the transcript shows that I skipped storage and selected Search", async ({ page }) => {
+  await expect(history(page)).toContainText("Where should we store the project data?Skipped");
+  await expect(history(page)).toContainText("Which features should be included?Search");
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeInViewport();
 });

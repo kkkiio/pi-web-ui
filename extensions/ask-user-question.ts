@@ -27,7 +27,7 @@ type Question = {
 type Answer = {
   questionIndex: number;
   question: string;
-  kind: "option" | "custom" | "multi";
+  kind: "option" | "custom" | "multi" | "skipped";
   answer: string | null;
   selected?: string[];
   notes?: string;
@@ -153,7 +153,7 @@ function validateAnswer(questions: Question[], data: Record<string, unknown>): R
   const globalNote = typeof data.globalNote === "string" ? data.globalNote.trim() : "";
   if (data.cancel === true) return { answers: [], cancelled: true, ...(globalNote && { globalNote }) };
   if (!Array.isArray(data.answers) || data.answers.length !== questions.length) {
-    throw new Error("Answer every question before submitting.");
+    throw new Error("Answer or skip each question before submitting.");
   }
   const seen = new Set<number>();
   const answers = data.answers.map((entry): Answer => {
@@ -172,7 +172,13 @@ function validateAnswer(questions: Question[], data: Record<string, unknown>): R
     }
     if (entry.notes !== undefined && typeof entry.notes !== "string") throw new Error("Invalid question note.");
     const text = typeof entry.text === "string" ? entry.text.trim() : "";
-    if (indexes.length === 0 && !text) throw new Error("Answer every question before submitting.");
+    if (entry.skipped === true) {
+      if (indexes.length || text || entry.notes !== undefined)
+        throw new Error("A skipped question cannot have an answer.");
+      return { questionIndex: index, question: question.question, kind: "skipped", answer: null };
+    }
+    if (entry.skipped !== undefined && entry.skipped !== false) throw new Error("Invalid skipped value.");
+    if (indexes.length === 0 && !text) throw new Error("Answer or skip each question before submitting.");
     if (!question.multiSelect && indexes.length + Number(Boolean(text)) !== 1) {
       throw new Error("Select one option or provide a custom answer.");
     }
@@ -193,7 +199,10 @@ function validateAnswer(questions: Question[], data: Record<string, unknown>): R
 
 function toolResult(result: Result) {
   const answers = result.answers.map((answer) => {
-    const lines = [answer.question, [...(answer.selected ?? []), answer.answer].filter(Boolean).join(", ")];
+    const lines = [
+      answer.question,
+      answer.kind === "skipped" ? "Skipped" : [...(answer.selected ?? []), answer.answer].filter(Boolean).join(", "),
+    ];
     if (answer.preview) lines.push(`Selected preview:\n${answer.preview}`);
     if (answer.notes) lines.push(`Notes: ${answer.notes}`);
     return lines.join("\n");

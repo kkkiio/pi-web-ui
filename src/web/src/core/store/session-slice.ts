@@ -369,7 +369,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
             ...question,
             status: event.isError || details?.cancelled ? "cancelled" : "answered",
             submitting: false,
-            summary: formatToolOutput(event.result),
           },
         },
       }));

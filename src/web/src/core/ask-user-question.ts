@@ -6,15 +6,14 @@ export type Question = {
   multiSelect: boolean;
   options: { label: string; description: string; preview?: string }[];
 };
-export type QuestionAnswer = { questionIndex: number; optionIndexes?: number[]; text?: string };
-export type QuestionDraft = { indexes: number[]; text: string; custom: boolean; preview?: number };
+export type QuestionAnswer = { questionIndex: number; optionIndexes?: number[]; text?: string; skipped?: boolean };
+export type QuestionDraft = { indexes: number[]; text: string; skipped?: boolean };
 export type AskUserQuestion = {
   toolCallId: string;
   questions: Question[];
   status: "pending" | "answered" | "cancelled";
   submitting?: boolean;
   error?: string;
-  summary?: string;
 };
 
 export function readQuestions(value: unknown): Question[] {
@@ -44,6 +43,7 @@ export function readQuestions(value: unknown): Question[] {
 
 export function historicalQuestion(item: ChatItem & { kind: "tool" }): AskUserQuestion | undefined {
   if (item.name !== "webui_ask_user_question") return;
+  if (item.state !== "output-available" && item.state !== "output-error") return;
   const questions = readQuestions(item.input);
   if (!questions.length) return;
   const details = item.outputDetails as { cancelled?: boolean } | undefined;
@@ -51,6 +51,5 @@ export function historicalQuestion(item: ChatItem & { kind: "tool" }): AskUserQu
     toolCallId: item.id,
     questions,
     status: details?.cancelled || item.state !== "output-available" ? "cancelled" : "answered",
-    summary: item.errorText || (typeof item.output === "string" ? item.output : undefined),
   };
 }

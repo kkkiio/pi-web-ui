@@ -9,12 +9,25 @@ Feature: Structured agent clarification
     When I ask the agent to clarify
     Then the question card is waiting for answers
     And submitting unanswered questions is disabled
-    When I choose project storage and features
     Then the option Markdown preview is visible
+    When I choose project storage and features
     When I submit the clarification answers
     Then the agent receives my answers
     When I reload the question page
     Then the answered card is read only
+
+  @p0
+  Scenario: Answering from the bottom of a narrow chat
+    Why: the agent waits for the user, so the answer and skip controls must stay within reach on a narrow screen.
+
+    Given an activated question session
+    When I use a narrow viewport
+    And I ask the agent to clarify
+    Then the question card is waiting for answers
+    When I collapse and reopen the question card
+    And I skip storage and select Search
+    And I submit the clarification answers
+    Then the transcript shows that I skipped storage and selected Search
 
   @p0
   Scenario: A pending question is still pending after a reload

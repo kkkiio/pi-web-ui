@@ -25,6 +25,7 @@ import {
   SettingsPanel,
   UserMessageView,
 } from "./components/pi-web-ui";
+import { AskUserQuestionCard } from "./components/pi-web-ui/ask-user-question-card";
 import { ConversationOutline } from "./components/pi-web-ui/conversation-outline";
 import { groupTranscript, ProcessGroup } from "./components/pi-web-ui/process-group";
 import {
@@ -41,6 +42,9 @@ import type { StateSyncPayload } from "./core/types";
 
 export function App() {
   const items = usePiWebUiStore((state) => state.items);
+  const pendingQuestion = usePiWebUiStore((state) =>
+    Object.values(state.questionnaires).find((question) => question.status === "pending"),
+  );
   const connection = usePiWebUiStore((state) => state.connection);
   const chatStatus = usePiWebUiStore((state) => state.chatStatus);
   const modelLabel = usePiWebUiStore((state) => state.modelLabel);
@@ -394,7 +398,11 @@ export function App() {
                         const first = section.rows[0];
                         return (
                           <ProcessGroup
-                            active={index === transcriptSections.length - 1 && chatStatus === "streaming"}
+                            active={
+                              chatStatus === "streaming" &&
+                              (index === transcriptSections.length - 1 ||
+                                section.rows.some((row) => row.id === pendingQuestion?.toolCallId))
+                            }
                             rows={section.rows}
                             key={`process:${first.kind}:${first.id}`}
                             toolExpansion={toolExpansion}
@@ -407,6 +415,7 @@ export function App() {
                                 onQuote={addQuote}
                                 onToggleTool={toggleTool}
                                 reasoningRow={item.kind === "message"}
+                                processRow
                               />
                             ))}
                           </ProcessGroup>
@@ -456,18 +465,23 @@ export function App() {
               </div>
             )}
 
-            <ChatInput
-              connection={connection}
-              quotes={quotes}
-              onRemoveQuote={(id) => setQuotes((current) => current.filter((quote) => quote.id !== id))}
-              disabled={loadingTreeEntryId !== null}
-              chatStatus={chatStatus}
-              onAbort={abort}
-              onSubmit={submitMessage}
-              onValueChange={setDraftText}
-              value={draftText}
-              viewingHistory={false}
-            />
+            <div hidden={Boolean(pendingQuestion)}>
+              <ChatInput
+                connection={connection}
+                quotes={quotes}
+                onRemoveQuote={(id) => setQuotes((current) => current.filter((quote) => quote.id !== id))}
+                disabled={Boolean(pendingQuestion) || loadingTreeEntryId !== null}
+                chatStatus={chatStatus}
+                onAbort={abort}
+                onSubmit={submitMessage}
+                onValueChange={setDraftText}
+                value={draftText}
+                viewingHistory={false}
+              />
+            </div>
+            {pendingQuestion && (
+              <AskUserQuestionCard key={pendingQuestion.toolCallId} questionnaire={pendingQuestion} onAbort={abort} />
+            )}
           </div>
 
           {rightPanelTabs.length > 0 && (

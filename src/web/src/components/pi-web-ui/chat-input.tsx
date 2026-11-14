@@ -53,7 +53,7 @@ export function ChatInput({
         <PromptInput
           accept="image/*"
           className="rounded-2xl border bg-card shadow-sm"
-          globalDrop={true}
+          globalDrop={!disabled}
           multiple
           onSubmit={onSubmit}
           onSubmitCapture={(event) => {
