@@ -17,18 +17,29 @@ import type { SessionSlice, StoreSlice } from "./types";
 let conversationSyncInFlight = false;
 let conversationSyncPending = false;
 let conversationSyncTimer: number | null = null;
-let streamingId: string | null = null;
-let streamingHasToolCall = false;
 let itemCounter = 0;
 let sessionFile: string | undefined;
+let streamingHasToolCall = false;
+let pendingMessage: SessionSlice["streamingMessage"] = null;
+let frame: number | null = null;
 
 function nextId(prefix: string) {
   itemCounter += 1;
   return `${prefix}-${Date.now()}-${itemCounter}`;
 }
 
+// End events can arrive before the scheduled frame, including in background tabs.
+function takeStreamingMessage(published: SessionSlice["streamingMessage"]) {
+  if (frame !== null) window.cancelAnimationFrame(frame);
+  frame = null;
+  const message = pendingMessage ?? published;
+  pendingMessage = null;
+  return message;
+}
+
 export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   items: [],
+  streamingMessage: null,
   chatStatus: "ready",
   tree: [],
   leafId: null,
@@ -51,9 +62,13 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     sessionFile = sync.sessionFile;
     const currentItems = sameSession ? get().items : [];
     const items = syncToItems(entries, nextId, currentItems);
-    const liveMessage = currentItems.find((item) => item.kind === "message" && item.id === streamingId);
-    if (sync.isStreaming && liveMessage && !items.some((item) => item.id === liveMessage.id)) {
+    const liveMessage = sameSession && sync.isStreaming ? get().streamingMessage : null;
+    const keepStreaming = liveMessage && !items.some((item) => item.id === liveMessage.id);
+    if (keepStreaming) {
       items.push(liveMessage);
+    } else {
+      takeStreamingMessage(get().streamingMessage);
+      streamingHasToolCall = false;
     }
     const tree = sync.tree ?? [];
     const currentSelection = get().selectedTreeEntryId;
@@ -78,6 +93,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       currentModel: sync.model || null,
       error: null,
       items,
+      streamingMessage: keepStreaming ? liveMessage : null,
       questionnaires: {},
       lastUsage: findLastUsage(entries),
       usageTotals: sumUsageTotals(tree),
@@ -180,48 +196,41 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   },
 
   applyAgentEnd: () => {
-    const hadToolCall = streamingHasToolCall;
+    const message = takeStreamingMessage(get().streamingMessage);
+    const copyable = !streamingHasToolCall;
+    streamingHasToolCall = false;
     set((state) => ({
       chatStatus: "ready",
-      items: state.items.map((item) =>
-        item.kind === "message" && item.streaming
-          ? {
-              ...item,
-              copyable: !hadToolCall,
-              thinking: false,
-              streaming: false,
-            }
-          : item,
-      ),
+      streamingMessage: null,
+      items: message
+        ? state.items.map((item) =>
+            item.kind === "message" && item.id === message.id
+              ? { ...message, copyable, thinking: false, streaming: false }
+              : item,
+          )
+        : state.items,
     }));
-    streamingId = null;
-    streamingHasToolCall = false;
     void get().requestConversationSync({ debounce: true });
     get().requestGitStatusRefresh({ debounce: true });
   },
 
   applyMessageStart: (event) => {
     if (event.message?.role === "assistant") {
+      takeStreamingMessage(get().streamingMessage);
       const { id: messageId, timestamp } = event.message;
       const id = messageId || nextId("assistant");
-      const hasInitialToolCall = extractToolCalls(event.message.content).length > 0;
-      streamingId = id;
-      streamingHasToolCall = hasInitialToolCall;
-      set((state) => ({
-        items: [
-          ...state.items,
-          {
-            kind: "message",
-            id,
-            role: "assistant",
-            text: extractText(event.message?.content),
-            reasoning: extractThinking(event.message?.content),
-            streaming: true,
-            copyable: false,
-            timestamp,
-          },
-        ],
-      }));
+      streamingHasToolCall = extractToolCalls(event.message.content).length > 0;
+      const message = {
+        kind: "message",
+        id,
+        role: "assistant",
+        text: extractText(event.message.content),
+        reasoning: extractThinking(event.message.content),
+        streaming: true,
+        copyable: false,
+        timestamp,
+      } satisfies ChatItem;
+      set((state) => ({ items: [...state.items, message], streamingMessage: message }));
       return;
     }
 
@@ -236,55 +245,65 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
 
   applyMessageUpdate: (event) => {
     const messageEvent = event.assistantMessageEvent;
-    const delta = messageEvent?.delta || "";
-    const id = streamingId;
-    if (!id) return;
-    if (messageEvent?.type.startsWith("toolcall_")) streamingHasToolCall = true;
-    const type = messageEvent?.type;
-    if (type !== "thinking_start" && type !== "thinking_delta" && type !== "thinking_end" && type !== "text_delta") {
-      return;
+    const message = pendingMessage ?? get().streamingMessage;
+    if (!message || !messageEvent) return;
+
+    const { type, delta = "" } = messageEvent;
+    if (type.startsWith("toolcall_")) streamingHasToolCall = true;
+    switch (type) {
+      case "text_delta":
+        pendingMessage = { ...message, text: message.text + delta };
+        break;
+      case "thinking_delta":
+        pendingMessage = { ...message, thinking: true, reasoning: (message.reasoning ?? "") + delta };
+        break;
+      case "thinking_start":
+      case "thinking_end":
+        pendingMessage = { ...message, thinking: type === "thinking_start" };
+        break;
+      default:
+        return;
     }
 
-    set((state) => ({
-      items: state.items.map((item) => {
-        if (item.kind !== "message" || item.id !== id) return item;
-        if (type === "text_delta") return { ...item, text: `${item.text}${delta}` };
-        if (type === "thinking_delta") {
-          return { ...item, thinking: true, reasoning: `${item.reasoning || ""}${delta}` };
-        }
-        return { ...item, thinking: type === "thinking_start" };
-      }),
-    }));
+    if (frame !== null) return;
+    frame = window.requestAnimationFrame(() => {
+      const previous = get().streamingMessage;
+      const next = takeStreamingMessage(previous);
+      if (!next || !previous) return;
+      // The transcript only needs a new array when the message gains or loses a row.
+      const rowsChanged =
+        Boolean(previous.text.trim()) !== Boolean(next.text.trim()) ||
+        Boolean(previous.thinking || previous.reasoning?.trim()) !== Boolean(next.thinking || next.reasoning?.trim());
+      set((state) => ({
+        streamingMessage: next,
+        items: rowsChanged
+          ? state.items.map((item) => (item.kind === "message" && item.id === next.id ? next : item))
+          : state.items,
+      }));
+    });
   },
 
   applyMessageEnd: (event) => {
-    const id = streamingId;
-    if (!id) return;
+    const message = takeStreamingMessage(get().streamingMessage);
+    if (!message) return;
     const usage = event.message?.usage;
-    const finalText = event.message ? extractText(event.message.content) : undefined;
-    const finalReasoning = event.message ? extractThinking(event.message.content) : undefined;
-    const finalToolCalls = event.message ? extractToolCalls(event.message.content) : undefined;
-    const hasToolCalls = finalToolCalls?.length ? true : streamingHasToolCall;
+    const content = event.message?.content;
+    const completed = {
+      ...message,
+      ...(content && { text: extractText(content), reasoning: extractThinking(content) }),
+      copyable: !(streamingHasToolCall || extractToolCalls(content).length),
+      cost: usage?.cost?.total,
+      thinking: false,
+      streaming: false,
+    };
+    streamingHasToolCall = false;
 
     set((state) => ({
-      items: state.items.map((item) =>
-        item.kind === "message" && item.id === id
-          ? {
-              ...item,
-              ...(finalReasoning !== undefined && { reasoning: finalReasoning }),
-              ...(finalText !== undefined && { text: finalText }),
-              copyable: !hasToolCalls,
-              cost: usage?.cost?.total,
-              thinking: false,
-              streaming: false,
-            }
-          : item,
-      ),
+      streamingMessage: null,
+      items: state.items.map((item) => (item.kind === "message" && item.id === message.id ? completed : item)),
       lastUsage: usage || null,
       usageTotals: addUsageToTotals(state.usageTotals, usage),
     }));
-    streamingId = null;
-    streamingHasToolCall = false;
   },
 
   applyToolExecutionStart: (event) => {

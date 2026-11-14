@@ -36,6 +36,7 @@ export type ConnectionSlice = {
 
 export type SessionSlice = {
   items: ChatItem[];
+  streamingMessage: Extract<ChatItem, { kind: "message" }> | null;
   chatStatus: ChatSubmitStatus;
   tree: SessionTreeNode[];
   leafId: string | null;

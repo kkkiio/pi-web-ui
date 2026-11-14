@@ -21,7 +21,7 @@ import { AskUserQuestionCard } from "./ask-user-question-card";
 import type { TranscriptQuote } from "./transcript-quote";
 
 export function ChatItemView({
-  item,
+  item: transcriptItem,
   onCopy,
   onQuote,
   onToggleTool,
@@ -33,6 +33,11 @@ export function ChatItemView({
   onToggleTool: (id: string, open: boolean) => void;
   reasoningRow?: boolean;
 }) {
+  const item = usePiWebUiStore((state) =>
+    transcriptItem.kind === "message" && transcriptItem.streaming && state.streamingMessage?.id === transcriptItem.id
+      ? state.streamingMessage
+      : transcriptItem,
+  );
   const questionnaire = usePiWebUiStore((state) => state.questionnaires[item.id]);
   if (item.kind === "system") {
     return (

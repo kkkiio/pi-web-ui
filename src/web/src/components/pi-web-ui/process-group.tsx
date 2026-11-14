@@ -2,6 +2,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { reasoningPreview } from "@/components/ai-elements/reasoning";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { usePiWebUiStore } from "../../core/store";
 import { formatToolInvocationTitle, formatToolSummary } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
 
@@ -61,7 +62,12 @@ export function ProcessGroup({
   const runningTool = tools
     .filter((tool) => tool.state === "input-available" || tool.state === "input-streaming")
     .at(-1);
-  const latest = rows.at(-1);
+  const lastRow = rows.at(-1);
+  const latest = usePiWebUiStore((state) =>
+    active && lastRow?.kind === "message" && lastRow.streaming && state.streamingMessage?.id === lastRow.id
+      ? state.streamingMessage
+      : lastRow,
+  );
   const thinking = latest?.kind === "message";
   const preview = active && thinking && !runningTool ? reasoningPreview(latest.reasoning ?? "", true) : undefined;
   const open =
