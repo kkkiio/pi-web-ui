@@ -195,6 +195,19 @@ Then("the transcript shows the verified dry-run result", async ({ page }) => {
   );
   await expect(page.getByRole("button", { name: "Open Changes" })).toContainText(/main.*\+\d+/);
   await expect(result).toBeInViewport();
+  // Shiki highlights code blocks asynchronously after render; a screenshot taken too
+  // early captures plain text and fails the snapshot.
+  await expect
+    .poll(
+      () =>
+        page
+          .locator("pre code span")
+          .evaluateAll((nodes) =>
+            nodes.some((node) => getComputedStyle(node).getPropertyValue("--sdm-c").trim() !== "inherit"),
+          ),
+      { timeout: 10_000 },
+    )
+    .toBe(true);
   await expect(page).toHaveScreenshot("pi-web-ui-example.png");
 });
 
