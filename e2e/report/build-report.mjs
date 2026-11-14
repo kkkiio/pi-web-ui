@@ -138,6 +138,8 @@ function hashFiles(files) {
 const stepHash = hashFiles([
   ...listFiles(path.join(e2eDir, "steps"), (name) => /\.[cm]?[jt]s$/.test(name)),
   ...listFiles(path.join(e2eDir, "harness"), (name) => /\.[cm]?[jt]s$/.test(name)),
+  // Fixtures decide what the agent does on screen, so they invalidate recordings too.
+  ...listFiles(path.join(e2eDir, "fixtures"), (name) => /\.[cm]?[jt]s$/.test(name)),
   path.join(e2eDir, "playwright.config.ts"),
 ]);
 const uiHash = hashFiles([
@@ -306,7 +308,9 @@ if (merge) {
   } else {
     const previous = JSON.parse(readFileSync(manifestFile, "utf8"));
     if (previous.stepHash !== stepHash) {
-      console.error("[gallery] step definitions or harness changed since the last build; run a full storyboard.");
+      console.error(
+        "[gallery] steps, harness, fixtures or config changed since the last build; run a full storyboard.",
+      );
       process.exit(1);
     }
     if (previous.uiHash !== uiHash) {

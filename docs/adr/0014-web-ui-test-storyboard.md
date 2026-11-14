@@ -57,8 +57,10 @@ npm run e2e:preview                                           # http://127.0.0.1
 A subset run merges with the previous gallery, guarded so a partial run never shows
 stale previews:
 
-- `manifest.json` stores a hash of `e2e/steps/**`, `e2e/harness/**` and the Playwright
-  config. If it changed, merging is refused.
+- `manifest.json` stores a hash of `e2e/steps/**`, `e2e/harness/**`, `e2e/fixtures/**`
+  and the Playwright config. Fixtures are included because they decide what the agent
+  does on screen, so a changed response must invalidate old recordings. If the hash
+  changed, merging is refused.
 - A hash of `src/web/**` and `extensions/**` is stored too: a UI change invalidates
   every recording, so merging is refused and a full run is required.
 - Each feature file is hashed. Scenarios from an edited feature are dropped unless
