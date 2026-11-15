@@ -1,0 +1,30 @@
+.git-review-diff {
+  display: block;
+  --diffs-font-size: 12px;
+  --diffs-line-height: 22px;
+  --diffs-light-bg: var(--card);
+  --diffs-dark-bg: var(--card);
+  --diffs-light: var(--foreground);
+  --diffs-dark: var(--foreground);
+  --diffs-bg-context-gutter-override: var(--card);
+  --diffs-bg-separator-override: var(--muted);
+  --diffs-fg-number-override: var(--muted-foreground);
+  --review-addition: #18764e;
+  --diffs-addition-color-override: var(--review-addition);
+  --diffs-deletion-color-override: var(--destructive);
+  --diffs-bg-addition-override: var(--review-addition);
+  --diffs-bg-deletion-override: var(--destructive);
+  --diffs-bg-addition-emphasis-override: color-mix(in srgb, var(--review-addition) 19%, var(--card));
+  --diffs-bg-deletion-emphasis-override: color-mix(in srgb, var(--destructive) 16%, var(--card));
+  --diffs-bg-selection-override: color-mix(in srgb, var(--ring) 16%, var(--card));
+  --diffs-bg-selection-number-override: var(--diffs-bg-selection-override);
+}
+
+.dark .git-review-diff {
+  --review-addition: #62c390;
+}
+
+.git-review-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 35%, transparent) transparent;
+}

@@ -1,11 +1,12 @@
-import { QuoteIcon, XIcon } from "lucide-react";
+import { CheckIcon, PencilIcon, QuoteIcon, XIcon } from "lucide-react";
 import { nanoid } from "nanoid";
 import type { RefObject } from "react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
-export type TranscriptQuote = { id: string; source: string; text: string };
+export type TranscriptQuote = { id: string; source: string; text: string; comment?: string };
 
 export function formatQuotedPrompt(text: string, quotes: TranscriptQuote[]) {
   return [
@@ -14,7 +15,7 @@ export function formatQuotedPrompt(text: string, quotes: TranscriptQuote[]) {
         `Quoted from ${quote.source}:\n${quote.text
           .split("\n")
           .map((line) => `> ${line}`)
-          .join("\n")}`,
+          .join("\n")}${quote.comment?.trim() ? `\n\nComment: ${quote.comment.trim()}` : ""}`,
     ),
     text.trim(),
   ]
@@ -115,11 +116,14 @@ export function TranscriptQuoteAction({
 
 export function TranscriptQuotePreview({
   quotes,
+  onEdit,
   onRemove,
 }: {
   quotes: TranscriptQuote[];
+  onEdit: (id: string, comment: string) => void;
   onRemove: (id: string) => void;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
   if (!quotes.length) return null;
   return (
     <div
@@ -135,7 +139,34 @@ export function TranscriptQuotePreview({
             <blockquote className="max-h-16 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
               {quote.text}
             </blockquote>
+            {quote.comment !== undefined &&
+              (editingId === quote.id ? (
+                <Textarea
+                  aria-label={`Comment on ${quote.source}`}
+                  className="mt-1 min-h-8 text-xs"
+                  onChange={(event) => onEdit(quote.id, event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.stopPropagation();
+                      setEditingId(null);
+                    }
+                  }}
+                  value={quote.comment}
+                />
+              ) : (
+                <p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{quote.comment}</p>
+              ))}
           </div>
+          {quote.comment !== undefined && (
+            <button
+              aria-label={editingId === quote.id ? "Done editing comment" : `Edit comment on ${quote.source}`}
+              className="self-start rounded p-1 hover:bg-muted"
+              onClick={() => setEditingId((id) => (id === quote.id ? null : quote.id))}
+              type="button"
+            >
+              {editingId === quote.id ? <CheckIcon className="size-3" /> : <PencilIcon className="size-3" />}
+            </button>
+          )}
           <button
             aria-label="Remove quote"
             className="self-start rounded p-1 hover:bg-muted"

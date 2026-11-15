@@ -40,3 +40,56 @@ Feature: Workspace status and Changes panel
     Then the right panel fills the mobile width
     When I hide the right panel
     Then the composer stays fully visible
+
+  @p0
+  Scenario: Review net changes and attach feedback to the chat
+    Why: the reviewer can point Pi to the exact removed and added lines even if the working tree changes before sending.
+
+    Given a git workspace
+    And Pi replies with plain text
+    When I open Pi Web UI
+    And the workspace has retry code changes and a staged edit reverted on disk
+    And I open Changes
+    Then Changes groups the two files in their directory
+    When I comment on the removed line
+    And I write a comment on a range of new lines in split view
+    And I switch to unified view and attach the comment
+    And I edit the first comment and refresh Changes after another workspace edit
+    Then the composer still shows both original excerpts
+    When I send the diff comments
+    Then the transcript shows the edited comment and both original excerpts
+
+  @p1
+  Scenario: Add a diff comment on mobile
+    Why: a touch user can select a line and return to the composer with the feedback attached.
+
+    Given a git workspace
+    When I open Pi Web UI
+    And the workspace has retry code changes and a staged edit reverted on disk
+    And I switch to a mobile viewport
+    And I open Changes
+    When I tap a line number and write a comment
+    And I attach the mobile diff comment
+    Then the mobile composer shows the diff comment
+
+  @p1
+  Scenario: A long diff scrolls within Changes
+    Why: scrolling code keeps the app header and the review controls in view.
+
+    Given a git workspace
+    When I open Pi Web UI
+    And the workspace has a long code diff
+    And I open Changes
+    Then I can scroll to the end of the diff while the review controls stay in place
+
+  @p1
+  Scenario: Refresh a changes list after a commit
+    Why: a file committed outside the app can still be listed, and reviewers need a clear way to reload the list.
+
+    Given a git workspace
+    When I open Pi Web UI
+    And the workspace has retry code changes and a staged edit reverted on disk
+    And I open Changes
+    And I commit the displayed retry changes outside Pi
+    And I open the previously changed retry file
+    Then I can refresh the outdated list and see a clean working tree

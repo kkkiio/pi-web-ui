@@ -14,6 +14,7 @@ import { type TranscriptQuote, TranscriptQuotePreview } from "./transcript-quote
 type ChatInputProps = {
   connection: ConnectionState;
   quotes: TranscriptQuote[];
+  onEditQuote: (id: string, comment: string) => void;
   onRemoveQuote: (id: string) => void;
   viewingHistory: boolean;
   disabled?: boolean;
@@ -27,6 +28,7 @@ type ChatInputProps = {
 export function ChatInput({
   connection,
   quotes,
+  onEditQuote,
   onRemoveQuote,
   viewingHistory,
   disabled,
@@ -63,7 +65,7 @@ export function ChatInput({
             }
           }}
         >
-          <TranscriptQuotePreview quotes={quotes} onRemove={onRemoveQuote} />
+          <TranscriptQuotePreview quotes={quotes} onEdit={onEditQuote} onRemove={onRemoveQuote} />
           <PromptAttachmentPreview />
           <PromptInputBody>
             <PromptInputTextarea
