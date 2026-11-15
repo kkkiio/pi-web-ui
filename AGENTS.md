@@ -134,7 +134,7 @@ activation again. Recommend continuing activated sessions in Web UI.
 ├── tsconfig.json                # TypeScript config (only src/web + vite.config.ts)
 ├── vite.config.ts               # Vite config (dev proxy to :3001, build to dist/)
 ├── biome.json                   # Biome formatter/linter config
-└── justfile                     # just tasks (fmt, check)
+└── justfile                     # just tasks (fmt, check, build, readme-images)
 ```
 
 ### Architecture: Extension ↔ Frontend Communication
@@ -219,13 +219,18 @@ not proof that something is visible. See
 
 CI runs `npm run e2e` on every PR; local `just check` does not.
 
-README images (`docs/images/*.png`) are generated, not hand-made: the `@readme`
-scenarios in `e2e/features/readme-preview.feature` rewrite them on every `npm run e2e`
-(`readme` Playwright project, 2x pixel density). They are not snapshot assertions. If your
-change affects what those scenarios show, run E2E, inspect the regenerated images, and
-commit them with the change; if they changed when they should not have, treat it as a
-regression. To refresh only the images:
-`npm run build:web && npm run e2e:gen && npx playwright test -c e2e/playwright.config.ts --project=readme`.
+README images (`docs/images/*.png`) are committed snapshots generated in exactly one
+place: `just readme-images`, which runs the `@readme` scenarios from
+`e2e/features/readme-preview.feature` inside the pinned Linux image
+(`e2e/readme-image.Dockerfile`, 2x pixel density) and copies the result back. They are not
+snapshot assertions, but they are reviewable output. That project is not part of
+`npm run e2e` (chromium only) nor of CI, because the pixels depend on the platform: the app
+ships no webfont, so `Inter, ui-sans-serif, system-ui, …` resolves to the OS UI font and
+each OS rasterizes text its own way, which means a host render can never match the
+committed files. If your change affects what those scenarios show, run
+`just readme-images`, inspect the diff, and commit it with the change; if the images changed
+when they should not have, treat it as a regression and check the Playwright image tag in
+the Dockerfile before assuming a UI change.
 
 ```bash
 just check   # npx tsc --noEmit + biome check .

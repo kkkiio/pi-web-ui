@@ -1,0 +1,7 @@
+.git
+node_modules
+dist
+e2e/.features-gen
+e2e/test-results
+e2e/report-out
+pi-web-ui-*.tgz
