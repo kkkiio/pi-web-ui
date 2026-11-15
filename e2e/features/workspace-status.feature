@@ -81,3 +81,15 @@ Feature: Workspace status and Changes panel
     And the workspace has a long code diff
     And I open Changes
     Then I can scroll to the end of the diff while the review controls stay in place
+
+  @p1
+  Scenario: Refresh a changes list after a commit
+    Why: a file committed outside the app can still be listed, and reviewers need a clear way to reload the list.
+
+    Given a git workspace
+    When I open Pi Web UI
+    And the workspace has retry code changes and a staged edit reverted on disk
+    And I open Changes
+    And I commit the displayed retry changes outside Pi
+    And I open the previously changed retry file
+    Then I can refresh the outdated list and see a clean working tree
