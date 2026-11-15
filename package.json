@@ -1,6 +1,6 @@
 {
   "name": "@kkkiio/pi-web-ui",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Web UI for Pi coding agent — view and control your Pi session from the browser",
   "keywords": [
     "pi",
@@ -20,7 +20,8 @@
   "pi": {
     "extensions": [
       "./extensions/mirror-server.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/kkkiio/pi-web-ui/main/docs/images/pi-web-ui-example.png"
   },
   "scripts": {
     "dev:web": "vite --host 127.0.0.1",
@@ -102,6 +103,7 @@
     "dist/",
     "public/",
     "docs/configuration.md",
+    "docs/images/",
     "README.md"
   ]
 }
