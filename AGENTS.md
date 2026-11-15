@@ -219,6 +219,14 @@ not proof that something is visible. See
 
 CI runs `npm run e2e` on every PR; local `just check` does not.
 
+README images (`docs/images/*.png`) are generated, not hand-made: the `@readme`
+scenarios in `e2e/features/readme-preview.feature` rewrite them on every `npm run e2e`
+(`readme` Playwright project, 2x pixel density). They are not snapshot assertions. If your
+change affects what those scenarios show, run E2E, inspect the regenerated images, and
+commit them with the change; if they changed when they should not have, treat it as a
+regression. To refresh only the images:
+`npm run build:web && npm run e2e:gen && npx playwright test -c e2e/playwright.config.ts --project=readme`.
+
 ```bash
 just check   # npx tsc --noEmit + biome check .
 just fmt     # biome check --write

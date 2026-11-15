@@ -4,6 +4,7 @@ import path from "node:path";
 import { expect, type Locator } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { type PiWebUiHarness, startPiWebUi } from "../harness/pi-process";
+import { saveReadmeImage } from "../harness/readme-image";
 
 const { Given, When, Then, After } = createBdd();
 let harness: PiWebUiHarness | null = null;
@@ -196,19 +197,39 @@ Then("the transcript shows the verified dry-run result", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Open Changes" })).toContainText(/main.*\+\d+/);
   await expect(result).toBeInViewport();
   // Shiki highlights code blocks asynchronously after render; a screenshot taken too
-  // early captures plain text and fails the snapshot.
+  // early captures plain text in the README image.
   await expect
     .poll(
       () =>
         page
-          .locator("pre code span")
-          .evaluateAll((nodes) =>
-            nodes.some((node) => getComputedStyle(node).getPropertyValue("--sdm-c").trim() !== "inherit"),
-          ),
+          .locator("pre code span", { hasText: "reports/summary.csv" })
+          .last()
+          .evaluate((node) => {
+            const code = node.closest("code");
+            return Boolean(code) && getComputedStyle(node).color !== getComputedStyle(code as Element).color;
+          }),
       { timeout: 10_000 },
     )
     .toBe(true);
-  await expect(page).toHaveScreenshot("pi-web-ui-example.png");
+  await saveReadmeImage(page, "pi-web-ui-example");
+});
+
+When("I open Changes to review the edit", async ({ page }) => {
+  // The side-by-side layout needs an xl viewport; widen the panel so diff lines do not wrap.
+  await page.setViewportSize({ width: 1280, height: 780 });
+  await page.evaluate(() => localStorage.setItem("pi-web-ui-right-panel-width", "600"));
+  await page.reload();
+  await page.getByRole("button", { name: "Open Changes" }).click();
+});
+
+Then("Git Diff shows the dry-run change", async ({ page }) => {
+  const panel = page.locator("aside");
+  await expect(panel.getByText("export.mjs", { exact: true }).first()).toBeVisible();
+  await expect(panel.getByText('if (process.argv.includes("--dry-run")) {').first()).toBeVisible();
+  await expect(
+    page.getByText("The test confirms the path is relative and the output directory stays empty."),
+  ).toBeVisible();
+  await saveReadmeImage(page, "git-diff");
 });
 
 After(async () => {
