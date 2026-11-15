@@ -48,7 +48,7 @@ Feature: Workspace status and Changes panel
     Given a git workspace
     And Pi replies with plain text
     When I open Pi Web UI
-    And I prepare a replacement, a new file and a staged edit reverted on disk
+    And the workspace has retry code changes and a staged edit reverted on disk
     And I open Changes
     Then Changes groups the two files in their directory
     When I comment on the removed line
@@ -65,7 +65,7 @@ Feature: Workspace status and Changes panel
 
     Given a git workspace
     When I open Pi Web UI
-    And I prepare a replacement, a new file and a staged edit reverted on disk
+    And the workspace has retry code changes and a staged edit reverted on disk
     And I switch to a mobile viewport
     And I open Changes
     When I tap a line number and write a comment

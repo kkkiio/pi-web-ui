@@ -11,6 +11,7 @@ import {
   ListIcon,
   Loader2Icon,
   MessageSquarePlusIcon,
+  WrapTextIcon,
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -39,6 +40,7 @@ export default function GitDiffTab({
 }) {
   const [expandedFiles, setExpandedFiles] = useState<Set<string> | null>(null);
   const [layout, setLayout] = useState<"unified" | "split">("unified");
+  const [wrapLines, setWrapLines] = useState(true);
   const [copyError, setCopyError] = useState("");
   const send = usePiWebUiStore((state) => state.send);
   const files = useMemo(() => {
@@ -119,6 +121,17 @@ export default function GitDiffTab({
             ))}
           </div>
           <Button
+            aria-label="Wrap lines"
+            aria-pressed={wrapLines}
+            onClick={() => setWrapLines((current) => !current)}
+            size="icon-sm"
+            title={wrapLines ? "Disable line wrapping" : "Enable line wrapping"}
+            type="button"
+            variant={wrapLines ? "secondary" : "ghost"}
+          >
+            <WrapTextIcon className="size-4" />
+          </Button>
+          <Button
             aria-label="Collapse all files"
             disabled={!expanded.size}
             onClick={() => setExpandedFiles(new Set())}
@@ -159,6 +172,7 @@ export default function GitDiffTab({
           directory={tree}
           expanded={expanded}
           layout={layout}
+          wrapLines={wrapLines}
           theme={theme}
           onQuote={onQuote}
           onToggle={(id) => {
@@ -179,18 +193,20 @@ function ChangedFiles({
   directory,
   expanded,
   layout,
+  wrapLines,
   theme,
   onQuote,
   onToggle,
-  nested = false,
+  depth = 0,
 }: {
   directory: ReviewDirectory;
   expanded: Set<string>;
   layout: "unified" | "split";
+  wrapLines: boolean;
   theme: "light" | "dark";
   onQuote: (quote: TranscriptQuote) => void;
   onToggle: (id: string) => void;
-  nested?: boolean;
+  depth?: number;
 }) {
   const childFiles: ReviewEntry[] = [];
   const groups: ReviewDirectory[] = [];
@@ -206,7 +222,7 @@ function ChangedFiles({
   }
 
   return (
-    <ul aria-label={nested ? undefined : "Changed files"}>
+    <ul aria-label={depth > 0 ? undefined : "Changed files"}>
       {[...directory.files, ...childFiles].map((file) => {
         const open = expanded.has(file.id);
         const nameIndex = file.path.lastIndexOf("/") + 1;
@@ -221,8 +237,8 @@ function ChangedFiles({
             <button
               aria-expanded={open}
               className={cn(
-                "flex min-h-9 w-full min-w-0 items-center gap-2 border-y border-transparent px-3 text-left hover:bg-muted/70",
-                open && "border-y-border/60 bg-muted/55",
+                "flex min-h-9 w-full min-w-0 items-center gap-2 px-3 text-left hover:bg-muted/70",
+                open && "bg-muted/55",
               )}
               onClick={() => onToggle(file.id)}
               title={file.path}
@@ -233,7 +249,7 @@ function ChangedFiles({
               ) : (
                 <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
               )}
-              <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs">
+              <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-[13px]">
                 <span className="max-w-full shrink-0 truncate font-medium">{name}</span>
                 {folder && <span className="min-w-0 truncate text-muted-foreground">{folder}</span>}
                 {file.id !== file.path && <span className="text-muted-foreground">(untracked)</span>}
@@ -258,7 +274,11 @@ function ChangedFiles({
               </span>
               <span className="sr-only">{status}</span>
             </button>
-            {open && <ReviewFileDiff file={file} layout={layout} theme={theme} onQuote={onQuote} />}
+            {open && (
+              <div style={{ marginInlineStart: -20 * depth }}>
+                <ReviewFileDiff file={file} layout={layout} wrapLines={wrapLines} theme={theme} onQuote={onQuote} />
+              </div>
+            )}
           </li>
         );
       })}
@@ -276,10 +296,11 @@ function ChangedFiles({
                 directory={group}
                 expanded={expanded}
                 layout={layout}
+                wrapLines={wrapLines}
                 theme={theme}
                 onQuote={onQuote}
                 onToggle={onToggle}
-                nested
+                depth={depth + 1}
               />
             </div>
           </details>
@@ -292,11 +313,13 @@ function ChangedFiles({
 function ReviewFileDiff({
   file,
   layout,
+  wrapLines,
   theme,
   onQuote,
 }: {
   file: GitChangedFile;
   layout: "unified" | "split";
+  wrapLines: boolean;
   theme: "light" | "dark";
   onQuote: (quote: TranscriptQuote) => void;
 }) {
@@ -351,17 +374,19 @@ function ReviewFileDiff({
   }
   if (!state.result) return <LoadingPanel label="Loading diff" />;
   if (!parsed.file) return <PanelMessage title={path} body={state.result.omitted || "No changes to display."} />;
-  return <ReviewFile file={parsed.file} layout={layout} theme={theme} onQuote={onQuote} />;
+  return <ReviewFile file={parsed.file} layout={layout} wrapLines={wrapLines} theme={theme} onQuote={onQuote} />;
 }
 
 function ReviewFile({
   file,
   layout,
+  wrapLines,
   theme,
   onQuote,
 }: {
   file: FileDiffMetadata;
   layout: "unified" | "split";
+  wrapLines: boolean;
   theme: "light" | "dark";
   onQuote: (quote: TranscriptQuote) => void;
 }) {
@@ -390,13 +415,13 @@ function ReviewFile({
         disableFileHeader: true,
         hunkSeparators: "line-info-basic",
         themeType: theme,
-        overflow: "wrap",
+        overflow: wrapLines ? "wrap" : "scroll",
         enableLineSelection: true,
         enableGutterUtility: true,
         unsafeCSS: `
           [data-gutter-buffer="annotation"] { background: var(--card); }
-          [data-gutter-utility-slot] { z-index: 2; align-items: center; }
-          [data-gutter-utility-slot] ::slotted(*) { pointer-events: auto; }
+          [data-gutter-utility-slot] { z-index: 2; align-items: center; inset-inline: 100% auto; transform: translateX(-2px); }
+          [data-gutter-utility-slot] ::slotted(*) { pointer-events: none; }
         `,
         onLineSelectionEnd: (range) => {
           if (range && (!range.endSide || range.side === range.endSide)) setSelection(range);
@@ -407,7 +432,7 @@ function ReviewFile({
       renderGutterUtility={(getHoveredLine) => (
         <button
           aria-label="Comment"
-          className="flex size-[18px] items-center justify-center rounded bg-primary text-primary-foreground shadow-sm"
+          className="pointer-events-auto flex size-4 items-center justify-center rounded bg-primary text-primary-foreground shadow-sm"
           onClick={() => {
             const line = getHoveredLine();
             if (line) setSelection({ side: line.side, start: line.lineNumber, end: line.lineNumber });

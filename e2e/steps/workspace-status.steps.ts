@@ -69,84 +69,109 @@ Then("the composer stays fully visible", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeVisible();
 });
 
-When("I prepare a replacement, a new file and a staged edit reverted on disk", () => {
+const retryFile = "src/http/retry.ts";
+const originalRetry = "  return 500;";
+const retryBackoff = "  const delay = 500 * 2 ** attempt;";
+const cappedRetry = "  return Math.min(delay, 30_000);";
+
+When("the workspace has retry code changes and a staged edit reverted on disk", () => {
   if (!world.harness) throw new Error("Pi harness is not running");
   const cwd = world.harness.workspaceDir;
-  mkdirSync(path.join(cwd, "src/review"), { recursive: true });
-  writeFileSync(path.join(cwd, "src/review/replacement.txt"), "original line\n");
+  mkdirSync(path.join(cwd, "src/http"), { recursive: true });
+  const before = ["export function retryDelay(attempt: number) {", originalRetry, "}", ""];
+  writeFileSync(path.join(cwd, retryFile), before.join("\n"));
   writeFileSync(path.join(cwd, "reverted.txt"), "baseline\n");
-  execFileSync("git", ["add", "src/review/replacement.txt", "reverted.txt"], { cwd });
-  execFileSync("git", ["commit", "-m", "Add review files"], { cwd });
+  execFileSync("git", ["add", retryFile, "reverted.txt"], { cwd });
+  execFileSync("git", ["commit", "-m", "Add a fixed retry delay"], { cwd });
   writeFileSync(path.join(cwd, "reverted.txt"), "staged change\n");
   execFileSync("git", ["add", "reverted.txt"], { cwd });
   writeFileSync(path.join(cwd, "reverted.txt"), "baseline\n");
-  writeFileSync(path.join(cwd, "src/review/replacement.txt"), "first addition\nsecond addition\n");
-  writeFileSync(path.join(cwd, "src/review/new file.txt"), "untracked file\n");
+  writeFileSync(path.join(cwd, retryFile), [before[0], retryBackoff, cappedRetry, "}", ""].join("\n"));
+  writeFileSync(
+    path.join(cwd, "src/http/retry.test.ts"),
+    [
+      'import { strictEqual } from "node:assert";',
+      'import { retryDelay } from "./retry";',
+      "",
+      "strictEqual(retryDelay(2), 2_000);",
+      "strictEqual(retryDelay(10), 30_000);",
+      "",
+    ].join("\n"),
+  );
 });
 
 Then("Changes groups the two files in their directory", async ({ page }) => {
   const files = page.getByRole("list", { name: "Changed files" });
-  await expect(files.getByText("src/review/", { exact: true })).toBeVisible();
-  const replacement = files.getByRole("button", { name: /replacement\.txt.*\+2.*−1.*Modified/ });
-  const newFile = files.getByRole("button", { name: /new file\.txt.*\+1.*Added/ });
+  await expect(files.getByText("src/http/", { exact: true })).toBeVisible();
+  const replacement = files.getByRole("button", { name: /retry\.ts.*\+2.*−1.*Modified/ });
+  const newFile = files.getByRole("button", { name: /retry\.test\.ts.*\+5.*Added/ });
   await expect(replacement).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Changes" })).toContainText("+3 −1");
+  await expect(page.getByRole("button", { name: "Open Changes" })).toContainText("+7 −1");
   await replacement.click();
   await newFile.click();
-  await expect(page.locator("aside").getByText("untracked file", { exact: true })).toBeVisible();
+  await expect(page.locator("aside").getByText(/strictEqual.*retryDelay.*30_000/)).toBeVisible();
   await expect(replacement).toHaveAttribute("aria-expanded", "true");
-  await files.getByText("src/review/", { exact: true }).click();
+  await files.getByText("src/http/", { exact: true }).click();
   await expect(newFile).toBeHidden();
-  await files.getByText("src/review/", { exact: true }).click();
+  await files.getByText("src/http/", { exact: true }).click();
   await expect(newFile).toBeVisible();
 });
 
 When("I comment on the removed line", async ({ page }) => {
   const panel = page.locator("aside");
   await expect(async () => {
-    await panel.getByText("original line", { exact: true }).hover();
+    await panel.locator('[data-line="2"][data-line-type="change-deletion"]').hover();
     await panel.getByRole("button", { name: "Comment", exact: true }).click({ timeout: 500 });
   }).toPass({ timeout: 5000 });
-  await panel.getByRole("textbox", { name: "Comment on old line 1" }).fill("Keep the original meaning.");
+  await panel.getByRole("textbox", { name: "Comment on old line 2" }).fill("Keep the first retry at 500 ms.");
   await panel.getByRole("button", { name: "Add to Chat" }).click();
 });
 
 When("I write a comment on a range of new lines in split view", async ({ page }) => {
   const panel = page.locator("aside");
   await panel.getByRole("button", { name: "Split", exact: true }).click();
-  const file = panel.getByRole("button", { name: /replacement\.txt.*Modified/ }).locator("..");
-  const first = file.locator('[data-column-number="1"][data-line-type="change-addition"]');
-  const last = file.locator('[data-column-number="2"][data-line-type="change-addition"]');
-  await first.click();
-  await last.click({ modifiers: ["Shift"] });
-  await panel.getByRole("textbox", { name: "Comment on new lines 1–2" }).fill("Combine these additions.");
+  const file = panel.getByRole("button", { name: /retry\.ts.*Modified/ }).locator("..");
+  const first = file.locator('[data-column-number="2"][data-line-type="change-addition"]');
+  const last = file.locator('[data-column-number="3"][data-line-type="change-addition"]');
+  await expect(first).toBeInViewport();
+  await expect(last).toBeInViewport();
+  const start = await first.boundingBox();
+  const end = await last.boundingBox();
+  if (!start || !end) throw new Error("The diff lines are outside the viewport");
+  await page.mouse.move(start.x + start.width - 5, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width - 5, end.y + end.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await panel
+    .getByRole("textbox", { name: "Comment on new lines 2–3" })
+    .fill("Can we extract the retry cap into a constant?");
 });
 
 When("I switch to unified view and attach the comment", async ({ page }) => {
   const panel = page.locator("aside");
   await panel.getByRole("button", { name: "Unified", exact: true }).click();
-  await expect(panel.getByRole("textbox", { name: "Comment on new lines 1–2" })).toHaveValue(
-    "Combine these additions.",
+  await expect(panel.getByRole("textbox", { name: "Comment on new lines 2–3" })).toHaveValue(
+    "Can we extract the retry cap into a constant?",
   );
   await panel.getByRole("button", { name: "Add to Chat" }).click();
 });
 
 When("I edit the first comment and refresh Changes after another workspace edit", async ({ page }) => {
-  await page.getByRole("button", { name: "Edit comment on src/review/replacement.txt (old line 1)" }).click();
+  await page.getByRole("button", { name: "Edit comment on src/http/retry.ts (old line 2)" }).click();
   await page
-    .getByRole("textbox", { name: "Comment on src/review/replacement.txt (old line 1)" })
-    .fill("Preserve the original behavior.");
+    .getByRole("textbox", { name: "Comment on src/http/retry.ts (old line 2)" })
+    .fill("Keep the initial delay at 500 ms.");
   await page.getByRole("button", { name: "Done editing comment" }).click();
   if (!world.harness) throw new Error("Pi harness is not running");
-  writeFileSync(path.join(world.harness.workspaceDir, "src/review/replacement.txt"), "updated after review\n");
+  writeFileSync(path.join(world.harness.workspaceDir, retryFile), "export const retryDelay = () => 1_000;\n");
   await page.getByRole("button", { name: "Refresh tab" }).click();
-  await expect(page.locator("aside").getByText("updated after review", { exact: true })).toBeVisible();
+  await expect(page.locator("aside").getByText(/retryDelay.*1_000/)).toBeVisible();
 });
 
 Then("the composer still shows both original excerpts", async ({ page }) => {
   const quotes = page.getByRole("group", { name: "Quoted selections" });
-  await expect(quotes.getByText("-original line", { exact: true })).toBeVisible();
-  await expect(quotes.getByText("+first addition +second addition", { exact: true })).toBeVisible();
+  await expect(quotes.getByText(/-\s+return 500;/)).toBeVisible();
+  await expect(quotes.getByText(/const delay[\s\S]*Math\.min/)).toBeVisible();
 });
 
 When("I send the diff comments", async ({ page }) => {
@@ -155,18 +180,18 @@ When("I send the diff comments", async ({ page }) => {
 
 Then("the transcript shows the edited comment and both original excerpts", async ({ page }) => {
   const log = page.getByRole("log");
-  await expect(log).toContainText("Preserve the original behavior.");
-  await expect(log).toContainText("-original line");
-  await expect(log).toContainText("+first addition");
-  await expect(log).toContainText("+second addition");
+  await expect(log).toContainText("Keep the initial delay at 500 ms.");
+  await expect(log).toContainText(originalRetry.trim());
+  await expect(log).toContainText(retryBackoff.trim());
+  await expect(log).toContainText(cappedRetry.trim());
   await expect(page.getByRole("group", { name: "Quoted selections" })).toHaveCount(0);
 });
 
 When("I tap a line number and write a comment", async ({ page }) => {
   const touch = await page.context().newCDPSession(page);
   const panel = page.locator("aside");
-  await panel.getByRole("button", { name: /replacement\.txt.*Modified/ }).click();
-  const line = panel.locator('[data-column-number="2"][data-line-type="change-addition"]');
+  await panel.getByRole("button", { name: /retry\.ts.*Modified/ }).click();
+  const line = panel.locator('[data-column-number="3"][data-line-type="change-addition"]');
   await expect(line).toBeInViewport();
   const bounds = await line.boundingBox();
   if (!bounds) throw new Error("The diff line number is outside the viewport");
@@ -175,7 +200,7 @@ When("I tap a line number and write a comment", async ({ page }) => {
     touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
   });
   await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await panel.getByRole("textbox", { name: "Comment on new line 2" }).fill("Keep this concise.");
+  await panel.getByRole("textbox", { name: "Comment on new line 3" }).fill("Give the retry cap a name.");
 });
 
 When("I attach the mobile diff comment", async ({ page }) => {
@@ -185,7 +210,7 @@ When("I attach the mobile diff comment", async ({ page }) => {
 Then("the mobile composer shows the diff comment", async ({ page }) => {
   await expect(page.locator("aside")).toBeHidden();
   await expect(
-    page.getByRole("group", { name: "Quoted selections" }).getByText("Keep this concise.", { exact: true }),
+    page.getByRole("group", { name: "Quoted selections" }).getByText("Give the retry cap a name.", { exact: true }),
   ).toBeInViewport();
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
