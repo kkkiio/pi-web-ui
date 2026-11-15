@@ -237,6 +237,7 @@ export type GitChangedFile = {
   additions: number;
   deletions: number;
   untracked?: true;
+  status: string;
 };
 
 export type GitStatusResult = {

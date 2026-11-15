@@ -13,7 +13,14 @@ const DIFF_FLAGS = [
   "--find-renames",
 ];
 
-type ChangedFile = { path: string; previousPath?: string; additions: number; deletions: number; untracked?: true };
+type ChangedFile = {
+  path: string;
+  previousPath?: string;
+  additions: number;
+  deletions: number;
+  untracked?: true;
+  status: string;
+};
 type GitQuery =
   | { kind: "status" }
   | { kind: "diff"; path?: string; paths?: string[]; source?: "tracked" | "untracked" };
@@ -69,7 +76,7 @@ export function readGitChanges(workspace: string, query: GitQuery) {
     "--literal-pathspecs",
     "diff",
     ...DIFF_FLAGS,
-    ...(query.kind === "status" ? ["--numstat", "-z"] : ["--patch"]),
+    ...(query.kind === "status" ? ["--raw", "--numstat", "-z"] : ["--patch"]),
     base,
     "--",
     ...requested,
@@ -95,13 +102,22 @@ export function readGitChanges(workspace: string, query: GitQuery) {
   const files: ChangedFile[] = [];
   if (query.kind === "status" && tracked) {
     const records = tracked.stdout.split("\0");
-    for (let index = 0; index < records.length - 1; index++) {
+    const statuses = new Map<string, string>();
+    let index = 0;
+    while (records[index]?.startsWith(":")) {
+      const status = records[index++].split(" ").at(-1)?.[0] ?? "M";
+      if (status === "R" || status === "C") index++;
+      statuses.set(records[index++], status);
+    }
+    for (; index < records.length - 1; index++) {
       const record = records[index];
       const addedEnd = record.indexOf("\t");
       const deletedEnd = record.indexOf("\t", addedEnd + 1);
       const filename = record.slice(deletedEnd + 1);
+      const filePath = filename || records[index + 2];
       files.push({
-        path: filename || records[index + 2],
+        path: filePath,
+        status: statuses.get(filePath) || "M",
         previousPath: filename ? undefined : records[index + 1],
         additions: Number(record.slice(0, addedEnd)) || 0,
         deletions: Number(record.slice(addedEnd + 1, deletedEnd)) || 0,
@@ -128,7 +144,7 @@ export function readGitChanges(workspace: string, query: GitQuery) {
           }
         } catch {}
       }
-      files.push({ path: filename, additions, deletions: 0, untracked: true });
+      files.push({ path: filename, additions, deletions: 0, untracked: true, status: "A" });
       continue;
     }
 

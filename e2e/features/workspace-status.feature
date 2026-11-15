@@ -50,7 +50,7 @@ Feature: Workspace status and Changes panel
     When I open Pi Web UI
     And I prepare a replacement, a new file and a staged edit reverted on disk
     And I open Changes
-    Then Changes lists the replacement and the new file
+    Then Changes groups the two files in their directory
     When I comment on the removed line
     And I write a comment on a range of new lines in split view
     And I switch to unified view and attach the comment

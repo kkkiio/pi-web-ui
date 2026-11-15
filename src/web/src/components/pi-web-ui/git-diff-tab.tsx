@@ -1,10 +1,13 @@
 import { type FileDiffMetadata, parsePatchFiles, type SelectedLineRange } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
 import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronsDownUpIcon,
   Columns2Icon,
   CopyIcon,
-  FileCodeIcon,
   FilesIcon,
+  FolderIcon,
   ListIcon,
   Loader2Icon,
   MessageSquarePlusIcon,
@@ -20,6 +23,9 @@ import type { GitChangedFile, GitDiffResult, RightPanelTab } from "../../core/ty
 import type { TranscriptQuote } from "./transcript-quote";
 import "./git-diff-tab.css";
 
+type ReviewEntry = GitChangedFile & { id: string };
+type ReviewDirectory = { path: string; files: ReviewEntry[]; children: Map<string, ReviewDirectory> };
+
 export default function GitDiffTab({
   tab,
   theme,
@@ -31,17 +37,38 @@ export default function GitDiffTab({
   onQuote: (quote: TranscriptQuote) => void;
   onRetry: () => void;
 }) {
-  const [selectedId, setSelectedId] = useState("");
+  const [expandedFiles, setExpandedFiles] = useState<Set<string> | null>(null);
   const [layout, setLayout] = useState<"unified" | "split">("unified");
   const [copyError, setCopyError] = useState("");
   const send = usePiWebUiStore((state) => state.send);
-  const trackedPaths = new Set(tab.files?.filter((entry) => !entry.untracked).map((entry) => entry.path));
-  const files =
-    tab.files?.map((entry) => ({
-      ...entry,
-      id: entry.untracked && trackedPaths.has(entry.path) ? `/${entry.path}` : entry.path,
-    })) ?? [];
-  const file = files.find(({ id }) => id === selectedId) ?? files[0];
+  const files = useMemo(() => {
+    const trackedPaths = new Set(tab.files?.filter((entry) => !entry.untracked).map((entry) => entry.path));
+    return (
+      tab.files?.map((entry) => ({
+        ...entry,
+        id: entry.untracked && trackedPaths.has(entry.path) ? `/${entry.path}` : entry.path,
+      })) ?? []
+    );
+  }, [tab.files]);
+  const tree = useMemo(() => {
+    const root: ReviewDirectory = { path: "", files: [], children: new Map() };
+    for (const file of files) {
+      const segments = file.path.split("/");
+      segments.pop();
+      let directory = root;
+      for (const segment of segments) {
+        let child = directory.children.get(segment);
+        if (!child) {
+          child = { path: `${directory.path}${segment}/`, files: [], children: new Map() };
+          directory.children.set(segment, child);
+        }
+        directory = child;
+      }
+      directory.files.push(file);
+    }
+    return root;
+  }, [files]);
+  const expanded = expandedFiles ?? new Set(files.length === 1 ? [files[0].id] : []);
 
   if (tab.loading) return <LoadingPanel label="Loading changes" />;
   const error = tab.error;
@@ -56,11 +83,11 @@ export default function GitDiffTab({
     );
   }
   if (!tab.isRepo) return <PanelMessage title="No git repository" body="Open a git workspace to view changes." />;
-  if (!file) return <PanelMessage title="No changes" body="The working tree has no changes to review." />;
+  if (!files.length) return <PanelMessage title="No changes" body="The working tree has no changes to review." />;
 
   return (
     <section className="@container flex h-full min-w-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b px-3">
+      <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b px-3">
         <div className="flex min-w-0 items-center gap-2 text-muted-foreground text-xs">
           <FilesIcon aria-hidden="true" className="size-4 shrink-0" />
           <span className="truncate">
@@ -92,6 +119,17 @@ export default function GitDiffTab({
             ))}
           </div>
           <Button
+            aria-label="Collapse all files"
+            disabled={!expanded.size}
+            onClick={() => setExpandedFiles(new Set())}
+            size="icon-sm"
+            title="Collapse all files"
+            type="button"
+            variant="ghost"
+          >
+            <ChevronsDownUpIcon className="size-4" />
+          </Button>
+          <Button
             aria-label="Copy diff"
             onClick={async () => {
               setCopyError("");
@@ -116,44 +154,138 @@ export default function GitDiffTab({
           {copyError}
         </p>
       )}
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] @[620px]:grid-cols-[minmax(160px,30%)_minmax(0,1fr)] @[620px]:grid-rows-1">
-        <ul
-          aria-label="Changed files"
-          className="max-h-40 overflow-auto border-b px-1.5 py-1.5 @[620px]:max-h-none @[620px]:border-r @[620px]:border-b-0"
-        >
-          {files.map((entry) => (
-            <li key={entry.id}>
-              <button
-                aria-current={file.id === entry.id ? "true" : undefined}
-                className={cn(
-                  "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-muted/70",
-                  file.id === entry.id && "bg-muted font-medium",
-                )}
-                onClick={() => setSelectedId(entry.id)}
-                title={entry.path}
-                type="button"
-              >
-                <FileCodeIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">
-                  {entry.path}
-                  {entry.id !== entry.path ? " (untracked)" : ""}
-                </span>
-                <span className="flex shrink-0 gap-1.5 font-mono tabular-nums">
-                  <span className="text-emerald-700 dark:text-emerald-400">+{entry.additions}</span>
-                  <span className="text-destructive">−{entry.deletions}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="min-w-0 overflow-auto bg-card">
-          <div className="hidden truncate border-b px-4 py-2 font-medium text-xs @[620px]:block" title={file.path}>
-            {file.path}
-          </div>
-          <ReviewFileDiff key={file.id} file={file} layout={layout} theme={theme} onQuote={onQuote} />
-        </div>
+      <div className="min-h-0 flex-1 overflow-auto bg-card">
+        <ChangedFiles
+          directory={tree}
+          expanded={expanded}
+          layout={layout}
+          theme={theme}
+          onQuote={onQuote}
+          onToggle={(id) => {
+            setExpandedFiles((current) => {
+              const next = new Set(current ?? expanded);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }}
+        />
       </div>
     </section>
+  );
+}
+
+function ChangedFiles({
+  directory,
+  expanded,
+  layout,
+  theme,
+  onQuote,
+  onToggle,
+  nested = false,
+}: {
+  directory: ReviewDirectory;
+  expanded: Set<string>;
+  layout: "unified" | "split";
+  theme: "light" | "dark";
+  onQuote: (quote: TranscriptQuote) => void;
+  onToggle: (id: string) => void;
+  nested?: boolean;
+}) {
+  const childFiles: ReviewEntry[] = [];
+  const groups: ReviewDirectory[] = [];
+  for (const child of directory.children.values()) {
+    let group = child;
+    while (!group.files.length && group.children.size === 1) {
+      const next = group.children.values().next().value;
+      if (!next) break;
+      group = next;
+    }
+    if (group.files.length === 1 && group.children.size === 0) childFiles.push(group.files[0]);
+    else groups.push(group);
+  }
+
+  return (
+    <ul aria-label={nested ? undefined : "Changed files"}>
+      {[...directory.files, ...childFiles].map((file) => {
+        const open = expanded.has(file.id);
+        const nameIndex = file.path.lastIndexOf("/") + 1;
+        const name = file.path.slice(nameIndex);
+        const folder = file.path.slice(0, nameIndex).slice(directory.path.length);
+        const status =
+          { A: "Added", D: "Deleted", R: "Renamed", M: "Modified", T: "Type changed", U: "Unmerged", C: "Copied" }[
+            file.status
+          ] ?? "Changed";
+        return (
+          <li className="min-w-0" key={file.id}>
+            <button
+              aria-expanded={open}
+              className={cn(
+                "flex min-h-9 w-full min-w-0 items-center gap-2 border-y border-transparent px-3 text-left hover:bg-muted/70",
+                open && "border-y-border/60 bg-muted/55",
+              )}
+              onClick={() => onToggle(file.id)}
+              title={file.path}
+              type="button"
+            >
+              {open ? (
+                <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-xs">
+                <span className="max-w-full shrink-0 truncate font-medium">{name}</span>
+                {folder && <span className="min-w-0 truncate text-muted-foreground">{folder}</span>}
+                {file.id !== file.path && <span className="text-muted-foreground">(untracked)</span>}
+              </span>
+              <span className="flex shrink-0 gap-1.5 font-mono text-xs tabular-nums">
+                {file.additions > 0 && (
+                  <span className="text-emerald-700 dark:text-emerald-400">+{file.additions}</span>
+                )}
+                {file.deletions > 0 && <span className="text-destructive">−{file.deletions}</span>}
+              </span>
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "grid size-[18px] shrink-0 place-items-center rounded-[4px] border border-current/25 font-medium text-[10px] text-muted-foreground",
+                  file.status === "A" && "text-emerald-700 dark:text-emerald-400",
+                  file.status === "D" && "text-destructive",
+                  file.status === "M" && "text-amber-700 dark:text-amber-400",
+                )}
+                title={status}
+              >
+                {file.status}
+              </span>
+              <span className="sr-only">{status}</span>
+            </button>
+            {open && <ReviewFileDiff file={file} layout={layout} theme={theme} onQuote={onQuote} />}
+          </li>
+        );
+      })}
+      {groups.map((group) => (
+        <li className="min-w-0" key={group.path}>
+          <details open>
+            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-3 text-muted-foreground text-xs hover:bg-muted/50">
+              <FolderIcon className="size-4 shrink-0" />
+              <span className="truncate" title={group.path}>
+                {group.path.slice(directory.path.length)}
+              </span>
+            </summary>
+            <div className="ml-[19px] border-l">
+              <ChangedFiles
+                directory={group}
+                expanded={expanded}
+                layout={layout}
+                theme={theme}
+                onQuote={onQuote}
+                onToggle={onToggle}
+                nested
+              />
+            </div>
+          </details>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -251,10 +383,10 @@ function ReviewFile({
   return (
     <FileDiff
       fileDiff={file}
-      className="git-review-diff"
+      className="git-review-diff border-b"
       options={{
         diffStyle: layout,
-        diffIndicators: "classic",
+        diffIndicators: "bars",
         disableFileHeader: true,
         hunkSeparators: "line-info-basic",
         themeType: theme,

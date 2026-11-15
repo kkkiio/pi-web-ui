@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
@@ -32,7 +32,7 @@ When("I open Changes", async ({ page }) => {
 
 Then("the right panel shows the git diff", async ({ page }) => {
   const panel = page.locator("aside");
-  await expect(panel).toContainText("docs/prd/workspace-status-float.md");
+  await expect(panel.getByRole("button", { name: /workspace-status-float\.md/ })).toContainText("docs/prd/");
   await expect(panel.getByText(/The workspace float shows the current git branch/).first()).toBeVisible();
 });
 
@@ -72,25 +72,33 @@ Then("the composer stays fully visible", async ({ page }) => {
 When("I prepare a replacement, a new file and a staged edit reverted on disk", () => {
   if (!world.harness) throw new Error("Pi harness is not running");
   const cwd = world.harness.workspaceDir;
-  writeFileSync(path.join(cwd, "replacement.txt"), "original line\n");
+  mkdirSync(path.join(cwd, "src/review"), { recursive: true });
+  writeFileSync(path.join(cwd, "src/review/replacement.txt"), "original line\n");
   writeFileSync(path.join(cwd, "reverted.txt"), "baseline\n");
-  execFileSync("git", ["add", "replacement.txt", "reverted.txt"], { cwd });
+  execFileSync("git", ["add", "src/review/replacement.txt", "reverted.txt"], { cwd });
   execFileSync("git", ["commit", "-m", "Add review files"], { cwd });
   writeFileSync(path.join(cwd, "reverted.txt"), "staged change\n");
   execFileSync("git", ["add", "reverted.txt"], { cwd });
   writeFileSync(path.join(cwd, "reverted.txt"), "baseline\n");
-  writeFileSync(path.join(cwd, "replacement.txt"), "first addition\nsecond addition\n");
-  writeFileSync(path.join(cwd, "new file.txt"), "untracked file\n");
+  writeFileSync(path.join(cwd, "src/review/replacement.txt"), "first addition\nsecond addition\n");
+  writeFileSync(path.join(cwd, "src/review/new file.txt"), "untracked file\n");
 });
 
-Then("Changes lists the replacement and the new file", async ({ page }) => {
+Then("Changes groups the two files in their directory", async ({ page }) => {
   const files = page.getByRole("list", { name: "Changed files" });
-  await expect(files.getByRole("listitem")).toHaveCount(2);
-  await expect(files.getByRole("button", { name: "replacement.txt +2 −1" })).toBeVisible();
+  await expect(files.getByText("src/review/", { exact: true })).toBeVisible();
+  const replacement = files.getByRole("button", { name: /replacement\.txt.*\+2.*−1.*Modified/ });
+  const newFile = files.getByRole("button", { name: /new file\.txt.*\+1.*Added/ });
+  await expect(replacement).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Changes" })).toContainText("+3 −1");
-  await files.getByRole("button", { name: "new file.txt +1 −0" }).click();
+  await replacement.click();
+  await newFile.click();
   await expect(page.locator("aside").getByText("untracked file", { exact: true })).toBeVisible();
-  await files.getByRole("button", { name: "replacement.txt +2 −1" }).click();
+  await expect(replacement).toHaveAttribute("aria-expanded", "true");
+  await files.getByText("src/review/", { exact: true }).click();
+  await expect(newFile).toBeHidden();
+  await files.getByText("src/review/", { exact: true }).click();
+  await expect(newFile).toBeVisible();
 });
 
 When("I comment on the removed line", async ({ page }) => {
@@ -106,8 +114,9 @@ When("I comment on the removed line", async ({ page }) => {
 When("I write a comment on a range of new lines in split view", async ({ page }) => {
   const panel = page.locator("aside");
   await panel.getByRole("button", { name: "Split", exact: true }).click();
-  const first = panel.locator('[data-column-number="1"][data-line-type="change-addition"]');
-  const last = panel.locator('[data-column-number="2"][data-line-type="change-addition"]');
+  const file = panel.getByRole("button", { name: /replacement\.txt.*Modified/ }).locator("..");
+  const first = file.locator('[data-column-number="1"][data-line-type="change-addition"]');
+  const last = file.locator('[data-column-number="2"][data-line-type="change-addition"]');
   await first.click();
   await last.click({ modifiers: ["Shift"] });
   await panel.getByRole("textbox", { name: "Comment on new lines 1–2" }).fill("Combine these additions.");
@@ -123,13 +132,13 @@ When("I switch to unified view and attach the comment", async ({ page }) => {
 });
 
 When("I edit the first comment and refresh Changes after another workspace edit", async ({ page }) => {
-  await page.getByRole("button", { name: "Edit comment on replacement.txt (old line 1)" }).click();
+  await page.getByRole("button", { name: "Edit comment on src/review/replacement.txt (old line 1)" }).click();
   await page
-    .getByRole("textbox", { name: "Comment on replacement.txt (old line 1)" })
+    .getByRole("textbox", { name: "Comment on src/review/replacement.txt (old line 1)" })
     .fill("Preserve the original behavior.");
   await page.getByRole("button", { name: "Done editing comment" }).click();
   if (!world.harness) throw new Error("Pi harness is not running");
-  writeFileSync(path.join(world.harness.workspaceDir, "replacement.txt"), "updated after review\n");
+  writeFileSync(path.join(world.harness.workspaceDir, "src/review/replacement.txt"), "updated after review\n");
   await page.getByRole("button", { name: "Refresh tab" }).click();
   await expect(page.locator("aside").getByText("updated after review", { exact: true })).toBeVisible();
 });
@@ -156,6 +165,7 @@ Then("the transcript shows the edited comment and both original excerpts", async
 When("I tap a line number and write a comment", async ({ page }) => {
   const touch = await page.context().newCDPSession(page);
   const panel = page.locator("aside");
+  await panel.getByRole("button", { name: /replacement\.txt.*Modified/ }).click();
   const line = panel.locator('[data-column-number="2"][data-line-type="change-addition"]');
   await expect(line).toBeInViewport();
   const bounds = await line.boundingBox();
