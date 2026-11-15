@@ -40,3 +40,34 @@ Feature: Workspace status and Changes panel
     Then the right panel fills the mobile width
     When I hide the right panel
     Then the composer stays fully visible
+
+  @p0
+  Scenario: Review net changes and attach feedback to the chat
+    Why: the reviewer can point Pi to the exact removed and added lines even if the working tree changes before sending.
+
+    Given a git workspace
+    And Pi replies with plain text
+    When I open Pi Web UI
+    And I prepare a replacement, a new file and a staged edit reverted on disk
+    And I open Changes
+    Then Changes lists the replacement and the new file
+    When I comment on the removed line
+    And I write a comment on a range of new lines in split view
+    And I switch to unified view and attach the comment
+    And I edit the first comment and refresh Changes after another workspace edit
+    Then the composer still shows both original excerpts
+    When I send the diff comments
+    Then the transcript shows the edited comment and both original excerpts
+
+  @p1
+  Scenario: Add a diff comment on mobile
+    Why: a touch user can select a line and return to the composer with the feedback attached.
+
+    Given a git workspace
+    When I open Pi Web UI
+    And I prepare a replacement, a new file and a staged edit reverted on disk
+    And I switch to a mobile viewport
+    And I open Changes
+    When I tap a line number and write a comment
+    And I attach the mobile diff comment
+    Then the mobile composer shows the diff comment

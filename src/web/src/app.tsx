@@ -469,6 +469,9 @@ export function App() {
               <ChatInput
                 connection={connection}
                 quotes={quotes}
+                onEditQuote={(id, comment) =>
+                  setQuotes((current) => current.map((quote) => (quote.id === id ? { ...quote, comment } : quote)))
+                }
                 onRemoveQuote={(id) => setQuotes((current) => current.filter((quote) => quote.id !== id))}
                 disabled={Boolean(pendingQuestion) || loadingTreeEntryId !== null}
                 chatStatus={chatStatus}
@@ -488,6 +491,11 @@ export function App() {
             <RightPanel
               activeTabId={activeRightPanelTabId}
               onCloseTab={closeRightPanelTab}
+              onQuote={(quote) => {
+                setQuotes((current) => [...current, quote]);
+                if (!window.matchMedia("(min-width: 1280px)").matches) toggleRightPanelVisible();
+              }}
+              theme={resolvedTheme}
               onRefreshTab={refreshRightPanelTab}
               onSelectTab={setActiveRightPanelTabId}
               tabs={rightPanelTabs}

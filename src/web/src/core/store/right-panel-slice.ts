@@ -1,4 +1,7 @@
-import type { GitDiffResult, RightPanelSlice, StoreSlice } from "./types";
+import type { GitStatusResult } from "../types";
+import type { RightPanelSlice, StoreSlice } from "./types";
+
+let gitDiffRequest = 0;
 
 export const createRightPanelSlice: StoreSlice<RightPanelSlice> = (set, get) => ({
   rightPanelTabs: [],
@@ -18,7 +21,7 @@ export const createRightPanelSlice: StoreSlice<RightPanelSlice> = (set, get) => 
   },
 
   openGitDiff: async () => {
-    const startedAt = Date.now();
+    const request = ++gitDiffRequest;
     const status = get().gitStatus;
     get().upsertRightPanelTab({
       id: "git-diff",
@@ -27,31 +30,43 @@ export const createRightPanelSlice: StoreSlice<RightPanelSlice> = (set, get) => 
       branch: status?.branch ?? null,
       isRepo: status?.isRepo,
       loading: true,
-      updatedAt: startedAt,
+      updatedAt: Date.now(),
+      error: undefined,
     });
     try {
-      const result = (await get().send("get_git_diff")) as GitDiffResult;
-      get().upsertRightPanelTab({
-        id: "git-diff",
-        kind: "git-diff",
-        title: "Changes",
-        branch: result.branch,
-        diff: result.diff,
-        isRepo: result.isRepo,
-        loading: false,
-        updatedAt: Date.now(),
-      });
+      const result = (await get().send("get_git_status")) as GitStatusResult;
+      if (request !== gitDiffRequest || !get().rightPanelTabs.some(({ id }) => id === "git-diff")) return;
+      set((state) => ({
+        gitStatus: result,
+        rightPanelTabs: state.rightPanelTabs.map((tab) =>
+          tab.id === "git-diff"
+            ? {
+                ...tab,
+                branch: result.branch,
+                files: result.files,
+                isRepo: result.isRepo,
+                loading: false,
+                updatedAt: Date.now(),
+              }
+            : tab,
+        ),
+      }));
     } catch (error) {
-      get().upsertRightPanelTab({
-        id: "git-diff",
-        kind: "git-diff",
-        title: "Changes",
-        branch: status?.branch ?? null,
-        isRepo: status?.isRepo,
-        error: error instanceof Error ? error.message : "Failed to load git diff",
-        loading: false,
-        updatedAt: Date.now(),
-      });
+      if (request !== gitDiffRequest || !get().rightPanelTabs.some(({ id }) => id === "git-diff")) return;
+      set((state) => ({
+        rightPanelTabs: state.rightPanelTabs.map((tab) =>
+          tab.id === "git-diff"
+            ? {
+                ...tab,
+                branch: status?.branch ?? null,
+                isRepo: status?.isRepo,
+                error: error instanceof Error ? error.message : "Failed to load git diff",
+                loading: false,
+                updatedAt: Date.now(),
+              }
+            : tab,
+        ),
+      }));
     }
   },
 

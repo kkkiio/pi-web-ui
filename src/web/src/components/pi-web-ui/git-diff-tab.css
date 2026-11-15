@@ -1,0 +1,21 @@
+.git-review-diff {
+  display: block;
+  --diffs-font-size: 12px;
+  --diffs-line-height: 22px;
+  --diffs-light-bg: var(--card);
+  --diffs-dark-bg: var(--card);
+  --diffs-light: var(--foreground);
+  --diffs-dark: var(--foreground);
+  --diffs-bg-context-gutter-override: var(--card);
+  --diffs-bg-separator-override: var(--muted);
+  --diffs-fg-number-override: var(--muted-foreground);
+  --review-addition: light-dark(#18764e, #62c390);
+  --diffs-addition-color-override: var(--review-addition);
+  --diffs-deletion-color-override: var(--destructive);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--review-addition) 12%, var(--card));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--destructive) 12%, var(--card));
+  --diffs-bg-addition-emphasis-override: color-mix(in srgb, var(--review-addition) 19%, var(--card));
+  --diffs-bg-deletion-emphasis-override: color-mix(in srgb, var(--destructive) 16%, var(--card));
+  --diffs-bg-selection-override: color-mix(in srgb, var(--ring) 16%, var(--card));
+  --diffs-bg-selection-number-override: var(--diffs-bg-selection-override);
+}

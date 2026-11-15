@@ -231,6 +231,14 @@ export type ConversationTreeItem = {
   order: number;
 };
 
+export type GitChangedFile = {
+  path: string;
+  previousPath?: string;
+  additions: number;
+  deletions: number;
+  untracked?: true;
+};
+
 export type GitStatusResult = {
   isRepo: boolean;
   branch: string | null;
@@ -238,12 +246,14 @@ export type GitStatusResult = {
   additions: number;
   deletions: number;
   untracked?: number;
+  files?: GitChangedFile[];
 };
 
 export type GitDiffResult = {
   isRepo: boolean;
   branch: string | null;
   diff: string;
+  omitted?: string;
 };
 
 export type RightPanelTab = {
@@ -251,7 +261,7 @@ export type RightPanelTab = {
   kind: "git-diff";
   title: string;
   branch: string | null;
-  diff?: string;
+  files?: GitChangedFile[];
   isRepo?: boolean;
   loading?: boolean;
   error?: string;
