@@ -605,11 +605,6 @@ export const PromptInput = ({
   const remove = usingProvider ? controller.attachments.remove : removeLocal;
   const openFileDialog = usingProvider ? controller.attachments.openFileDialog : openFileDialogLocal;
 
-  const clear = useCallback(() => {
-    clearAttachments();
-    clearReferencedSources();
-  }, [clearAttachments, clearReferencedSources]);
-
   // Let provider know about our hidden file input so external menus can call openFileDialog()
   useEffect(() => {
     if (!usingProvider) {
@@ -752,6 +747,13 @@ export const PromptInput = ({
         if (!usingProvider && input instanceof HTMLTextAreaElement && input.value === text) form.reset();
       };
 
+      // Only the attachments that took part in this submit may be cleared once it resolves.
+      // Anything attached while the request was in flight belongs to the next draft.
+      const submittedIds = files.map((file) => file.id);
+      const clearSubmittedAttachments = () => {
+        for (const id of submittedIds) remove(id);
+      };
+
       try {
         // Convert blob URLs to data URLs asynchronously
         const convertedFiles: FileUIPart[] = await Promise.all(
@@ -775,7 +777,7 @@ export const PromptInput = ({
           try {
             await result;
             resetSubmittedText();
-            clear();
+            clearSubmittedAttachments();
             if (usingProvider) {
               controller.textInput.clear();
             }
@@ -785,7 +787,7 @@ export const PromptInput = ({
         } else {
           // Sync function completed without throwing, clear inputs
           resetSubmittedText();
-          clear();
+          clearSubmittedAttachments();
           if (usingProvider) {
             controller.textInput.clear();
           }
@@ -794,7 +796,7 @@ export const PromptInput = ({
         // Don't clear on error - user may want to retry
       }
     },
-    [usingProvider, controller, files, onSubmit, clear],
+    [usingProvider, controller, files, onSubmit, remove],
   );
 
   // Render with or without local provider
