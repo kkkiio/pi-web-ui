@@ -71,3 +71,13 @@ Feature: Workspace status and Changes panel
     When I tap a line number and write a comment
     And I attach the mobile diff comment
     Then the mobile composer shows the diff comment
+
+  @p1
+  Scenario: A long diff scrolls within Changes
+    Why: scrolling code keeps the app header and the review controls in view.
+
+    Given a git workspace
+    When I open Pi Web UI
+    And the workspace has a long code diff
+    And I open Changes
+    Then I can scroll to the end of the diff while the review controls stay in place

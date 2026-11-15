@@ -23,3 +23,8 @@
 .dark .git-review-diff {
   --review-addition: #62c390;
 }
+
+.git-review-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 35%, transparent) transparent;
+}

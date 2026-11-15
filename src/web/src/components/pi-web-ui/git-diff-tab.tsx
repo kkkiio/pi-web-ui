@@ -167,7 +167,7 @@ export default function GitDiffTab({
           {copyError}
         </p>
       )}
-      <div className="min-h-0 flex-1 overflow-auto bg-card">
+      <div className="git-review-scroll min-h-0 flex-1 overflow-auto overscroll-contain bg-card">
         <ChangedFiles
           directory={tree}
           expanded={expanded}

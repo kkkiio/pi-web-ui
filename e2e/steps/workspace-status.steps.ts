@@ -215,3 +215,46 @@ Then("the mobile composer shows the diff comment", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+When("the workspace has a long code diff", () => {
+  if (!world.harness) throw new Error("Pi harness is not running");
+  writeFileSync(
+    path.join(world.harness.workspaceDir, "http-status.ts"),
+    [
+      "export const statusMessages = {",
+      ...Array.from({ length: 100 }, (_, index) => `  ${400 + index}: "Request error",`),
+      "};",
+      "",
+    ].join("\n"),
+  );
+});
+
+Then("I can scroll to the end of the diff while the review controls stay in place", async ({ page }) => {
+  const controls = page.getByRole("button", { name: "Wrap lines" });
+  const header = page.getByRole("button", { name: "Open Changes" });
+  const diff = page.locator("aside");
+  const first = diff.getByText(/400:.*Request error/);
+  const last = diff.getByText(/499:.*Request error/);
+  await expect(first).toBeInViewport();
+  const initialControls = await controls.boundingBox();
+  const initialHeader = await header.boundingBox();
+  await first.hover();
+  await page.mouse.wheel(0, 5000);
+  await expect(last).toBeInViewport();
+  await last.hover();
+  await page.mouse.wheel(0, 500);
+  await expect(controls).toBeInViewport();
+  await expect(header).toBeInViewport();
+  expect(await controls.boundingBox()).toEqual(initialControls);
+  expect(await header.boundingBox()).toEqual(initialHeader);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  await page.setViewportSize({ width: 390, height: 600 });
+  const mobileControls = await controls.boundingBox();
+  await last.hover();
+  await page.mouse.wheel(0, 500);
+  await expect(last).toBeInViewport();
+  await expect(controls).toBeInViewport();
+  expect(await controls.boundingBox()).toEqual(mobileControls);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
