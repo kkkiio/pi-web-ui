@@ -1,13 +1,20 @@
 // Pi Web UI Service Worker — minimal, just enables PWA install
 // No aggressive caching since Pi Web UI connects to a live local server
 
-const CACHE_NAME = "pi-web-ui-v1";
+const CACHE_NAME = "pi-web-ui-v2";
 
 // Cache only the app shell on install
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(["/", "/manifest.json", "/icons/tau-192.png", "/icons/tau-512.png"]);
+      return cache.addAll([
+        "/",
+        "/manifest.json",
+        "/logo.svg",
+        "/favicon.svg",
+        "/icons/pi-web-ui-192.png",
+        "/icons/pi-web-ui-512.png",
+      ]);
     }),
   );
   self.skipWaiting();
