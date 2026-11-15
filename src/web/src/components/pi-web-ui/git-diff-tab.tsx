@@ -175,7 +175,6 @@ export default function GitDiffTab({
           wrapLines={wrapLines}
           theme={theme}
           onQuote={onQuote}
-          onRefresh={onRetry}
           onToggle={(id) => {
             setExpandedFiles((current) => {
               const next = new Set(current ?? expanded);
@@ -198,7 +197,6 @@ function ChangedFiles({
   theme,
   onQuote,
   onToggle,
-  onRefresh,
   depth = 0,
 }: {
   directory: ReviewDirectory;
@@ -208,7 +206,6 @@ function ChangedFiles({
   theme: "light" | "dark";
   onQuote: (quote: TranscriptQuote) => void;
   onToggle: (id: string) => void;
-  onRefresh: () => void;
   depth?: number;
 }) {
   const childFiles: ReviewEntry[] = [];
@@ -279,14 +276,7 @@ function ChangedFiles({
             </button>
             {open && (
               <div style={{ marginInlineStart: -20 * depth }}>
-                <ReviewFileDiff
-                  file={file}
-                  layout={layout}
-                  wrapLines={wrapLines}
-                  theme={theme}
-                  onQuote={onQuote}
-                  onRefresh={onRefresh}
-                />
+                <ReviewFileDiff file={file} layout={layout} wrapLines={wrapLines} theme={theme} onQuote={onQuote} />
               </div>
             )}
           </li>
@@ -310,7 +300,6 @@ function ChangedFiles({
                 theme={theme}
                 onQuote={onQuote}
                 onToggle={onToggle}
-                onRefresh={onRefresh}
                 depth={depth + 1}
               />
             </div>
@@ -327,14 +316,12 @@ function ReviewFileDiff({
   wrapLines,
   theme,
   onQuote,
-  onRefresh,
 }: {
   file: GitChangedFile;
   layout: "unified" | "split";
   wrapLines: boolean;
   theme: "light" | "dark";
   onQuote: (quote: TranscriptQuote) => void;
-  onRefresh: () => void;
 }) {
   const send = usePiWebUiStore((state) => state.send);
   const [retry, setRetry] = useState(0);
@@ -390,12 +377,9 @@ function ReviewFileDiff({
   if (state.result.omitted) return <PanelMessage title={path} body={state.result.omitted} />;
   if (!parsed.file) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
-        <p className="text-muted-foreground text-xs">The changes list is out of date.</p>
-        <Button onClick={onRefresh} size="sm" type="button" variant="outline">
-          Refresh Changes
-        </Button>
-      </div>
+      <p className="border-b px-3 py-2 text-muted-foreground text-xs">
+        The changes list is out of date. Use Refresh tab in the toolbar.
+      </p>
     );
   }
   return <ReviewFile file={parsed.file} layout={layout} wrapLines={wrapLines} theme={theme} onQuote={onQuote} />;

@@ -272,8 +272,8 @@ When("I open the previously changed retry file", async ({ page }) => {
 });
 
 Then("I can refresh the outdated list and see a clean working tree", async ({ page }) => {
-  await expect(page.getByText("The changes list is out of date.")).toBeVisible();
-  await page.getByRole("button", { name: "Refresh Changes", exact: true }).click();
+  await expect(page.getByText("The changes list is out of date. Use Refresh tab in the toolbar.")).toBeVisible();
+  await page.getByRole("button", { name: "Refresh tab", exact: true }).click();
   await expect(page.locator("aside").getByText("No changes", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Changes" })).toHaveAttribute("title", "main: No changes");
 });
