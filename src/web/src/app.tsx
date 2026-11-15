@@ -1,11 +1,4 @@
-import {
-  ArchiveIcon,
-  BarChart3Icon,
-  DownloadIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  TerminalIcon,
-} from "lucide-react";
+import { ArchiveIcon, BarChart3Icon, DownloadIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
@@ -389,7 +382,7 @@ export function App() {
                   {items.length === 0 ? (
                     <ConversationEmptyState
                       description="Connect to the running Pi session and send a message."
-                      icon={<TerminalIcon className="size-7" />}
+                      icon={<img alt="" className="size-16" height={64} src="/logo.svg" width={64} />}
                       title="Pi Web UI"
                     />
                   ) : (
