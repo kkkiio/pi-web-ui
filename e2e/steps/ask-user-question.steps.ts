@@ -3,6 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import WebSocket from "ws";
 import { type PiWebUiHarness, startPiWebUi } from "../harness/pi-process";
+import { saveReadmeImage } from "../harness/readme-image";
 
 const { Given, When, Then, After } = createBdd();
 let harness: PiWebUiHarness | undefined;
@@ -130,6 +131,33 @@ When("I run webui after the agent settles", async ({ page }) => {
 function assertTools(state: { active?: string[]; inactive?: string[] }) {
   return harness?.command(`/assert-tool-state ${JSON.stringify(state)}`);
 }
+
+Given("Pi is ready to plan the export dry-run", async ({ page }) => {
+  harness = await startPiWebUi("export-clarify", { sessionName: "Plan export dry-run" });
+  await page.goto(harness.pageUrl);
+  await expect(page.getByText("connected", { exact: true })).toBeVisible();
+});
+When("I ask Pi to add a dry-run flag", async ({ page }) => {
+  await page
+    .getByRole("textbox", { name: "Message Pi", exact: true })
+    .fill("Add `--dry-run` to the export command so I can see which files it would write.");
+  await page.getByRole("button", { name: "Submit", exact: true }).click();
+  await expect(card(page)).toBeVisible();
+});
+When("I pick the recommended overwrite behavior", async ({ page }) => {
+  await card(page)
+    .getByRole("radio", { name: /Mark it as an overwrite/ })
+    .click();
+  // A single-choice answer advances to the next question; go back to show the choice.
+  await card(page).getByRole("button", { name: "Previous question" }).click();
+  await card(page).getByText("Preview", { exact: true }).first().click();
+});
+Then("the question card previews the dry-run output", async ({ page }) => {
+  const preview = card(page).getByRole("region", { name: "Option preview" }).first();
+  await expect(preview).toContainText("reports/summary.csv   overwrite");
+  await expect(card(page).getByRole("radio", { name: /Mark it as an overwrite/ })).toBeChecked();
+  await saveReadmeImage(page, "ask-user-question");
+});
 
 When("I ask the agent to clarify", async ({ page }) => {
   await page

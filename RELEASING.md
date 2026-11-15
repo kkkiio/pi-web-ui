@@ -101,7 +101,7 @@ The output must include at least:
 - `dist/index.html`
 - `dist/assets/`
 - `public/`
-- `docs/images/pi-web-ui-example.png` when README references that image
+- every `docs/images/*.png` that README references (`pi-web-ui-example.png`, `git-diff.png`, `ask-user-question.png`)
 
 Check the CDN path that pi.dev will use for README images after publish. Replace `<version>` with the version being released:
 

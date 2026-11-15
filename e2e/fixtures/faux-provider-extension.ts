@@ -4,6 +4,7 @@ import askUserQuestionResponses from "./responses/ask-user-question.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
 import duplicateArtifactResponses from "./responses/duplicate-artifact.ts";
 import editHistoryResponses from "./responses/edit-history.ts";
+import exportClarifyResponses from "./responses/export-clarify.ts";
 import externalArtifactResponses from "./responses/external-artifact.ts";
 import processGroupResponses from "./responses/process-group.ts";
 import promptDraftResponses from "./responses/prompt-draft.ts";
@@ -17,6 +18,7 @@ const responsesByName = {
   "ask-user-question": askUserQuestionResponses,
   "process-group": processGroupResponses,
   "report-export": reportExportResponses,
+  "export-clarify": exportClarifyResponses,
   "transcript-quote": transcriptQuoteResponses,
   "edit-history": editHistoryResponses,
   "chat-lifecycle": chatLifecycleResponses,

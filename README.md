@@ -4,8 +4,6 @@
 
 An **interactive agent UI** for the [Pi](https://pi.dev/) coding agent.
 
-> Renamed to pi-web-ui with significant changes including single-session scope, removed auth, redesigned sidebar, and an interactive agent steering focus.
-
 ## Install
 
 Install from GitHub:
@@ -32,14 +30,25 @@ See [docs/configuration.md](docs/configuration.md) for environment variables, `s
 ## Features
 
 - [x] Real-time bidirectional sync with Pi TUI
-- [x] Model picker, thinking level control, and context usage indicator
-- [x] Git diff panel
+- [x] Git Diff Panel
 - [x] Edit Message (inline rollback & resend; enabled by `/webui`)
 - [x] Add to Chat
-- [ ] Git Diff Comment
+- [x] Git Diff Comment
 - [ ] BTW / Ask in Side Chat
 - [x] AskUserQuestion
 - [ ] Generative UI
+
+### Git Diff
+
+Review what the agent changed on disk without leaving the conversation.
+
+![Git Diff panel showing the agent's dry-run edit next to the chat](docs/images/git-diff.png)
+
+### AskUserQuestion
+
+The agent stops to clarify intent before writing code, with a preview of each option.
+
+![AskUserQuestion card asking how dry-run should report existing files](docs/images/ask-user-question.png)
 
 ## How it works
 

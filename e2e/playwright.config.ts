@@ -48,24 +48,18 @@ export default defineConfig({
       grepInvert: /@readme/,
       use: { ...devices["Desktop Chrome"], viewport },
     },
-    ...(process.env.PI_WEB_UI_README_SNAPSHOT === "1"
-      ? [
-          {
-            name: "readme",
-            grep: /@readme/,
-            use: {
-              ...devices["Desktop Chrome"],
-              viewport: { width: 1120, height: 780 },
-              colorScheme: "light" as const,
-              deviceScaleFactor: 1,
-              video: "off" as const,
-              trace: "off" as const,
-            },
-            expect: {
-              toHaveScreenshot: { pathTemplate: "../docs/images/{arg}{ext}" },
-            },
-          },
-        ]
-      : []),
+    {
+      // Writes the README images in docs/images/ (see e2e/harness/readme-image.ts).
+      // The viewport stays close to GitHub's README width and renders at 2x so text
+      // stays legible after GitHub scales the image down.
+      name: "readme",
+      grep: /@readme/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1000, height: 780 },
+        colorScheme: "light",
+        deviceScaleFactor: 2,
+      },
+    },
   ],
 });
