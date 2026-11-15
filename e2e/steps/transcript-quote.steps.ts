@@ -28,8 +28,33 @@ function persistedPrompt() {
     .join("");
 }
 
+/**
+ * Expanding a row grows the transcript, and the conversation keeps itself pinned to the
+ * bottom with a smooth scroll (`resize="smooth"` in conversation.tsx). Any scroll dismisses
+ * a quote action, so selecting text while that animation runs loses the action mid-click.
+ *
+ * A person never hits this: `use-stick-to-bottom` pauses its animation while the mouse is
+ * down on a selection (`isSelecting()` checks `mouseDown`), and people let the transcript
+ * settle before dragging anyway. A scripted selection has no mouse down, so the animation
+ * keeps scrolling underneath it. Wait until the transcript is at rest, then select.
+ */
+async function waitForTranscriptAtRest(locator: Locator) {
+  const scroller = locator.page().locator(".conversation-scroll");
+  let previous: number | null = null;
+  let stable = 0;
+  for (let attempt = 0; attempt < 60 && stable < 3; attempt++) {
+    const current = await scroller.evaluate((element) => Math.round(element.scrollTop));
+    stable = current === previous ? stable + 1 : 0;
+    previous = current;
+    await locator.page().waitForTimeout(50);
+  }
+}
+
 async function selectText(locator: Locator, text: string) {
   await locator.scrollIntoViewIfNeeded();
+  // Scrolling the target into view emits its own scroll event, so let it settle before the
+  // selection exists; otherwise the delayed event dismisses the action right after it renders.
+  await waitForTranscriptAtRest(locator);
   await locator.evaluate((element, selectedText) => {
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     const nodes: Text[] = [];
