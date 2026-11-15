@@ -116,19 +116,3 @@ Then("the transcript does not contain the draft", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeEnabled();
   await expect(page.getByRole("log")).not.toContainText(draft);
 });
-
-When("I disconnect with an illustrated draft", async ({ page, context }) => {
-  await expect(page.getByText("connected", { exact: true })).toBeVisible();
-  await prepareDraft(page);
-  await context.setOffline(true);
-  // Closing the actual browser sockets makes the offline transition deterministic.
-  await world.harness?.command("/webui-stop");
-  await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeDisabled();
-});
-
-When("I reconnect to Pi", async ({ page, context }) => {
-  await world.harness?.command("/webui");
-  await context.setOffline(false);
-  await expect(page.getByText("connected", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeEnabled();
-});
