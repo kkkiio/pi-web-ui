@@ -28,7 +28,7 @@
     "build:web": "tsc --noEmit && vite build",
     "preview:web": "vite preview --host 127.0.0.1",
     "e2e:gen": "bddgen test -c e2e/playwright.config.ts",
-    "e2e": "npm run build:web && npm run e2e:gen && playwright test -c e2e/playwright.config.ts",
+    "e2e": "npm run build:web && npm run e2e:gen && playwright test -c e2e/playwright.config.ts --project=chromium",
     "e2e:storyboard": "node e2e/report/record.mjs",
     "e2e:gallery": "node e2e/report/build-report.mjs",
     "e2e:gallery:merge": "node e2e/report/build-report.mjs --merge",

@@ -1,9 +1,17 @@
 @readme @docs
 Feature: README images
 
+  # These scenarios drive the real product path and screenshot it into
+  # docs/images/*.png, which are committed snapshots reviewed like any other change.
+  #
+  # Prerequisite: run `just readme-images`. This project is not part of `npm run e2e`; the
+  # only thing that runs it is that container (e2e/readme-image.Dockerfile), because the
+  # pixels depend on the platform: the app ships no webfont, so the platform UI font and its
+  # text rasterizer decide them, and a macOS render can never match the committed files.
+
   Scenario: Refine the export plan by quoting the assistant, then review the diff
-    Why: the README hero and the Git Diff image show this flow, so each run regenerates
-         them from the real product path.
+    Why: the README hero and the Git Diff image show this flow, so regenerating them from
+         the real product path is how the published screenshots stay honest.
 
     Given Pi is ready to discuss report exports
     When I ask Pi for an export preview
