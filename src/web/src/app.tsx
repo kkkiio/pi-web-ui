@@ -128,6 +128,10 @@ export function App() {
   }, [lightPalette, resolvedTheme, themeMode]);
 
   useEffect(() => {
+    document.title = sessionName || "Pi Web UI";
+  }, [sessionName]);
+
+  useEffect(() => {
     localStorage.setItem("pi-web-ui-show-thinking", String(showThinking));
   }, [showThinking]);
 

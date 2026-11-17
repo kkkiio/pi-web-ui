@@ -353,6 +353,7 @@ export default function (pi: ExtensionAPI) {
     "auto_retry_start",
     "auto_retry_end",
     "model_select",
+    "session_info_changed",
   ] as const;
 
   for (const eventType of eventTypes) {

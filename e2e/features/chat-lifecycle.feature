@@ -45,3 +45,14 @@ Feature: Chat and session transcript
     And I send "run the failing tool"
     Then the transcript shows the tool call "write"
     And the tool call is marked as failed
+
+  @p1
+  Scenario: Renaming the session updates the header and browser tab title
+    Why: with several sessions open across tabs, the tab title has to match the session name.
+
+    Given Pi replies with plain text
+    When I open Pi Web UI
+    Then the browser tab title is "Pi Web UI E2E"
+    When the session is renamed to "Refactor auth module"
+    Then the browser tab title is "Refactor auth module"
+    And the header shows the session name "Refactor auth module"

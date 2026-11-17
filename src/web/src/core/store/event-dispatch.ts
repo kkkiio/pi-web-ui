@@ -75,7 +75,8 @@ export function dispatchPiEvent(store: PiWebUiStore, data: WsEvent) {
       store.addSystemMessage(`Extension error: ${event.error || "Unknown error"}`, "error");
       break;
     case "session_name":
-      if (event.name) store.setSessionName(event.name);
+    case "session_info_changed":
+      store.setSessionName(event.name || "Pi Web UI");
       break;
     case "auth_changed":
       store.setAuthEnabled(Boolean(event.enabled));

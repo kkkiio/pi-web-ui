@@ -11,6 +11,7 @@ export type PiWebUiHarness = {
   stop: () => Promise<void>;
   enableEditing: () => Promise<void>;
   command: (message: string) => Promise<void>;
+  setSessionName: (name: string) => Promise<void>;
   /** Wait until the session file on disk contains `text`. Rewinds are persisted
    * asynchronously, so a reload right after them can otherwise snapshot an older
    * session and render an empty transcript. */
@@ -92,12 +93,12 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
   captureProcessOutput(piProcess, processOutput);
 
   let commandId = 0;
-  const command = async (message: string) => {
+  const sendRpc = async (payload: Record<string, unknown>, label: string) => {
     const id = `command-${++commandId}`;
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         piProcess.stdout.off("data", onData);
-        reject(new Error(`${message} command timed out:\n${processOutput.join("")}`));
+        reject(new Error(`${label} command timed out:\n${processOutput.join("")}`));
       }, 10000);
       let output = "";
       const onData = (chunk: Buffer) => {
@@ -112,15 +113,17 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
           if (response.type !== "response" || response.id !== id) continue;
           clearTimeout(timer);
           piProcess.stdout.off("data", onData);
-          if (response.success === false) reject(new Error(response.error || `${message} failed`));
+          if (response.success === false) reject(new Error(response.error || `${label} failed`));
           else resolve();
           return;
         }
       };
       piProcess.stdout.on("data", onData);
-      piProcess.stdin.write(`${JSON.stringify({ id, type: "prompt", message })}\n`);
+      piProcess.stdin.write(`${JSON.stringify({ id, ...payload })}\n`);
     });
   };
+  const command = (message: string) => sendRpc({ type: "prompt", message }, message);
+  const setSessionName = (name: string) => sendRpc({ type: "set_session_name", name }, `set_session_name(${name})`);
   const enableEditing = () => command("/webui");
   if (options.autoStart !== false) {
     await command("/webui");
@@ -144,6 +147,7 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
 
   return {
     command,
+    setSessionName,
     enableEditing,
     waitForSessionText,
     pageUrl: `http://127.0.0.1:${port}`,
