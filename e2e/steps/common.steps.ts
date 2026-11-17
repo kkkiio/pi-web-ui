@@ -78,6 +78,18 @@ Then("the composer is ready for the next message", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeEnabled();
 });
 
+When("the session is renamed to {string}", async ({ page: _page }, name: string) => {
+  await world.harness?.setSessionName(name);
+});
+
+Then("the browser tab title is {string}", async ({ page }, title: string) => {
+  await expect(page).toHaveTitle(title);
+});
+
+Then("the header shows the session name {string}", async ({ page }, name: string) => {
+  await expect(page.locator("header").getByText(name, { exact: true })).toBeVisible();
+});
+
 After(async () => {
   await stopWebUi();
 });
