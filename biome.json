@@ -11,6 +11,7 @@
     "includes": [
       "components.json",
       "e2e/**/*.ts",
+      "evals/**/*.ts",
       "extensions/**/*.ts",
       "package.json",
       "public/**/*.js",

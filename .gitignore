@@ -13,3 +13,6 @@ pi-session-*.html
 .env
 AGENTS.local.md
 .scratch/
+
+# DIL eval artifacts (recordings are committed; reports are per-run)
+evals/dil/report.json

@@ -22,5 +22,5 @@
       "@/*": ["src/web/*"]
     }
   },
-  "include": ["src/web", "vite.config.ts"]
+  "include": ["src/web", "evals", "vite.config.ts"]
 }
