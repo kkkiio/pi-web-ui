@@ -20,6 +20,7 @@ import fc from "fast-check";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
+import { resolveNodes } from "../../components/dil/resolve.ts";
 import { safeEvaluate } from "./evaluator.ts";
 import { hasDilElements, parseDocument } from "./index.ts";
 import type { DilNode } from "./types.ts";
@@ -131,6 +132,50 @@ test("property: Markdown-only prose never becomes DIL and keeps its text", () =>
     { numRuns: 60, seed: 20241118 },
   );
 });
+
+// ---------------------------------------------------------------------------
+// O1b — inline DIL neighbours keep their separators
+// ---------------------------------------------------------------------------
+
+/**
+ * The space between two inline nodes lives in a whitespace-only text node. A lowering
+ * pass that drops those nodes renders `Helloworld` and `12` — a regression this property
+ * was added for after review found it by hand.
+ */
+const inlineDil = fc.oneof(
+  word.map((value) => ({ source: value, text: value })),
+  word.map((value) => ({ source: `<bold>${value}</bold>`, text: value })),
+  word.map((value) => ({ source: `<italic>${value}</italic>`, text: value })),
+  word.map((value) => ({ source: `<code>${value}</code>`, text: value })),
+  fc.integer({ min: 1, max: 9 }).map((n) => ({ source: `{${n} + 1}`, text: String(n + 1) })),
+);
+
+test("property: inline DIL neighbours keep their separators", () => {
+  fc.assert(
+    fc.property(fc.array(inlineDil, { minLength: 2, maxLength: 4 }), (atoms) => {
+      const source = atoms.map((atom) => atom.source).join(" ");
+      const expected = atoms.map((atom) => atom.text).join(" ");
+      // Resolve first: `{1 + 1}` is an `expr` node until it is evaluated.
+      const resolved = resolveNodes(parseDocument(source).tree, {});
+      const actual = squash(
+        resolved.map((node) => (node.kind === "text" ? node.value : "")).join("") +
+          resolved.map((node) => (node.kind === "element" ? flatten(node.children) : "")).join(""),
+      );
+      assert.equal(actual, expected, source);
+    }),
+    { numRuns: 40, seed: 20241118 },
+  );
+});
+
+function flatten(nodes: readonly { kind: string; value?: string; children?: readonly unknown[] }[]): string {
+  let out = "";
+  for (const node of nodes) {
+    if (node.kind === "text") out += node.value ?? "";
+    else if (node.children)
+      out += flatten(node.children as readonly { kind: string; value?: string; children?: readonly unknown[] }[]);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // O2 — block structure matches what Markdown itself parsed
