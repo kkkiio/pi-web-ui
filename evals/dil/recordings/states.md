@@ -1,69 +1,88 @@
-# Git 工作区文件状态流转
+Git 里的“状态”其实横跨三个存储区：**工作区 (Working Tree)**、**暂存区 (Index/Staging)**、**本地仓库 (HEAD/Objects)**、**远端 (Remote)**。文件在它们之间移动，就是一个“复制内容 + 改指针”的过程。
 
-<box padding={3} background="surface-secondary" radius="lg">
-  <text weight="semibold">核心链路</text>
-  <text><code>Untracked</code> → <code>Staged</code> → <code>Committed</code> → <code>Pushed</code>；<code>Modified</code> 是已跟踪文件在「工作区」与「暂存区」之间的并行状态，可随时插回链路。</text>
+## 1. 流转图
+
+你列出的 `Untracked → Staged → Modified → Committed → Pushed` 是一条常见的**心智模型**，但严格来说 `Modified` 不是必经环节：新文件直接 Untracked→Staged，已跟踪文件才会有 Modified。实际是两条路径：
+
+<box padding={3} background="surface-secondary" radius="lg" gap={3}>
+  <caption>路径 A：新文件首次入库</caption>
+  <row gap={2} align="center" justify="center">
+    <box padding={2} radius="md" border background="surface" width="100%"><col gap={0}><text weight="semibold" size="sm">Untracked</text><caption>未跟踪</caption></col></box>
+    <icon name="arrow-right" size="sm"/>
+    <box padding={2} radius="md" border background="surface" width="100%"><col gap={0}><text weight="semibold" size="sm">Staged</text><caption>已暂存</caption></col></box>
+    <icon name="arrow-right" size="sm"/>
+    <box padding={2} radius="md" border background="surface" width="100%"><col gap={0}><text weight="semibold" size="sm">Committed</text><caption>已提交</caption></col></box>
+    <icon name="arrow-right" size="sm"/>
+    <box padding={2} radius="md" border background="surface" width="100%"><col gap={0}><text weight="semibold" size="sm">Pushed</text><caption>已推送</caption></col></box>
+  </row>
+  <caption>命令：git add → git commit → git push</caption>
 </box>
 
-## 状态与命令对照
+<box padding={3} background="surface-secondary" radius="lg" gap={3}>
+  <caption>路径 B：已跟踪文件的循环修改</caption>
+  <row gap={2} align="center" justify="center">
+    <box padding={2} radius="md" border background="surface" width="100%"><col gap={0}><text weight="semibold" size="sm">Modified</text><caption>已改未暂存</caption></col></box>
+    <icon name="arrow-right" size="sm"/>
+    <box padding={2} radius="md" border background="surface" width="100%"><col gap={0}><text weight="semibold" size="sm">Staged</text><caption>已暂存</caption></col></box>
+    <icon name="arrow-right" size="sm"/>
+    <box padding={2} radius="md" border background="surface" width="100%"><col gap={0}><text weight="semibold" size="sm">Committed</text><caption>新提交</caption></col></box>
+  </row>
+  <row gap={2} align="center">
+    <icon name="info" size="sm"/>
+    <caption>Staged 也可通过 restore --staged 退回 Modified；Modified 也可被 restore 直接丢弃回 HEAD 版本</caption>
+  </row>
+</box>
 
-<grid columns={2} gap={3}>
-  <grid-item>
-    <box padding={2} radius="md" border>
-      <title>1. Untracked → Staged</title>
-      <text><code>git add &lt;file&gt;</code> ／ <code>git add -A</code></text>
-      <caption>新增文件从未跟踪进入暂存区。</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} radius="md" border>
-      <title>2. Staged → Committed</title>
-      <text><code>git commit -m "msg"</code></text>
-      <caption>暂存快照写入本地仓库历史。</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} radius="md" border>
-      <title>3. Committed → Pushed</title>
-      <text><code>git push</code> ／ <code>git push -u origin main</code></text>
-      <caption>本地提交同步到远程。</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} radius="md" border>
-      <title>4. Tracked → Modified</title>
-      <text>编辑文件后自动产生，<code>git status</code> 可见</text>
-      <caption>已跟踪文件改动未再暂存。</caption>
-    </box>
-  </grid-item>
+## 2. 每次转换对应的命令 + 可逆性
+
+| # | 转换 | 命令 | 内容可逆? | 反向操作 |
+|---|------|------|:--:|------|
+| 1 | Untracked → Staged | `git add <f>` | ✅ | `git restore --staged <f>` |
+| 2 | Staged → Untracked（取消跟踪） | `git rm --cached <f>` | ✅ | `git add <f>` |
+| 3 | Staged → Modified（取消暂存） | `git restore --staged <f>` | ✅ | `git add <f>` |
+| 4 | Modified → Staged | `git add <f>` | ✅ | `git restore --staged <f>` |
+| 5 | Modified/Staged → 丢弃回 HEAD | `git restore <f>` / `git restore .` | ❌ | 无（未提交内容真丢失） |
+| 6 | Staged → Committed | `git commit -m "..."` | ✅ | `git reset --soft HEAD~1` |
+| 7 | Committed → Staged（撤销提交） | `git reset --soft HEAD~1` | ✅ | `git commit` |
+| 8 | Committed → Modified（撤销并回工作区） | `git reset HEAD~1`（= `--mixed`） | ✅ | `git add` + `commit` |
+| 9 | Committed → 全丢弃 | `git reset --hard HEAD~1` | ⚠️ 部分 | 提交本身可从 reflog 找回，工作区改动丢失 |
+| 10 | 修改最近一次提交 | `git commit --amend` | ✅ | `git reset --soft HEAD@{1}` |
+| 11 | Committed → Pushed | `git push` | ✅（本地侧） | 见 #12 / #13 |
+| 12 | 撤销已推送（安全） | `git revert <sha>` + `git push` | ✅ | 再 `revert` 一次 |
+| 13 | 回退已推送并强推 | `git reset --hard <sha>` + `git push --force-with-lease` | ❌ 重写历史 | 本地 reflog 可恢复，远端他人需重新同步 |
+| 14 | 删除未跟踪文件 | `git clean -fd` | ❌ | 从未入过索引则无法找回 |
+
+## 3. 哪些是不可逆的
+
+<grid columns={2}>
+  <box padding={3} background="surface-secondary" radius="lg" gap={2} border={{size:1, color:"success"}}>
+    <row gap={2} align="center"><icon name="check-circle" size="sm"/><text weight="semibold" size="sm">可逆（内容仍在某个存储区）</text></row>
+    <text size="sm">• 取消暂存、取消跟踪：内容还在工作区</text>
+    <text size="sm">• 撤销 commit（soft/mixed）：内容在索引或工作区</text>
+    <text size="sm">• 已提交的东西：`git reflog` 兜底（默认约 90 天）</text>
+    <text size="sm">• 未提交改动的临时保存：`git stash` / `git stash pop`</text>
+    <text size="sm">• 已推送后想撤销：`git revert` 生成反向提交（推荐）</text>
+  </box>
+  <box padding={3} background="surface-secondary" radius="lg" gap={2} border={{size:1, color:"danger"}}>
+    <row gap={2} align="center"><icon name="alert-triangle" size="sm"/><text weight="semibold" size="sm">不可逆 / 高风险</text></row>
+    <text size="sm">• `git restore <f>`、`git checkout -- <f>`：丢弃未暂存改动，真丢</text>
+    <text size="sm">• `git reset --hard`：丢弃工作区+索引（仅已提交部分可 reflog 找回）</text>
+    <text size="sm">• `git clean -fd`：删掉 untracked，未入索引就无法恢复</text>
+    <text size="sm">• `git push --force`：重写远端历史，影响所有协作者</text>
+    <text size="sm">• “取消推送”本质不存在：只能 revert 或强推重写</text>
+  </box>
 </grid>
 
-## 回退与可逆性
+## 4. 三个安全网
 
-<box padding={3} background="surface-tertiary" radius="lg">
-  <row align="between">
-    <text weight="medium">转换</text>
-    <text weight="medium">是否可逆</text>
-  </row>
-  <divider/>
-  <row align="between"><text>Untracked → Staged</text><badge color="success">可逆</badge></row>
-  <text><code>git restore --staged &lt;file&gt;</code> ／ <code>git rm --cached &lt;file&gt;</code></text>
-  <divider/>
-  <row align="between"><text>Modified → Staged</text><badge color="success">可逆</badge></row>
-  <text><code>git restore --staged</code> 退回暂存，<code>git restore</code> 丢弃工作区改动</text>
-  <divider/>
-  <row align="between"><text>Staged → Committed</text><badge color="warning">半可逆</badge></row>
-  <text>已提交内容靠 <code>git reset --soft HEAD~1</code> 回到暂存区；若已推送历史改写需 <code>push --force-with-lease</code></text>
-  <divider/>
-  <row align="between"><text>Committed → Pushed</text><badge color="danger">本地不可单方撤回</badge></row>
-  <text>远程同步无法由本地单方面撤销；只能 <code>git revert</code> 生成反向提交再推送。</text>
+<box padding={3} background="surface-secondary" radius="lg" gap={2}>
+  <row justify="between" align="center"><text weight="semibold" size="sm">git reflog</text><caption>只救「提交过的」东西</caption></row>
+  <row justify="between" align="center"><text weight="semibold" size="sm">git stash</text><caption>暂存未提交改动，可 pop 回来</caption></row>
+  <row justify="between" align="center"><text weight="semibold" size="sm">git fsck --lost-found</text><caption>曾 `git add` 过的孤立 blob 仍可能找回</caption></row>
 </box>
 
-<box padding={3} background="surface" radius="lg" border color="warning">
-  <row gap={2} align="center"><icon name="alert-triangle"/><text weight="semibold">容易踩坑的点</text></row>
-  <text>· <code>git restore &lt;file&gt;</code> 丢弃未暂存修改，<bold>不可恢复</bold>（除非编辑器有备份）。</text>
-  <text>· <code>git reset --hard</code> 同时丢弃暂存与工作区改动，同样不可逆。</text>
-  <text>· 提交历史已推送，优先用 <code>revert</code> 而不是 <code>reset</code>，避免影响协作者。</text>
-</box>
+**一句话结论**：往“更早、更本地”的方向走（unstage、undo commit、stash）基本都可逆；往“丢弃、删文件、改远端历史”的方向走（restore 未暂存、reset --hard 工作区、clean、force push）基本都不可逆。未 `git add` 且未 `git commit` 的内容，Git 不负责保管。
 
-**一句话总结**：暂存与工作区之间（add、restore、reset --soft）可自由往返；提交进入历史后可用 reset、revert 处理；推送到远程后，本地只能追加更正提交，无法单方擦除。
+<box padding={3} background="surface-tertiary" radius="md">
+  <row gap={2} align="center"><icon name="terminal" size="sm"/><text size="sm">随时确认状态：<code>git status -s</code>（两列：左=暂存区，右=工作区）、<code>git diff</code>（工作区 vs 暂存）、<code>git diff --staged</code>（暂存 vs HEAD）</text></row>
+</box>

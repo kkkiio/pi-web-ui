@@ -144,7 +144,11 @@ The negative control passes only with **zero** DIL elements and one code fence.
   `grid` instead of `{#each}` still read well; the checks are deliberately strict there.
 
 Treat this as a capability signal, not a product guarantee: three models, one run, five
-prompts. `--runs 3` starts to say something about stability.
+prompts. The variance is real — the committed recordings are a second
+`deepseek-v4.1-flash` run (`recordings/manifest.json`) and scored **77% (20/26)**: flow 83,
+comparison 80, proportions 67, states 60, restraint 100. Same model, same prompt, ~20
+points apart from the matrix run. `--runs 3` starts to say something about stability;
+a single run does not.
 
 ## Adding a case
 
