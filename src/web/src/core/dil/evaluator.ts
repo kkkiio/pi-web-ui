@@ -303,17 +303,20 @@ function memberKey(node: Extract<Expression, { type: "MemberExpression" }>, cont
 }
 
 function call(node: CallExpression, context: Context): unknown {
-  // `a?.b()` / `fn?.(x)`: the callee may have short-circuited, and then the call is skipped.
+  if (node.callee.type === "Super") throw new DilEvaluationError("super is not available");
+
+  // JavaScript evaluates the callee before the arguments, and a skipped optional call
+  // never evaluates them at all: `fn?.(missing)` with a null `fn` must not look up
+  // `missing`.
+  const value = evaluate(node.callee, context);
+  if (value === SHORT_CIRCUIT) return SHORT_CIRCUIT;
+  if (node.optional && (value === null || value === undefined)) return SHORT_CIRCUIT;
 
   const args = node.arguments.map((argument) => {
     if (argument.type === "SpreadElement") throw new DilEvaluationError("spread is not allowed");
     return evaluate(argument, context);
   });
 
-  if (node.callee.type === "Super") throw new DilEvaluationError("super is not available");
-  const value = evaluate(node.callee, context);
-  if (value === SHORT_CIRCUIT) return SHORT_CIRCUIT;
-  if (node.optional && (value === null || value === undefined)) return SHORT_CIRCUIT;
   return callValue(value, args);
 }
 

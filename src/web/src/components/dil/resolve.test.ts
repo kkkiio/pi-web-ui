@@ -4,6 +4,30 @@ import type { DilScope } from "../../core/dil/evaluator.ts";
 import { collectStatements, evaluateStatements, parseDocument } from "../../core/dil/index.ts";
 import { type ResolvedNode, resolveNodes } from "./resolve.ts";
 
+function count(nodes: readonly ResolvedNode[]): number {
+  let total = 0;
+  for (const node of nodes) {
+    total += 1;
+    if (node.kind === "element") total += count(node.children);
+  }
+  return total;
+}
+
+test("nested loops cannot expand without bound", () => {
+  const source =
+    "{#each Array.from({ length: 400 }) as r}{#each Array.from({ length: 400 }) as c}<text>x</text>{/each}{/each}";
+  const resolved = resolveNodes(parseDocument(source).tree, {});
+  // 400 × 400 = 160k would overflow the stack while pushing; the pass is capped instead.
+  assert.ok(count(resolved) <= 5_000, `resolved ${count(resolved)} nodes`);
+});
+
+test("a large but legitimate loop still renders", () => {
+  const source = "{#each Array.from({ length: 300 }) as i}<text>{i}</text>{/each}";
+  const resolved = resolveNodes(parseDocument(source).tree, {});
+  // One `<text>` element plus its interpolated text node per item.
+  assert.equal(count(resolved), 600);
+});
+
 function scopeOf(source: string): DilScope {
   return evaluateStatements(collectStatements(parseDocument(source).raw));
 }

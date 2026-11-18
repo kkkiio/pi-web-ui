@@ -33,21 +33,46 @@ export type ResolvedNode =
       readonly children: readonly ResolvedNode[];
     };
 
+/**
+ * Upper bound on resolved nodes for one render.
+ *
+ * The evaluator caps the work of a single expression, but nested loops multiply their
+ * *output*: `{#each 400}{#each 400}` is 160k nodes from two small lists, and pushing them
+ * onto one array overflows the stack. A shared budget bounds the pass itself.
+ */
+const MAX_RESOLVED_NODES = 5_000;
+
+interface Budget {
+  remaining: number;
+}
+
 /** Expand control flow and interpolations into a tree of elements and text. */
-export function resolveNodes(nodes: readonly DilNode[], scope: DilScope): ResolvedNode[] {
+export function resolveNodes(
+  nodes: readonly DilNode[],
+  scope: DilScope,
+  budget: Budget = { remaining: MAX_RESOLVED_NODES },
+): ResolvedNode[] {
   const out: ResolvedNode[] = [];
-  for (const node of nodes) out.push(...resolveNode(node, scope));
+  for (const node of nodes) {
+    if (budget.remaining <= 0) break;
+    // Never spread: the array is capped, but the spread itself is what overflows.
+    for (const resolved of resolveNode(node, scope, budget)) out.push(resolved);
+  }
   return out;
 }
 
-function resolveNode(node: DilNode, scope: DilScope): ResolvedNode[] {
+function resolveNode(node: DilNode, scope: DilScope, budget: Budget): ResolvedNode[] {
   switch (node.type) {
     case "text":
-      return node.value ? [{ kind: "text", value: node.value }] : [];
+      if (!node.value) return [];
+      budget.remaining -= 1;
+      return [{ kind: "text", value: node.value }];
 
     case "expr": {
       const value = formatValue(safeEvaluate(node.code, scope, undefined));
-      return value ? [{ kind: "text", value }] : [];
+      if (!value) return [];
+      budget.remaining -= 1;
+      return [{ kind: "text", value }];
     }
 
     case "stmt":
@@ -55,11 +80,12 @@ function resolveNode(node: DilNode, scope: DilScope): ResolvedNode[] {
       return [];
 
     case "fence":
+      budget.remaining -= 1;
       return [fenceNode(node)];
 
     case "if":
       for (const branch of node.branches) {
-        if (evaluateCondition(branch.cond, scope)) return resolveNodes(branch.body, scope);
+        if (evaluateCondition(branch.cond, scope)) return resolveNodes(branch.body, scope, budget);
       }
       return [];
 
@@ -67,22 +93,25 @@ function resolveNode(node: DilNode, scope: DilScope): ResolvedNode[] {
       const items = evaluateList(node.list, scope);
       const out: ResolvedNode[] = [];
       items.forEach((item, index) => {
+        if (budget.remaining <= 0) return;
         const frame: Record<string, unknown> = { ...scope, [node.item]: item };
         if (node.index) frame[node.index] = index;
-        out.push(...resolveNodes(node.body, frame));
+        for (const resolved of resolveNodes(node.body, frame, budget)) out.push(resolved);
       });
       return out;
     }
 
-    case "element":
+    case "element": {
+      budget.remaining -= 1;
       return [
         {
           kind: "element",
           name: node.name,
           props: resolveAttributes(node, scope),
-          children: resolveNodes(node.children, scope),
+          children: resolveNodes(node.children, scope, budget),
         },
       ];
+    }
 
     default:
       return [];

@@ -40,6 +40,8 @@ test("an optional chain short-circuits the rest of the chain", () => {
   assert.equal(value("greet?.()", calls), "hi");
   assert.equal(value("missing?.()", calls), undefined);
   assert.equal(value("missing?.() ?? 'none'", calls), "none");
+  // Arguments are not evaluated when the call is skipped: `missing` is not in scope.
+  assert.equal(value("missing?.(undeclared) ?? 'none'", calls), "none");
 
   // Parentheses end the chain: `(user?.profile).name` is a real read of `name` on
   // `undefined`, which is an error rather than `undefined`.
