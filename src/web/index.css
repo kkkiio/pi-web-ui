@@ -4,6 +4,9 @@
 
 @custom-variant dark (&:is(.dark *));
 @source "../../node_modules/streamdown/dist/*.js";
+/* The DIL renderer emits class names from token maps; scan it explicitly so its
+   utilities exist even before the message view imports the component. */
+@source "./src/components/dil";
 
 @theme inline {
   --color-background: var(--background);

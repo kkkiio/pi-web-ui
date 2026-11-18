@@ -5,17 +5,22 @@ React renderer and component catalog that maps the unified DIL AST from [`src/co
 ## Positioning & Responsibilities
 
 1. **AST-to-React Coordinator (`dil-renderer.tsx`)**:
-   - Renders the parsed DIL AST into React elements without `eval` or direct DOM mutation.
-   - Manages per-message reactive state slots (`DIL.useState`) and connects `GenUI.issueNewTurn(prompt)` / `GenUI.openUrl(url)` to Pi Web UI's session composer and transport.
+   - `<DilRenderer source isStreaming />` runs the whole loop: throttle → `parseDocument` →
+     `evaluateStatements` + `resolveNodes` → JSX. No `eval`, no direct DOM mutation.
+   - Expansion of `{#each}` / `{#if}` / `{expr}` happens in `resolve.ts` **before** React
+     sees anything, so components only render resolved elements and text.
 2. **Design Token Mapping (`tokens.ts`)**:
-   - Maps DIL layout and semantic tokens (`background="surface-secondary"`, `radius="xl"`, `padding={{x: 3, y: 2}}`, `color="success"`, `tabularNums`) to Pi Web UI's light/dark Tailwind classes.
-3. **Primitive Component Catalog (`primitives/`)**:
-   - `layout.tsx` — `box`, `row`, `col`, `grid`, `grid-item`, `divider`
-   - `typography.tsx` — `title`, `text`, `caption`, `badge`, `icon` (Lucide), `bold`, `italic`, `code`, `blockquote`, `Link`
-   - `data.tsx` — `list` (including `connector="solid"` step timelines), `list-item`, `table`, `table-row`, `table-cell`
-   - `rich-blocks.tsx` — `code-block` (reusing Shiki syntax highlighting), `math` (KaTeX), `mermaid`
-   - `svg.tsx` — Parametric inline SVG nodes (`svg`, `defs`, `marker`, `rect`, `path`, `text`)
-   - `controls.tsx` — Interactive controls (`button`, `radio-group`, `radio`, `textarea`, `label`)
+   - Maps DIL tokens (`padding`, `gap`, `radius`, `background`, `border`, `color`, `size`,
+     `weight`, `align`, `justify`, `tabularNums`, `columns`, …) to Tailwind classes and a
+     small inline `style` for numeric geometry. Values that are not a number, a CSS length
+     or a plain colour are dropped rather than forwarded.
+3. **Primitive Component Catalog (`primitives/`)** — what exists today:
+   - `layout.tsx` — `box`, `row`, `col`, `grid`, `grid-item`, `divider` (#46)
+   - `typography.tsx` — `title`, `text`, `caption`, `badge`, `icon` (Lucide, unknown names
+     fall back to a dot), `bold`, `italic`, `code` (#46)
+   - `content.tsx` — readable fallbacks for the slices that follow: `list`/`list-item`,
+     `table`/`table-row`/`table-cell`, `blockquote`, `Link`, `math`, `code-block` (#49),
+     plus memoized `MathLeaf`/`CodeBlockLeaf` leaves. SVG leaves (#47) render nothing yet.
 
 ## Streaming updates & caching
 
@@ -85,3 +90,42 @@ a block that has already finished.
 - No `parseIncompleteMarkdown` style toggle: stream repair is part of `parseDocument`
   (`src/core/dil/stream-repair.ts`) and always applies to the tail.
 - No `parsePrefix`/incremental parser API, no AST virtualization, no per-node memo.
+
+## Safety
+
+Expressions are evaluated by [`src/core/dil/evaluator.ts`](../../core/dil/evaluator.ts),
+never by `eval` or `new Function`. The renderer only decides *which* expression to hand
+over and *what a failure looks like*:
+
+- `{#if cond}` → false, `{#each list as x}` → `[]`, `{expr}` and attributes → absent;
+  one broken expression never removes its siblings (the `__dilSafe` contract).
+- Links render as anchors only for `http(s):` and `mailto:` (`safeLinkUrl`); anything else
+  shows its label as text.
+- `on*` attributes are not wired up in #46: `onClick={() => …}` evaluates to an inert
+  closure value that the primitives ignore. Interaction is #48.
+
+## Where #46 stops
+
+`<DilRenderer>` is the end-to-end path (`parseDocument` → evaluator → primitives) and is
+what the message view will mount. The labels below are deliberately not rendered yet,
+because each is a slice of its own:
+
+| tag | today | slice |
+| --- | --- | --- |
+| `table`, `list`, `blockquote`, `Link`, `math`, `code-block` | plain HTML fallbacks; `math`/`code-block` are memoized leaves | #49 |
+| `svg`, `defs`, `marker`, `rect`, `path`, … | skipped (their leaves are geometry, not prose) | #47 |
+| `button`, `radio-group`, `radio`, `textarea`, `label` | children only; no handlers | #48 |
+
+## Roadmap
+
+- **[#46 Core MVP](https://github.com/kkkiio/pi-web-ui/issues/46)** — layout primitives,
+  typography, throttled render + safe evaluation. **Done in this package.**
+- **[#49 Document & data primitives](https://github.com/kkkiio/pi-web-ui/issues/49)** —
+  styled `list`/`table`/`blockquote`/`Link`, Shiki `code-block`, KaTeX `math`.
+  Fallbacks exist; replace their bodies, keep the leaf memo keys (`code`, `language`,
+  `closed` / `value`, `block`).
+- **[#47 Parametric SVG](https://github.com/kkkiio/pi-web-ui/issues/47)** — `svg` +
+  `defs`/`marker`/`rect`/`path`/`text` with DIL attributes.
+- **[#48 State & interaction](https://github.com/kkkiio/pi-web-ui/issues/48)** —
+  `DIL.useState` setters (the evaluator already binds initials and an inert setter),
+  form controls, `GenUI.issueNewTurn`.

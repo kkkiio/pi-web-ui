@@ -12,18 +12,21 @@ Formal grammar: [`dil.ebnf`](./dil.ebnf).
 ```
 source ── parse ─────────────────► structural AST + recovery diagnostics   parser.ts
        ── resolveSpanningEmphasis ► `**<Link/>**` pairs across nodes      markdown.ts
+       ── stream repair ─────────► close the constructs the tail left open stream-repair.ts
        ── lowerMarkdown ─────────► prose → title / text / list / table …  markdown.ts
        ── pruneEmptyIncomplete ──► drop half-streamed empty containers    prune.ts
+       ── evaluateStatements ────► `{@body}` scope for `{expr}`/{#if}/{#each} evaluator.ts
        ───────────────────────────► DilDocument { raw, tree, state, diagnostics }
 ```
 
 ```ts
-import { parseDocument, toFallbackMarkdown } from "@/core/dil";
+import { collectStatements, evaluateStatements, parseDocument, toFallbackMarkdown } from "@/core/dil";
 
 const document = parseDocument(source);
 document.tree; // DilNode[] — what the renderer walks
 document.state; // [{ name: "tab", setter: "setTab", initial: '"overview"' }]
 document.diagnosticSummary; // "clean", or "unclosed_tag×2 unclosed_block×1"
+const scope = evaluateStatements(collectStatements(document.raw)); // { items: [...], total: 3 }
 toFallbackMarkdown(document.tree); // Markdown projection for copy / quote
 ```
 
@@ -85,6 +88,8 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 | `parser.ts` | Recursive descent over `dil.ebnf`: elements, attributes, `{#if}`/`{#each}`, `{@body}`, `{expr}`, fenced blocks, raw text elements |
 | `markdown.ts` | Prose injection layers: `BlockProse` (GFM via `unified`/`remark`) and `InlineFlow` (blank-line runs) → DIL elements |
 | `stream-repair.ts` | Streaming tail repair: closes an unclosed `**`/`*`/`~~`/`` ` `` and drops a half-received link target before the prose is lexed |
+| `evaluator.ts` | Safe expression evaluation for `{expr}`, `{#if}`, `{#each}`, `{@body}` — `acorn` parses ESTree, an allowlisted tree walker evaluates it, no `eval`/`new Function` |
+| `evaluator-allowlist.ts` | What an expression may touch: `Math`/`Number`/`String`/`Array`, pure array/string/number methods, own-property access, work bounds |
 | `inline.ts` | `InlineRun` — the element-interior inline subset (`**bold**`, `*italic*`, `~~strike~~`, code, math, links, autolinks) |
 | `entities.ts` | Shared character-reference decoding (prose once, raw text at parse time) |
 | `prune.ts` | Streaming pass: unclosed empty containers are not rendered (anti-flash) |
@@ -200,11 +205,51 @@ run parses real ChatGPT DIL samples (e.g.
 `*.source.md`); truncated samples there are expected to report diagnostics, so it
 asserts on the clean ratio rather than zero.
 
+## Expression evaluation
+
+`{expr}`, `{#if cond}`, `{#each list as item, i}` and `{@body const …}` are evaluated by
+`evaluator.ts` — `acorn` (devDependency, bundled by Vite) parses the source into a
+standard **ESTree** AST, and a tree walker evaluates that AST under an explicit allowlist
+from `evaluator-allowlist.ts`. There is **no hand-written grammar, no `eval` and no
+`new Function`**, so a template can only reach what the renderer put in scope:
+
+| supported | |
+| --- | --- |
+| literals | numbers, strings, templates (`` `共 ${n} 项` ``), booleans, `null`, arrays, objects |
+| operators | `+ - * / %`, `=== !== > < >= <=`, `&& \|\| ??`, `!`, `-`, ternary |
+| access | `a.b`, `a?.b`, `a[b]`, `a?.[b]`, `f(x)` |
+| functions | `m => …`, `(item, i) => …` as arguments to array methods |
+| builtins | `Math.*`, `Number(…)`, `String(…)`, `Array.from/isArray/of` |
+| methods | array `map/filter/find/findIndex/some/every/reduce/slice/join/includes/indexOf/at/concat/flat`; string `split/slice/substring/includes/indexOf/startsWith/endsWith/toUpperCase/toLowerCase/trim/replace/replaceAll/padStart/padEnd/repeat/charAt/at`; number `toFixed/toLocaleString/toString` |
+| refused | globals (`window`, `document`, `process`, `fetch`, `globalThis`, `Function`, `require`, `import`), `constructor`/`__proto__`/`prototype`, assignment, `new`, loose `==`, regex literals, spread, destructuring |
+
+`acorn.parseExpressionAt` also has to end where the source ends, so trailing tokens
+(`1 + 2 foo`) are a failure rather than a silently truncated expression. Node types the
+walker refuses — assignment, `new`, `this`, `typeof`, spread, sequence expressions,
+regex, `function`/`async`/generator forms — fail the same way as an unknown name.
+
+Arrow bodies may be expressions **or blocks** (`m => { const p = m.p; return p; }`), which
+is the shape #48's `onClick={() => { setChoice(v); setRevealed(false) }}` needs.
+
+The `__dilSafe(evaluate, failureValue)` contract from the reference runtime is the default
+here: every entry point catches and returns a fallback, so a streamed prefix such as
+`{m.p.toFixed(` or `{#each items.fi` renders as nothing instead of breaking its siblings.
+
+```ts
+evaluateCondition("{#if}", scope); // false on failure
+evaluateList("items.filter(m => m.p > 90)", scope); // [] on failure
+safeEvaluate("m.p.toFixed(1)", scope, undefined); // undefined on failure
+evaluateStatements(["const items = […]", "const [open, setOpen] = DIL.useState(false)"]);
+```
+
+Statement semantics for #46: `const`/`let` declarations are evaluated in order and join the
+scope; a `DIL.useState(init)` declaration contributes its **initial value**, while its
+setter is bound to an inert no-op — interaction is #48.
+
 ## Non-goals (deliberate)
 
-- **No JavaScript evaluation.** `{expr}` and `{@body}` are kept as source text. Safe
-  expression evaluation is issue #47; implicit-state repair and the
-  `GenUI.*` host bridge are issue #48.
+- **No implicit state repair, no interactive setters.** `DIL.useState` contributes its
+  initial value only; setters, form controls and `GenUI.*` are issue #48.
 - **No ```` ```genui ```` unwrapping.** Per `dil.ebnf`, a fenced block is raw text. If a
   surface decides to accept a fenced DIL wrapper, it must strip the fence lines before
   calling `parseDocument`.
@@ -212,10 +257,17 @@ asserts on the clean ratio rather than zero.
 
 ## Roadmap
 
-- **Phase 1 ([#46](https://github.com/kkkiio/pi-web-ui/issues/46))**: spatial/relational
-  layout tags, typography, lists/tables, unified Markdown lowering — **parser side done**;
-  the React renderer in `src/components/dil` is what remains.
-- **Phase 2 ([#47](https://github.com/kkkiio/pi-web-ui/issues/47))**: `__dilSafe`
-  evaluator for `{#each}` / `{#if}` and parametric `<svg>`.
-- **Phase 3 ([#48](https://github.com/kkkiio/pi-web-ui/issues/48))**: `DIL.useState`,
-  interactive controls, implicit-state repair, `GenUI.issueNewTurn` host bridge.
+Four vertical slices under the parent issue
+([#22](https://github.com/kkkiio/pi-web-ui/issues/22)); this package is the parser half of
+each.
+
+- **[#46 Core MVP](https://github.com/kkkiio/pi-web-ui/issues/46)** — spatial/relational
+  layout, typography, restricted expression evaluation. **Done here**: parser, lowering,
+  stream repair, `evaluator.ts`; the React side lives in `src/components/dil`.
+- **[#49 Document & data primitives](https://github.com/kkkiio/pi-web-ui/issues/49)** —
+  `list`, `table`, `blockquote`, `Link`, `math`, `code-block`. **Parser side done**
+  (Markdown lowering produces them); the styled renderers are pending.
+- **[#47 Parametric SVG](https://github.com/kkkiio/pi-web-ui/issues/47)** — `svg`, `defs`,
+  `marker`, `rect`, `path`, `text`… **Parser side done**; the SVG renderer is pending.
+- **[#48 State & interaction](https://github.com/kkkiio/pi-web-ui/issues/48)** —
+  `DIL.useState` setters, form controls, `GenUI.issueNewTurn`. **Initial values only.**

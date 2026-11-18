@@ -38,7 +38,7 @@ export function parseDocument(source: string): DilDocument {
 }
 
 /** `{@body}` directives may appear anywhere; hoist them regardless of nesting. */
-function collectStatements(nodes: readonly DilNode[], out: string[] = []): string[] {
+export function collectStatements(nodes: readonly DilNode[], out: string[] = []): string[] {
   for (const node of nodes) {
     switch (node.type) {
       case "stmt":
@@ -60,6 +60,8 @@ function collectStatements(nodes: readonly DilNode[], out: string[] = []): strin
   return out;
 }
 
+export type { DilScope } from "./evaluator.ts";
+export { evaluateCondition, evaluateList, evaluateStatements, formatValue, safeEvaluate } from "./evaluator.ts";
 export { tidyFallback, toFallbackMarkdown } from "./fallback.ts";
 export { fenceToElement, lowerInline, lowerMarkdown, resolveSpanningEmphasis } from "./markdown.ts";
 export { mergeText, normalizeSource, parse, RAW_TEXT_TAGS } from "./parser.ts";
