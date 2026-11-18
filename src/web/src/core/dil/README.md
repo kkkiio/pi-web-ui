@@ -269,6 +269,7 @@ each.
   `list`, `table`, `blockquote`, `Link`, `math`, `code-block`. **Parser side done**
   (Markdown lowering produces them); the styled renderers are pending.
 - **[#47 Parametric SVG](https://github.com/kkkiio/pi-web-ui/issues/47)** — `svg`, `defs`,
-  `marker`, `rect`, `path`, `text`… **Parser side done**; the SVG renderer is pending.
+  `marker`, `rect`, `path`, `text`… **Done**: the parser already kept these subtrees; the
+  renderer is `svg-map.ts` + `primitives/svg.tsx` in `src/components/dil`.
 - **[#48 State & interaction](https://github.com/kkkiio/pi-web-ui/issues/48)** —
   `DIL.useState` setters, form controls, `GenUI.issueNewTurn`. **Initial values only.**

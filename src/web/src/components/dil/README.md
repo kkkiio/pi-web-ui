@@ -20,7 +20,8 @@ React renderer and component catalog that maps the unified DIL AST from [`src/co
      fall back to a dot), `bold`, `italic`, `code` (#46)
    - `content.tsx` — readable fallbacks for the slices that follow: `list`/`list-item`,
      `table`/`table-row`/`table-cell`, `blockquote`, `Link`, `math`, `code-block` (#49),
-     plus memoized `MathLeaf`/`CodeBlockLeaf` leaves. SVG leaves (#47) render nothing yet.
+     plus memoized `MathLeaf`/`CodeBlockLeaf` leaves. Inside `<svg>`, children are SVG
+     elements (`svg-map.ts` allowlist, ids namespaced per diagram).
 
 ## Streaming updates & caching
 
@@ -127,7 +128,7 @@ The labels below are deliberately not rendered yet, because each is a slice of i
 | tag | today | slice |
 | --- | --- | --- |
 | `table`, `list`, `blockquote`, `Link`, `math`, `code-block` | plain HTML fallbacks; `math`/`code-block` are memoized leaves | #49 |
-| `svg`, `defs`, `marker`, `rect`, `path`, … | skipped (their leaves are geometry, not prose) | #47 |
+| `svg`, `defs`, `marker`, `rect`, `path`, … | **rendered** (`#47`): allowlisted attributes, namespaced ids, `<text>` is SVG text inside `<svg>` | done |
 | `button`, `radio-group`, `radio`, `textarea`, `label` | children only; no handlers | #48 |
 
 ## Roadmap
@@ -139,7 +140,10 @@ The labels below are deliberately not rendered yet, because each is a slice of i
   Fallbacks exist; replace their bodies, keep the leaf memo keys (`code`, `language`,
   `closed` / `value`, `block`).
 - **[#47 Parametric SVG](https://github.com/kkkiio/pi-web-ui/issues/47)** — `svg` +
-  `defs`/`marker`/`rect`/`path`/`text` with DIL attributes.
+  `defs`/`marker`/`rect`/`path`/`text` with DIL attributes. **Done in this package**:
+  `svg-map.ts` owns the per-tag allowlist and id namespacing (pure, unit-tested), the
+  JSX lives in `primitives/svg.tsx`, and the renderer switches to SVG mode inside `<svg>`
+  so `<text>` means SVG text there. `href`/`xlink:href` are not in any allowlist.
 - **[#48 State & interaction](https://github.com/kkkiio/pi-web-ui/issues/48)** —
   `DIL.useState` setters (the evaluator already binds initials and an inert setter),
   form controls, `GenUI.issueNewTurn`.

@@ -18,7 +18,7 @@
  * is only JSX glue.
  */
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { collectStatements, evaluateStatements, hasDilElements, parseDocument } from "../../core/dil/index";
 import {
@@ -34,8 +34,10 @@ import {
   MathLeaf,
 } from "./primitives/content";
 import { Box, Col, Divider, Grid, GridItem, Row } from "./primitives/layout";
+import { SvgElement } from "./primitives/svg";
 import { Badge, Bold, Caption, Icon, InlineCode, Italic, Text, Title } from "./primitives/typography";
 import { type ResolvedNode, type ResolvedProps, resolveNodes } from "./resolve";
+import { isSvgTag, svgIdPrefix } from "./svg-map";
 import { layoutSkin, textSkin } from "./tokens";
 
 export interface DilRendererProps {
@@ -75,7 +77,7 @@ export function DilRenderer({
 
   return (
     <div className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
-      {renderNodes(resolved, "n")}
+      {renderNodes(resolved, "n", null)}
     </div>
   );
 }
@@ -142,33 +144,46 @@ export function useThrottledText(source: string, isStreaming: boolean, throttleM
 
 const CODE_FAMILY: ReadonlySet<string> = new Set(["code-block", "math"]);
 
-/** `#47` owns the SVG vocabulary; until then its leaves are numbers, not prose. */
-const SVG_TAGS: ReadonlySet<string> = new Set([
-  "svg",
-  "defs",
-  "marker",
-  "rect",
-  "path",
-  "line",
-  "circle",
-  "ellipse",
-  "polygon",
-  "polyline",
-  "g",
-  "use",
-  "textPath",
-]);
-
-function renderNodes(nodes: readonly ResolvedNode[], prefix: string) {
-  return nodes.map((node, index) => renderNode(node, `${prefix}.${index}`));
+/**
+ * Inside `<svg>`, every child is SVG: geometry is a child element, and a DIL container in
+ * there has no meaning. The id prefix is per diagram so two messages that both define
+ * `<marker id="arrow">` do not collide.
+ */
+interface SvgContext {
+  readonly idPrefix: string;
 }
 
-function renderNode(node: ResolvedNode, key: string) {
+function renderNodes(nodes: readonly ResolvedNode[], prefix: string, svg: SvgContext | null) {
+  return nodes.map((node, index) => renderNode(node, `${prefix}.${index}`, svg));
+}
+
+function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
   if (node.kind === "text") return node.value;
 
   const { name, props, children } = node;
+
+  if (svg) {
+    const inner = renderNodes(children, key, svg);
+    // `<text>` is an SVG text node in here, not the typography primitive.
+    if (!isSvgTag(name)) return <Fragment key={key}>{inner}</Fragment>;
+    return (
+      <SvgElement key={key} name={name} props={props} idPrefix={svg.idPrefix}>
+        {inner}
+      </SvgElement>
+    );
+  }
+
+  if (name === "svg") {
+    const idPrefix = svgIdPrefix(key);
+    return (
+      <SvgElement key={key} name="svg" props={props} idPrefix={idPrefix}>
+        {renderNodes(children, key, { idPrefix })}
+      </SvgElement>
+    );
+  }
+
   const skin = skinFor(name, props);
-  const rendered = renderNodes(children, key);
+  const rendered = renderNodes(children, key, null);
 
   switch (name) {
     case "box":
@@ -287,8 +302,6 @@ function renderNode(node: ResolvedNode, key: string) {
     }
     return <CodeBlockLeaf key={key} code={plainText(children)} language={textValue(props.language) || undefined} />;
   }
-
-  if (SVG_TAGS.has(name)) return null;
 
   return <FallbackBlock key={key}>{rendered}</FallbackBlock>;
 }

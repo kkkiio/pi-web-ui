@@ -27,6 +27,10 @@ Given("Pi replies with a DIL layout", () => {
   world.fixture = "dil-render";
 });
 
+Given("Pi replies with a DIL diagram", () => {
+  world.fixture = "dil-svg";
+});
+
 Given("Pi updates the workspace status document", () => {
   world.fixture = "workspace-artifact";
 });
@@ -82,9 +86,22 @@ Then("the DIL layout is rendered", async ({ page }) => {
   await expect(root.getByText("62%")).toBeVisible();
 });
 
+Then("the DIL diagram is rendered", async ({ page }) => {
+  const log = page.getByRole("log");
+  const svg = log.locator(".dil-root svg");
+  await expect(svg).toBeVisible();
+  // 4 rows × 8 columns of tiles, each one a <rect>.
+  await expect(svg.locator("rect")).toHaveCount(32);
+  // The marker is declared per diagram, so its id must be namespaced rather than "arrow".
+  await expect(svg.locator("marker")).toHaveAttribute("id", /^dil-.+-arrow$/);
+  await expect(svg.locator("line")).toHaveAttribute("marker-end", /^url\(#dil-.+-arrow\)$/);
+  await expect(log.getByText("4 × 8 tiles")).toBeVisible();
+});
+
 Then("the transcript does not show raw DIL tags", async ({ page }) => {
   await expect(page.getByRole("log")).not.toContainText("<box");
   await expect(page.getByRole("log")).not.toContainText("</box>");
+  await expect(page.getByRole("log")).not.toContainText("<svg");
 });
 
 Then("the transcript shows the tool call {string}", async ({ page }, name: string) => {
