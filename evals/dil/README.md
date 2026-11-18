@@ -60,9 +60,10 @@ npm run eval:dil:preview        # same as the first, without opening a browser
 ```
 
 The preview bundles the real renderer with Vite and writes
-`evals/dil/preview-out/index.html`: per case, the checks that passed or failed, then the
-answer rendered exactly as the transcript shows it (DIL primitives for DIL answers,
-Markdown for the rest), with the raw source one click away. The recordings under [`recordings/`](./recordings) were captured
+`evals/dil/preview-out/index.html`: a sticky case nav (variant, case, score — click to
+jump), per case the checks that passed or failed, then the answer rendered exactly as the
+transcript shows it (DIL primitives for DIL answers, Markdown for the rest), with the raw
+source one click away. The recordings under [`recordings/`](./recordings) were captured
 with the earlier raw-completion harness and are kept only as history; regenerate with
 `--record` before trusting `--dry`.
 

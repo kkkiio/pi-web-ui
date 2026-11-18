@@ -76,10 +76,21 @@ const report: Report =
     ? fromRecordings()
     : (JSON.parse(readFileSync(join(ROOT, "evals", "dil", "report.json"), "utf8")) as Report);
 
+interface TocGroup {
+  readonly variant: string;
+  readonly score: number;
+  readonly items: readonly { readonly anchor: string; readonly label: string; readonly score: number }[];
+}
+
+const toc: TocGroup[] = [];
 const sections = report.summaries
   .map((summary) => {
+    const group: TocGroup = { variant: summary.variant, score: summary.score, items: [] };
+    const items = [...group.items] as { anchor: string; label: string; score: number }[];
     const cases = summary.cases
       .map((result) => {
+        const anchor = `case-${summary.variant}-${result.id}`;
+        items.push({ anchor, label: result.id, score: result.score });
         const rendered = renderToStaticMarkup(
           <DilRenderer
             source={result.text}
@@ -92,7 +103,7 @@ const sections = report.summaries
               `<li class="${check.pass ? "pass" : "fail"}">${check.pass ? "✓" : "✗"} ${escapeHtml(check.label)}</li>`,
           )
           .join("");
-        return `<section class="case">
+        return `<section class="case" id="${anchor}">
   <header>
     <h3>${escapeHtml(result.id)} <small>${escapeHtml(result.category)}</small></h3>
     <span class="score ${result.score === 100 ? "pass" : "fail"}">${result.score}% · ${result.passed}/${result.total}</span>
@@ -104,9 +115,27 @@ const sections = report.summaries
 </section>`;
       })
       .join("");
-    return `<h2>${escapeHtml(summary.variant)} — ${summary.score}%</h2>${cases}`;
+    toc.push({ ...group, items });
+    return `<h2 id="variant-${summary.variant}">${escapeHtml(summary.variant)} — ${summary.score}%</h2>${cases}`;
   })
   .join("");
+
+const nav = `<nav class="toc" aria-label="Cases">
+  <a class="top" href="#top">DIL eval</a>
+  ${toc
+    .map(
+      (group) => `<div class="group">
+    <h4>${escapeHtml(group.variant)} <span class="score ${group.score === 100 ? "pass" : "fail"}">${group.score}%</span></h4>
+    <ul>${group.items
+      .map(
+        (item) =>
+          `<li><a href="#${item.anchor}"><span>${escapeHtml(item.label)}</span><span class="score ${item.score === 100 ? "pass" : "fail"}">${item.score}%</span></a></li>`,
+      )
+      .join("")}</ul>
+  </div>`,
+    )
+    .join("")}
+</nav>`;
 
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -116,9 +145,23 @@ const html = `<!doctype html>
 <style>
   /* The app stylesheet targets a full-height shell (body and #root at height 100%,
      body overflow hidden). This page is a long document, so undo the shell. */
-  html, body { height: auto; min-height: 100%; overflow: auto; }
+  html, body { height: auto; min-height: 100%; overflow: visible; }
   body { margin: 0; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-  main { max-width: 880px; margin: 0 auto; padding: 32px 20px 96px; }
+  .layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 32px; max-width: 1180px; margin: 0 auto; padding: 32px 20px 96px; }
+  main { min-width: 0; }
+  .toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; font-size: 12px; }
+  .toc .top { display: block; font-weight: 600; margin-bottom: 12px; color: var(--foreground); text-decoration: none; }
+  .toc h4 { margin: 16px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); }
+  .toc h4 .score { text-transform: none; letter-spacing: 0; margin-left: 4px; }
+  .toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .toc a { display: flex; justify-content: space-between; gap: 8px; padding: 3px 6px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; }
+  .toc a:hover { background: var(--muted); color: var(--foreground); }
+  .toc .score { font-variant-numeric: tabular-nums; }
+  .case { scroll-margin-top: 24px; }
+  @media (max-width: 900px) {
+    .layout { display: block; }
+    .toc { position: static; max-height: none; margin-bottom: 20px; }
+  }
   .meta { color: var(--muted-foreground); font-size: 13px; margin-bottom: 24px; }
   h2 { margin: 40px 0 12px; font-size: 18px; }
   .case { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
@@ -132,11 +175,14 @@ const html = `<!doctype html>
   .render { border-top: 1px dashed var(--border); padding-top: 12px; }
   details { margin-top: 12px; font-size: 12px; } pre { white-space: pre-wrap; word-break: break-word; }
 </style>
-</head><body><main>
+</head><body><div class="layout" id="top">
+${nav}
+<main>
 <h1>DIL eval preview</h1>
 <p class="meta">model: ${escapeHtml(report.model)} · rendered with the product DIL renderer; Markdown answers use react-markdown as the fallback</p>
 ${sections}
-</main></body></html>`;
+</main>
+</div></body></html>`;
 
 mkdirSync(OUT, { recursive: true });
 const file = join(OUT, "index.html");
