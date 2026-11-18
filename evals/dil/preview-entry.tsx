@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { DIL_SYSTEM_PROMPT } from "../../extensions/dil-system-prompt.ts";
 import { DilRenderer } from "../../src/web/src/components/dil/dil-renderer";
 import { DIL_CASES } from "./cases.ts";
 import { scoreCase } from "./scoring.ts";
@@ -134,11 +135,17 @@ const sections = entries
               `<li class="${check.pass ? "pass" : "fail"}">${check.pass ? "✓" : "✗"} ${escapeHtml(check.label)}</li>`,
           )
           .join("");
+        const definition = DIL_CASES.find((candidate) => candidate.id === result.id);
+        const input = definition
+          ? `<p class="why">${escapeHtml(definition.why)}</p>
+  <pre class="prompt" aria-label="prompt">${escapeHtml(definition.prompt)}</pre>`
+          : "";
         return `<section class="case" id="${anchor}">
   <header>
     <h3>${escapeHtml(result.id)} <small>${escapeHtml(result.category)}</small></h3>
     <span class="score ${result.score === 100 ? "pass" : "fail"}">${result.score}% · ${result.passed}/${result.total}</span>
   </header>
+  ${input}
   <ul class="checks">${checks}</ul>
   ${result.diagnostics === "clean" ? "" : `<p class="diagnostics">diagnostics: ${escapeHtml(result.diagnostics)}</p>`}
   <div class="render">${rendered}</div>
@@ -182,8 +189,8 @@ const html = `<!doctype html>
   main { min-width: 0; }
   .toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; font-size: 12px; }
   .toc .top { display: block; font-weight: 600; margin-bottom: 12px; color: var(--foreground); text-decoration: none; }
-  .toc h4 { margin: 16px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); }
-  .toc h4 .score { text-transform: none; letter-spacing: 0; margin-left: 4px; }
+  .toc h4 { margin: 16px 0 6px; font-size: 11px; letter-spacing: .02em; color: var(--muted-foreground); word-break: break-word; }
+  .toc h4 .score { margin-left: 4px; }
   .toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
   .toc a { display: flex; justify-content: space-between; gap: 8px; padding: 3px 6px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; }
   .toc a:hover { background: var(--muted); color: var(--foreground); }
@@ -200,6 +207,11 @@ const html = `<!doctype html>
   h3 { margin: 0; font-size: 15px; } h3 small { color: var(--muted-foreground); font-weight: 400; margin-left: 8px; }
   .score { font-variant-numeric: tabular-nums; font-weight: 600; }
   .checks { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 2px; font-size: 12px; }
+  .why { margin: 0 0 8px; font-size: 12px; color: var(--muted-foreground); font-style: italic; }
+  .prompt { margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; background: var(--muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .system { margin-bottom: 16px; font-size: 12px; }
+  .system summary { cursor: pointer; color: var(--muted-foreground); }
+  .system pre { margin: 8px 0 0; padding: 10px; border-radius: 8px; background: var(--muted); white-space: pre-wrap; max-height: 320px; overflow: auto; }
   .checks .pass { color: #15803d; } .checks .fail { color: #b91c1c; }
   .score.pass { color: #15803d; } .score.fail { color: #b91c1c; }
   .diagnostics { color: #b45309; font-size: 12px; margin: 0 0 8px; }
@@ -210,6 +222,7 @@ const html = `<!doctype html>
 ${nav}
 <main>
 <h1>DIL eval preview</h1>
+<details class="system"><summary>system prompt section &lt;dil&gt;</summary><pre>${escapeHtml(DIL_SYSTEM_PROMPT)}</pre></details>
 <p class="meta">${reports.length} model${reports.length === 1 ? "" : "s"}: ${reports.map((report) => escapeHtml(report.model)).join(" · ")}<br>rendered with the product DIL renderer; Markdown answers use react-markdown as the fallback</p>
 ${sections}
 </main>
