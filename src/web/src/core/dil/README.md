@@ -6,6 +6,8 @@ This module has **zero React or DOM dependencies** so it can be unit-tested dire
 
 ## Positioning & Responsibilities
 
+Formal EBNF grammar specification: [`dil.ebnf`](./dil.ebnf).
+
 1. **Tolerant Unified Parsing (`parser.ts`, `scanner.ts`, `markdown.ts`)**:
    - Parses inline DIL tags (`<box>`, `<row>`, `<col>`, `<grid>`, `<list>`, `<svg>`, `<button>`, `<radio-group>`, etc.), template control blocks (`{#if}`, `{:else}`, `{#each}`), and state directives (`{@body const [x, setX] = DIL.useState(...)}`) alongside standard Markdown prose (headings, paragraphs, lists, GFM tables, fenced code blocks, and LaTeX math).
    - Preserves literal text inside fenced code blocks (` ``` `), inline code spans (`` ` ``), and raw text tags (`<code>`, `<pre>`).

@@ -1,0 +1,163 @@
+(* ========================================================================== *)
+(* OpenAI DIL (Dynamic Interface Language) + Markdown Hybrid Grammar          *)
+(* Dialect: ChatGPT model_dil_v2 (.source.md)                                 *)
+(* Notation: W3C / ISO-style EBNF with streaming recovery annotations         *)
+(* ========================================================================== *)
+
+(* -------------------------------------------------------------------------- *)
+(* 1. Document & Structural Nodes (ProseMode)                                 *)
+(* -------------------------------------------------------------------------- *)
+
+Document        ::= Node* ;
+
+Node            ::= AppDirective
+                  | IfBlock
+                  | EachBlock
+                  | Element
+                  | Interpolation
+                  | FencedBlock
+                  | ProseRun ;
+
+(* -------------------------------------------------------------------------- *)
+(* 2. App Directives ({@body ...})                                            *)
+(* -------------------------------------------------------------------------- *)
+
+(* [Lexical Mode]: Entering "{@" switches to BracedCodeMode (balanced "{}").  *)
+(* [Recovery]:                                                                *)
+(*   1. Unclosed "}" with no newline yet -> Defer (drop from current frame).  *)
+(*   2. Unclosed "}" followed by a line matching /^\s*(\{@|<[A-Za-z])/        *)
+(*      -> RecoverAtEOL (close directive at end of starting line).            *)
+AppDirective    ::= "{@" DirectiveName Ws+ JsStatements "}" ;
+
+DirectiveName   ::= "body" ;
+
+(* -------------------------------------------------------------------------- *)
+(* 3. Control Flow Blocks ({#if ...} / {#each ...})                           *)
+(* -------------------------------------------------------------------------- *)
+
+(* [Recovery]:                                                                *)
+(*   1. Unclosed header "}" -> RecoverAtEOF; invalid JsExpr -> false.         *)
+(*   2. Missing "{/if}" at EOF or parent close -> InsertMissingClose.         *)
+IfBlock         ::= IfOpen Node* ElseIfBranch* ElseBranch? IfClose ;
+
+IfOpen          ::= "{#if" Ws+ JsExpr "}" ;
+ElseIfBranch    ::= "{:else" Ws+ "if" Ws+ JsExpr "}" Node* ;
+ElseBranch      ::= "{:else}" Node* ;
+IfClose         ::= "{/if}" ;
+
+(* [Recovery]:                                                                *)
+(*   1. Malformed clause or invalid JsExpr -> list = "[]", item = "item".     *)
+(*   2. Missing "{/each}" at EOF or parent close -> InsertMissingClose.       *)
+EachBlock       ::= EachOpen Node* EachClose ;
+
+EachOpen        ::= "{#each" Ws+ JsExpr Ws+ "as" Ws+ LoopPattern "}" ;
+EachClose       ::= "{/each}" ;
+
+LoopPattern     ::= Identifier ( Ws* "," Ws* Identifier )? ;
+
+(* -------------------------------------------------------------------------- *)
+(* 4. DIL Elements & Attributes (TagOpenMode / ElementMode / RawElementMode)  *)
+(* -------------------------------------------------------------------------- *)
+
+(* [Recovery]:                                                                *)
+(*   1. Unterminated opening tag at EOF (no ">" or "/>")                      *)
+(*      -> DropErrorNode (diagnostic: unterminated_tag).                      *)
+(*   2. Missing "</TagName>" at EOF (after ">")                               *)
+(*      -> InsertMissingClose (diagnostic: unclosed_block, closed = false).   *)
+(*   3. Post-parse pruning: if closed == false && tag in ContainerTags        *)
+(*      && renderedChildren is empty -> PruneNode (prevent empty box flash).  *)
+Element         ::= RawTextElement
+                  | NormalElement ;
+
+RawTextElement  ::= "<" RawTagName ( Ws+ Attribute )* Ws*
+                    ( "/>"
+                    | ">" RawElementText "</" RawTagName Ws* ">" ) ;
+
+NormalElement   ::= "<" TagName ( Ws+ Attribute )* Ws*
+                    ( "/>"
+                    | ">" Node* "</" TagName Ws* ">" ) ;
+
+RawTagName      ::= "code" | "pre" | "code-block" ;
+
+TagName         ::= Identifier ( [-.] Identifier )* ;
+
+Attribute       ::= AttrName ( Ws* "=" Ws* AttrValue )? ;
+                    (* Bare AttrName without "=" evaluates to boolean true.   *)
+
+AttrName        ::= [A-Za-z_$] [A-Za-z0-9_$:-]* ;
+
+(* [Lexical Mode]: AttrValue starting with "{" switches to BracedCodeMode,    *)
+(* so ">" inside arrow functions (onChange={v => ...}) does NOT close tag.    *)
+AttrValue       ::= DoubleQuotedString
+                  | SingleQuotedString
+                  | BracedExpr ;
+
+(* -------------------------------------------------------------------------- *)
+(* 5. Interpolation & Balanced JavaScript Spans (BracedCodeMode)              *)
+(* -------------------------------------------------------------------------- *)
+
+(* [Recovery]: Unclosed "}" or invalid JsExpr -> FallbackNull (returns null). *)
+Interpolation   ::= BracedExpr ;
+
+BracedExpr      ::= "{" JsExpr "}" ;
+
+(* Balanced JS scan: tracks nested "{}" while skipping string literals,       *)
+(* template literals (`...${...}...`), regex literals, and comments.          *)
+JsExpr          ::= BalancedJsUnit+ ;
+JsStatements    ::= BalancedJsUnit+ ;
+
+BalancedJsUnit  ::= DoubleQuotedString
+                  | SingleQuotedString
+                  | TemplateLiteral
+                  | RegexLiteral
+                  | LineComment
+                  | BlockComment
+                  | "{" BalancedJsUnit* "}"
+                  | [^{}"'`/] ;
+
+TemplateLiteral ::= "`" ( "\\" AnyChar | "${" BalancedJsUnit* "}" | [^`\\$] )* "`" ;
+
+(* -------------------------------------------------------------------------- *)
+(* 6. Fenced Raw Blocks & Markdown Prose Injection (FencedRawMode / ProseRun) *)
+(* -------------------------------------------------------------------------- *)
+
+(* [Recovery]: Unclosed fence or math block at EOF -> incomplete_source,      *)
+(* keeps raw text up to EOF.                                                  *)
+FencedBlock     ::= CodeFence
+                  | DisplayMathBlock ;
+
+CodeFence       ::= LineStart "```" InfoString? "\n" RawChars ( LineStart "```" | EOF )
+                  | LineStart "~~~" InfoString? "\n" RawChars ( LineStart "~~~" | EOF ) ;
+
+DisplayMathBlock ::= "$$" RawChars ( "$$" | EOF )
+                   | "\\[" RawChars ( "\\]" | EOF ) ;
+
+(* ProseRun is injected into the Markdown Lowering pass (marked.Lexer +       *)
+(* inline parser) to produce: title, text, list, list-item, table, table-row, *)
+(* table-cell, blockquote, divider, bold, italic, code, math, Link.           *)
+ProseRun        ::= ProseAtom+ ;
+
+ProseAtom       ::= InlineCodeSpan
+                  | InlineMathSpan
+                  | PlainTextChar ;
+
+InlineCodeSpan  ::= "`" [^`\n]+ "`" ;
+InlineMathSpan  ::= "$" [^$\n]+ "$"
+                  | "\\(" RawChars "\\)" ;
+
+(* -------------------------------------------------------------------------- *)
+(* 7. Lexical Terminals                                                       *)
+(* -------------------------------------------------------------------------- *)
+
+Identifier         ::= [A-Za-z_$] [A-Za-z0-9_$]* ;
+DoubleQuotedString ::= '"' ( "\\" AnyChar | [^"\\] )* '"' ;
+SingleQuotedString ::= "'" ( "\\" AnyChar | [^'\\] )* "'" ;
+RegexLiteral       ::= "/" ( "\\" AnyChar | "[" [^\]\n]* "]" | [^/\\\n[] )+ "/" [dgimsuvy]* ;
+LineComment        ::= "//" [^\n]* ;
+BlockComment       ::= "/*" ( [^*] | "*"+ [^*/] )* "*"+ "/" ;
+InfoString         ::= [^\n]* ;
+RawElementText     ::= AnyChar* - ( AnyChar* "</" RawTagName Ws* ">" AnyChar* ) ;
+RawChars           ::= AnyChar* ;
+PlainTextChar      ::= AnyChar - ( "{@" | "{#" | "{:" | "{/" | "<" Identifier ) ;
+Ws                 ::= [ \t\r\n]+ ;
+AnyChar            ::= [#x0009-#x10FFFF] ;
