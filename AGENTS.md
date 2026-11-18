@@ -105,6 +105,7 @@ activation again. Recommend continuing activated sessions in Web UI.
 │   │   │   ├── workspace-artifacts.ts # Markdown artifact recovery from tool events/session entries
 │   │   │   ├── tool-summary.ts  # Tool call summary rendering
 │   │   │   ├── constants.ts     # Shared constants
+│   │   │   ├── dil/             # DIL + Markdown parser (grammar, recovery, lowering; node --test)
 │   │   │   └── store/           # Zustand slices + event dispatcher
 │   │   └── components/
 │   │       ├── pi-web-ui/       # Pi Web UI components
@@ -197,9 +198,15 @@ PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
 
 | Layer | What it proves | Command |
 | --- | --- | --- |
-| Check | types, lint, build | `just check`, `npm run build:web` |
+| Check | types, lint, unit tests, build | `just check`, `npm run build:web` |
+| Unit | DIL grammar, streaming recovery, Markdown lowering | `npm run test:dil` |
+| Snapshots | what the parser produced for each `*.dil.md` fixture | `npm run test:dil:update`, then review the diff |
 | E2E | the real Pi Web UI path works | `npm run e2e` |
 | Storyboard | what a scenario looks like | `npm run e2e:storyboard -- e2e/features/x.feature`, then `npm run e2e:preview` |
+
+DIL fixtures live next to the parser (`src/web/src/core/dil/__fixtures__/*.dil.md`); every
+fixture has a committed AST + fallback snapshot in `__snapshots__/`, which is the review
+artifact for parser changes.
 
 E2E drives a real browser through the real product path: `pi --mode rpc` with
 `extensions/mirror-server.ts`, real tools, and a temp git workspace; only the model is

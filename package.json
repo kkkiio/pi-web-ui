@@ -42,7 +42,9 @@
     "prepare": "npm run build:web",
     "prepack": "npm run build:web",
     "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --types node extensions/mirror-server.ts",
-    "e2e:preview": "node e2e/report/serve.mjs e2e/report-out"
+    "e2e:preview": "node e2e/report/serve.mjs e2e/report-out",
+    "test:dil": "node --test \"src/web/src/core/dil/*.test.ts\"",
+    "test:dil:update": "UPDATE_SNAPSHOTS=1 node --test \"src/web/src/core/dil/*.test.ts\""
   },
   "dependencies": {
     "@pierre/diffs": "^1.6.4",
@@ -63,6 +65,7 @@
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@tailwindcss/vite": "^4.3.0",
+    "@types/mdast": "^4.0.4",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
@@ -84,7 +87,9 @@
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
     "shiki": "^4.1.0",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",

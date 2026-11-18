@@ -7,6 +7,7 @@ check:
     npx tsc --noEmit
     npm run check:extension
     npm run check
+    npm run test:dil
 
 build:
     npm run build:web

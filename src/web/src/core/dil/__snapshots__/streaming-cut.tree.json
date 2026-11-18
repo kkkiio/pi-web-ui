@@ -1,0 +1,32 @@
+{
+  "diagnosticSummary": "unterminated_string×1 unterminated_tag×1 unclosed_tag×2",
+  "state": [],
+  "diagnostics": [
+    {
+      "code": "unterminated_string",
+      "line": 6,
+      "column": 16,
+      "action": "recovered_parse",
+      "tag": "text"
+    },
+    {"code": "unterminated_tag", "line": 6, "column": 5, "action": "dropped", "tag": "text"},
+    {"code": "unclosed_tag", "line": 4, "column": 3, "action": "recovered_parse", "tag": "row"},
+    {"code": "unclosed_tag", "line": 3, "column": 1, "action": "recovered_parse", "tag": "box"}
+  ],
+  "tree": [
+    {"tag": "title", "attrs": {"size": "lg"}, "children": ["半截的回答"]},
+    {
+      "tag": "box",
+      "attrs": {"border": true, "radius": "lg"},
+      "closed": false,
+      "children": [
+        {
+          "tag": "row",
+          "attrs": {"gap": {"expr": "2"}},
+          "closed": false,
+          "children": [{"tag": "bold", "children": ["正在流式输出"]}]
+        }
+      ]
+    }
+  ]
+}

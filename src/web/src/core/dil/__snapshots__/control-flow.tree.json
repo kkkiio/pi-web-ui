@@ -1,0 +1,70 @@
+{
+  "diagnosticSummary": "clean",
+  "state": [{"name": "expanded", "setter": "setExpanded", "initial": "false"}],
+  "diagnostics": [],
+  "tree": [
+    {"stmt": "const [expanded,setExpanded] = DIL.useState(false)"},
+    {"stmt": "const steps = [{name:\"解析\",ms:12},{name:\"核验\",ms:7},{name:\"落库\",ms:5}]"},
+    {
+      "tag": "box",
+      "attrs": {"border": true, "radius": "lg", "padding": {"expr": "3"}, "gap": {"expr": "2"}},
+      "children": [
+        {
+          "tag": "list",
+          "attrs": {"marker": "number"},
+          "children": [
+            {
+              "each": {
+                "list": "steps",
+                "pattern": "step, i",
+                "index": "i",
+                "body": [
+                  {
+                    "tag": "list-item",
+                    "children": [
+                      {
+                        "tag": "row",
+                        "attrs": {"justify": "between"},
+                        "children": [
+                          {
+                            "tag": "text",
+                            "children": [{"expr": "i + 1"}, ". ", {"expr": "step.name"}]
+                          },
+                          {
+                            "tag": "text",
+                            "attrs": {"color": "secondary", "tabularNums": true},
+                            "children": [{"expr": "step.ms"}, " ms"]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "if": [
+            {
+              "cond": "expanded",
+              "body": [
+                {"tag": "caption", "children": ["共 ", {"expr": "steps.length"}, " 步，总计 24 ms"]}
+              ]
+            },
+            {
+              "else": true,
+              "body": [
+                {
+                  "tag": "button",
+                  "attrs": {"onClick": {"expr": "() => setExpanded(true)"}},
+                  "children": ["展开明细"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

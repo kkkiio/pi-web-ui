@@ -1,22 +1,34 @@
 (* ========================================================================== *)
 (* OpenAI DIL (Dynamic Interface Language) + Markdown Hybrid Grammar          *)
-(* Dialect: ChatGPT model_dil_v2 (.source.md)                                 *)
+(* Dialect: ChatGPT model_dil_v2 (.source.md / .dil.md)                       *)
 (* Notation: W3C / ISO-style EBNF with streaming recovery annotations         *)
 (* ========================================================================== *)
 
 (* -------------------------------------------------------------------------- *)
-(* 1. Document & Structural Nodes (ProseMode)                                 *)
+(* 1. Document Level vs. Element Interior (Two-Tier Prose Boundary)           *)
 (* -------------------------------------------------------------------------- *)
 
-Document        ::= Node* ;
+(* Top-level document allows full block Markdown (headings, GFM tables,       *)
+(* lists, blockquotes, horizontal rules) alongside DIL constructs.            *)
+(* Indented code blocks (4 spaces) do NOT exist in DIL; code is always fenced *)
+(* (``` / ~~~) or inside <code> / <pre> / <code-block>.                       *)
+Document        ::= DocumentNode* ;
 
-Node            ::= AppDirective
+DocumentNode    ::= AppDirective
                   | IfBlock
                   | EachBlock
                   | Element
-                  | Interpolation
                   | FencedBlock
-                  | ProseRun ;
+                  | BlockProse ;
+
+(* Inside a DIL Element (<box>, <row>, <radio>, <list-item>, etc.), leading   *)
+(* indentation is XML layout formatting, and prose only uses the Inline       *)
+(* Markdown subset (plus blank-line paragraph splits).                        *)
+ElementChild    ::= IfElementBlock
+                  | EachElementBlock
+                  | Element
+                  | FencedBlock
+                  | InlineFlow ;
 
 (* -------------------------------------------------------------------------- *)
 (* 2. App Directives ({@body ...})                                            *)
@@ -38,22 +50,27 @@ DirectiveName   ::= "body" ;
 (* [Recovery]:                                                                *)
 (*   1. Unclosed header "}" -> RecoverAtEOF; invalid JsExpr -> false.         *)
 (*   2. Missing "{/if}" at EOF or parent close -> InsertMissingClose.         *)
-IfBlock         ::= IfOpen Node* ElseIfBranch* ElseBranch? IfClose ;
+IfBlock          ::= IfOpen DocumentNode* ElseIfBranch* ElseBranch? IfClose ;
+ElseIfBranch     ::= "{:else" Ws+ "if" Ws+ JsExpr "}" DocumentNode* ;
+ElseBranch       ::= "{:else}" DocumentNode* ;
 
-IfOpen          ::= "{#if" Ws+ JsExpr "}" ;
-ElseIfBranch    ::= "{:else" Ws+ "if" Ws+ JsExpr "}" Node* ;
-ElseBranch      ::= "{:else}" Node* ;
-IfClose         ::= "{/if}" ;
+IfElementBlock   ::= IfOpen ElementChild* ElseIfElemBranch* ElseElemBranch? IfClose ;
+ElseIfElemBranch ::= "{:else" Ws+ "if" Ws+ JsExpr "}" ElementChild* ;
+ElseElemBranch   ::= "{:else}" ElementChild* ;
+
+IfOpen           ::= "{#if" Ws+ JsExpr "}" ;
+IfClose          ::= "{/if}" ;
 
 (* [Recovery]:                                                                *)
 (*   1. Malformed clause or invalid JsExpr -> list = "[]", item = "item".     *)
 (*   2. Missing "{/each}" at EOF or parent close -> InsertMissingClose.       *)
-EachBlock       ::= EachOpen Node* EachClose ;
+EachBlock        ::= EachOpen DocumentNode* EachClose ;
+EachElementBlock ::= EachOpen ElementChild* EachClose ;
 
-EachOpen        ::= "{#each" Ws+ JsExpr Ws+ "as" Ws+ LoopPattern "}" ;
-EachClose       ::= "{/each}" ;
+EachOpen         ::= "{#each" Ws+ JsExpr Ws+ "as" Ws+ LoopPattern "}" ;
+EachClose        ::= "{/each}" ;
 
-LoopPattern     ::= Identifier ( Ws* "," Ws* Identifier )? ;
+LoopPattern      ::= Identifier ( Ws* "," Ws* Identifier )? ;
 
 (* -------------------------------------------------------------------------- *)
 (* 4. DIL Elements & Attributes (TagOpenMode / ElementMode / RawElementMode)  *)
@@ -75,7 +92,7 @@ RawTextElement  ::= "<" RawTagName ( Ws+ Attribute )* Ws*
 
 NormalElement   ::= "<" TagName ( Ws+ Attribute )* Ws*
                     ( "/>"
-                    | ">" Node* "</" TagName Ws* ">" ) ;
+                    | ">" ElementChild* "</" TagName Ws* ">" ) ;
 
 RawTagName      ::= "code" | "pre" | "code-block" ;
 
@@ -118,35 +135,78 @@ BalancedJsUnit  ::= DoubleQuotedString
 TemplateLiteral ::= "`" ( "\\" AnyChar | "${" BalancedJsUnit* "}" | [^`\\$] )* "`" ;
 
 (* -------------------------------------------------------------------------- *)
-(* 6. Fenced Raw Blocks & Markdown Prose Injection (FencedRawMode / ProseRun) *)
+(* 6. Fenced Raw Blocks (FencedRawMode)                                       *)
 (* -------------------------------------------------------------------------- *)
 
 (* [Recovery]: Unclosed fence or math block at EOF -> incomplete_source,      *)
 (* keeps raw text up to EOF.                                                  *)
-FencedBlock     ::= CodeFence
-                  | DisplayMathBlock ;
+FencedBlock      ::= CodeFence
+                   | DisplayMathBlock ;
 
-CodeFence       ::= LineStart "```" InfoString? "\n" RawChars ( LineStart "```" | EOF )
-                  | LineStart "~~~" InfoString? "\n" RawChars ( LineStart "~~~" | EOF ) ;
+CodeFence        ::= LineStart "```" InfoString? "\n" RawChars ( LineStart "```" | EOF )
+                   | LineStart "~~~" InfoString? "\n" RawChars ( LineStart "~~~" | EOF ) ;
 
 DisplayMathBlock ::= "$$" RawChars ( "$$" | EOF )
                    | "\\[" RawChars ( "\\]" | EOF ) ;
 
-(* ProseRun is injected into the Markdown Lowering pass (marked.Lexer +       *)
-(* inline parser) to produce: title, text, list, list-item, table, table-row, *)
-(* table-cell, blockquote, divider, bold, italic, code, math, Link.           *)
-ProseRun        ::= ProseAtom+ ;
+(* -------------------------------------------------------------------------- *)
+(* 7. Two-Tier Markdown Grammar: BlockProse vs. InlineFlow                    *)
+(* -------------------------------------------------------------------------- *)
 
-ProseAtom       ::= InlineCodeSpan
-                  | InlineMathSpan
+(* 7.1 Top-Level BlockProse (Document Level Only):                            *)
+(* Supports block constructs. 4-space indented code blocks are DISABLED       *)
+(* because indentation in DIL is strictly layout whitespace.                  *)
+BlockProse      ::= ( HeadingBlock
+                    | HorizontalRule
+                    | ListBlock
+                    | TableBlock
+                    | BlockquoteBlock
+                    | ParagraphBlock )+ ;
+
+HeadingBlock    ::= LineStart "#"{1,6} [ \t]+ InlineRun "\n" ;
+HorizontalRule  ::= LineStart ( "---" "-"?* | "***" "*"?* | "___" "_"?* ) [ \t]* "\n" ;
+ListBlock       ::= ( BulletListItem | OrderedListItem )+ ;
+BulletListItem  ::= LineStart [ \t]* [-*+] [ \t]+ InlineRun "\n" ;
+OrderedListItem ::= LineStart [ \t]* [0-9]+ [.)] [ \t]+ InlineRun "\n" ;
+TableBlock      ::= TableHeaderRow TableDelimiterRow TableBodyRow* ;
+BlockquoteBlock ::= ( LineStart [ \t]* ">" [ \t]? InlineRun "\n" )+ ;
+ParagraphBlock  ::= InlineRun ( BlankLine | EOF ) ;
+
+(* 7.2 Element-Interior InlineFlow (Inside <box>, <row>, <radio>, etc.):      *)
+(* NO block headings, NO markdown lists, NO markdown tables, NO indented      *)
+(* code blocks. Leading line indentation is ignored as XML formatting.        *)
+(* Single paragraph stays unwrapped (inline); multiple paragraphs separated   *)
+(* by BlankLine (\n\n) each wrap in <text>.                                   *)
+InlineFlow      ::= InlineRun ( BlankLine+ InlineRun )* ;
+
+(* 7.3 Unified InlineRun (Shared by ParagraphBlock and InlineFlow):           *)
+(* Inline Markdown constructs, {expr} interpolations, and inline DIL tags     *)
+(* (<icon>, <badge>, <Link>, <math>, <code>, <bold>, <italic>) stay inside    *)
+(* the SAME InlineRun so spaces around "$E=mc^2$" or "{n}" are never lost.    *)
+InlineRun       ::= InlineAtom+ ;
+
+InlineAtom      ::= InlineCodeSpan              (* -> <code>                  *)
+                  | InlineMathSpan              (* -> <math value="..."/>     *)
+                  | BoldSpan                    (* -> <bold>                  *)
+                  | ItalicSpan                  (* -> <italic>                *)
+                  | StrikeSpan                  (* -> <text lineThrough>      *)
+                  | InlineLink                  (* -> <Link url="..." title>  *)
+                  | Interpolation               (* -> {expr} in same flow     *)
+                  | InlineDilElement            (* <icon/>, <badge>, <Link/>  *)
                   | PlainTextChar ;
 
 InlineCodeSpan  ::= "`" [^`\n]+ "`" ;
-InlineMathSpan  ::= "$" [^$\n]+ "$"
+InlineMathSpan  ::= "$" [^$\s] ( [^$\n]* [^$\s] )? "$"
                   | "\\(" RawChars "\\)" ;
+BoldSpan        ::= "**" InlineAtom+ "**" ;
+ItalicSpan      ::= "*" [^*\n]+ "*" ;
+StrikeSpan      ::= "~~" InlineAtom+ "~~" ;
+InlineLink      ::= "[" InlineAtom* "](" [^)\s]+ ")" ;
+InlineDilElement ::= "<" ( "bold" | "italic" | "code" | "math" | "Link" | "icon" | "badge" )
+                     ( Ws+ Attribute )* Ws* ( "/>" | ">" InlineAtom* "</" Identifier Ws* ">" ) ;
 
 (* -------------------------------------------------------------------------- *)
-(* 7. Lexical Terminals                                                       *)
+(* 8. Lexical Terminals                                                       *)
 (* -------------------------------------------------------------------------- *)
 
 Identifier         ::= [A-Za-z_$] [A-Za-z0-9_$]* ;
@@ -159,5 +219,7 @@ InfoString         ::= [^\n]* ;
 RawElementText     ::= AnyChar* - ( AnyChar* "</" RawTagName Ws* ">" AnyChar* ) ;
 RawChars           ::= AnyChar* ;
 PlainTextChar      ::= AnyChar - ( "{@" | "{#" | "{:" | "{/" | "<" Identifier ) ;
+BlankLine          ::= "\n" [ \t]* "\n" ;
+LineStart          ::= "^" | "\n" ;
 Ws                 ::= [ \t\r\n]+ ;
 AnyChar            ::= [#x0009-#x10FFFF] ;

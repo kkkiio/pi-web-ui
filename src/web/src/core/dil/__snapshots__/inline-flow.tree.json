@@ -1,0 +1,46 @@
+{
+  "diagnosticSummary": "clean",
+  "state": [],
+  "diagnostics": [],
+  "tree": [
+    {
+      "tag": "box",
+      "attrs": {"border": true, "radius": "lg", "padding": {"expr": "3"}, "gap": {"expr": "2"}},
+      "children": [
+        {
+          "tag": "text",
+          "children": [
+            {"tag": "bold", "children": ["结论："]},
+            "先把 ",
+            {"tag": "code", "children": ["max_connections"]},
+            " 调回默认值，再观察 ",
+            {"tag": "bold", "children": ["2 个采样窗口"]},
+            "。"
+          ]
+        },
+        {
+          "tag": "text",
+          "children": [
+            "公式 ",
+            {"tag": "math", "attrs": {"value": "Q = \\lambda W"}},
+            " 说明排队长度只与到达率和停留时间有关。"
+          ]
+        },
+        {
+          "tag": "text",
+          "children": [
+            "详见 ",
+            {
+              "tag": "Link",
+              "attrs": {"url": "https://www.postgresql.org/docs", "title": "连接与并发"},
+              "children": ["Postgres 文档"]
+            },
+            "，以及 ",
+            {"tag": "text", "attrs": {"lineThrough": true}, "children": ["旧版调参笔记"]},
+            "。"
+          ]
+        }
+      ]
+    }
+  ]
+}

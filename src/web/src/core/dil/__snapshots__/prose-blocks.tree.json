@@ -1,0 +1,71 @@
+{
+  "diagnosticSummary": "clean",
+  "state": [],
+  "diagnostics": [],
+  "tree": [
+    {"tag": "title", "attrs": {"size": "lg"}, "children": ["怎么读这组数据"]},
+    {"tag": "text", "children": ["三层的口径不同，", {"tag": "bold", "children": ["不要混用"]}, "："]},
+    {
+      "tag": "table",
+      "children": [
+        {
+          "tag": "table-row",
+          "children": [
+            {"tag": "table-cell", "attrs": {"header": true}, "children": ["指标"]},
+            {"tag": "table-cell", "attrs": {"header": true}, "children": ["口径"]},
+            {"tag": "table-cell", "attrs": {"header": true}, "children": ["用途"]}
+          ]
+        },
+        {
+          "tag": "table-row",
+          "children": [
+            {"tag": "table-cell", "children": ["QPS"]},
+            {"tag": "table-cell", "children": ["网关"]},
+            {"tag": "table-cell", "children": ["容量规划"]}
+          ]
+        },
+        {
+          "tag": "table-row",
+          "children": [
+            {"tag": "table-cell", "children": ["P99"]},
+            {"tag": "table-cell", "children": ["端到端"]},
+            {"tag": "table-cell", "children": ["体验验收"]}
+          ]
+        }
+      ]
+    },
+    {"tag": "blockquote", "children": [{"tag": "text", "children": ["采样窗口是 5 分钟，短于一次发布的观察期。"]}]},
+    {
+      "tag": "list",
+      "attrs": {"marker": "number"},
+      "children": [
+        {"tag": "list-item", "children": [{"tag": "text", "children": ["先看 P99 有没有回归"]}]},
+        {"tag": "list-item", "children": [{"tag": "text", "children": ["再看 QPS 是否被限流"]}]}
+      ]
+    },
+    {"tag": "text", "children": ["排队长度只取决于到达率与停留时间："]},
+    {"tag": "math", "attrs": {"value": "Q = \\lambda W", "block": true}},
+    {
+      "tag": "code-block",
+      "attrs": {"language": "bash"},
+      "children": ["hey -z 30s -c 50 https://example.com/api"]
+    },
+    {"tag": "divider"},
+    {
+      "tag": "text",
+      "children": [{"tag": "italic", "children": ["采样窗口"]}, "短于一次发布的观察期，所以这组数字只对当前版本成立。"]
+    },
+    {
+      "tag": "text",
+      "children": [
+        "压测脚本见 ",
+        {
+          "tag": "Link",
+          "attrs": {"url": "https://example.com/bench", "title": "压测脚本"},
+          "children": ["示例仓库"]
+        },
+        "。"
+      ]
+    }
+  ]
+}

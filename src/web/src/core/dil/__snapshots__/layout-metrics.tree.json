@@ -1,0 +1,96 @@
+{
+  "diagnosticSummary": "clean",
+  "state": [{"name": "window", "setter": "setWindow", "initial": "\"5m\""}],
+  "diagnostics": [],
+  "tree": [
+    {"stmt": "const [window,setWindow] = DIL.useState(\"5m\")"},
+    {
+      "tag": "box",
+      "attrs": {"border": true, "radius": "lg", "padding": {"expr": "3"}, "gap": {"expr": "3"}},
+      "children": [
+        {
+          "tag": "row",
+          "attrs": {"align": "center", "justify": "between"},
+          "children": [
+            {"tag": "text", "attrs": {"weight": "medium"}, "children": ["本周实验"]},
+            {"tag": "badge", "attrs": {"color": "success"}, "children": ["进行中"]}
+          ]
+        },
+        {
+          "tag": "grid",
+          "attrs": {"columns": {"expr": "3"}, "gap": {"expr": "2"}},
+          "children": [
+            {
+              "tag": "grid-item",
+              "children": [
+                {
+                  "tag": "box",
+                  "attrs": {
+                    "background": "surface-secondary",
+                    "padding": {"expr": "2"},
+                    "gap": {"expr": "1"}
+                  },
+                  "children": [
+                    {"tag": "caption", "children": ["曝光"]},
+                    {"tag": "title", "attrs": {"size": "lg"}, "children": [{"expr": "exposure"}]}
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "grid-item",
+              "children": [
+                {
+                  "tag": "box",
+                  "attrs": {
+                    "background": "surface-secondary",
+                    "padding": {"expr": "2"},
+                    "gap": {"expr": "1"}
+                  },
+                  "children": [
+                    {"tag": "caption", "children": ["点击率"]},
+                    {"tag": "title", "attrs": {"size": "lg"}, "children": [{"expr": "ctr"}, "%"]}
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "grid-item",
+              "children": [
+                {
+                  "tag": "box",
+                  "attrs": {
+                    "background": "surface-secondary",
+                    "padding": {"expr": "2"},
+                    "gap": {"expr": "1"}
+                  },
+                  "children": [
+                    {"tag": "caption", "children": ["样本"]},
+                    {"tag": "title", "attrs": {"size": "lg"}, "children": [{"expr": "samples"}]}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "row",
+          "attrs": {"align": "center", "gap": {"expr": "2"}},
+          "children": [
+            {"tag": "icon", "attrs": {"name": "clock", "color": "tertiary"}},
+            {
+              "tag": "text",
+              "attrs": {"size": "xs", "color": "secondary"},
+              "children": ["统计窗口 ", {"expr": "window"}]
+            },
+            {
+              "tag": "button",
+              "attrs": {"onClick": {"expr": "() => setWindow(window === \"5m\" ? \"1h\" : \"5m\")"}},
+              "children": ["切换"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
