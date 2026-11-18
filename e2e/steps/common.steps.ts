@@ -31,6 +31,10 @@ Given("Pi replies with a DIL diagram", () => {
   world.fixture = "dil-svg";
 });
 
+Given("Pi replies with a continued ordered list", () => {
+  world.fixture = "dil-list";
+});
+
 Given("Pi updates the workspace status document", () => {
   world.fixture = "workspace-artifact";
 });
@@ -107,6 +111,12 @@ Then("each diagram keeps its own marker namespace", async ({ page }) => {
   // Two messages, two `<marker id="arrow">`: without a per-message prefix the second
   // reference would resolve to the first diagram's marker.
   expect(new Set(ids).size).toBe(ids.length);
+});
+
+Then("the ordered list continues at 5", async ({ page }) => {
+  const list = page.getByRole("log").locator(".dil-root ol").first();
+  await expect(list).toHaveAttribute("start", "5");
+  await expect(list.locator("li")).toHaveCount(2);
 });
 
 Then("the transcript does not show raw DIL tags", async ({ page }) => {

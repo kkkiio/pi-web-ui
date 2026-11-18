@@ -147,7 +147,11 @@ function lowerDocumentProse(nodes: DilNode[], sourceLength?: number): DilNode[] 
       // Feed the whole run to the Markdown lexer: blank lines are *its* block separator.
       // Splitting here makes a loose list (`1. a\n\n2. b`) two lists, both starting at 1,
       // and moves a list item's continuation paragraph out of the item.
-      if (/\S/.test(node.value)) run.push(node);
+      //
+      // Whitespace-only nodes are kept too: `<bold>Hello</bold> <italic>world</italic>`
+      // carries its space in one, and dropping it renders `Helloworld`. A run that is
+      // *only* whitespace is dropped in `flushRun`.
+      run.push(node);
       continue;
     }
     flushRun();

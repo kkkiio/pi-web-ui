@@ -24,13 +24,17 @@ interface FallbackProps {
 }
 
 export function FallbackList({ props, children }: FallbackProps) {
-  const ordered = props?.marker === "number";
-  const List = ordered ? "ol" : "ul";
-  return (
-    <List className={cn("my-1 space-y-1 pl-5", ordered ? "list-decimal" : "list-disc", "marker:text-muted-foreground")}>
-      {children}
-    </List>
-  );
+  const className = cn("my-1 space-y-1 pl-5", "marker:text-muted-foreground");
+  if (props?.marker === "number") {
+    // `5. Deploy` continues the list it belongs to; dropping `start` renumbers it to 1.
+    const start = typeof props.start === "number" ? props.start : Number.parseInt(String(props.start ?? ""), 10);
+    return (
+      <ol start={Number.isFinite(start) && start > 1 ? start : undefined} className={cn(className, "list-decimal")}>
+        {children}
+      </ol>
+    );
+  }
+  return <ul className={cn(className, "list-disc")}>{children}</ul>;
 }
 
 export function FallbackListItem({ children }: FallbackProps) {

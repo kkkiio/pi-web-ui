@@ -3,6 +3,19 @@ import test from "node:test";
 import { lowerInline, parseDocument } from "./index.ts";
 import type { DilElementNode, DilNode } from "./types.ts";
 
+test("inline neighbours keep the whitespace between them", () => {
+  // `<bold>Hello</bold> <italic>world</italic>` is one paragraph with a space node in the
+  // middle; dropping whitespace-only nodes renders `Helloworld`.
+  const text = only(tree("<bold>Hello</bold> <italic>world</italic>"), "text");
+  const rendered = text.children
+    .map((child) => (child.type === "text" ? child.value : child.type === "element" ? child.name : child.type))
+    .join("|");
+  assert.equal(rendered, "bold| |italic");
+
+  const interpolation = tree("{1} {2}");
+  assert.ok(JSON.stringify(interpolation).includes('" "'), "the space between two values survives");
+});
+
 test("a loose list stays one list (Markdown owns blank lines)", () => {
   const lists = only(tree("1. first\n\n2. second"), "list");
   const items = lists.children.filter((child) => child.type === "element" && child.name === "list-item");
