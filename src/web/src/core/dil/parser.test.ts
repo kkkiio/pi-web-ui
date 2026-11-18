@@ -29,6 +29,28 @@ function expression(element: DilElementNode, name: string): string {
   return String(attribute.value);
 }
 
+test("Markdown escapes keep braces and tags as prose", () => {
+  // `\{` is a literal brace: it must not open an interpolation that then vanishes.
+  const escaped = parseDocument("The set is \\{a, b\\}. Use \\<box\\> to group.");
+  assert.equal(escaped.diagnosticSummary, "clean");
+  const text = JSON.stringify(escaped.tree);
+  assert.ok(text.includes("{a, b}"), "escaped braces survive lowering");
+  assert.ok(text.includes("<box>"), "escaped tag opener stays prose");
+  assert.equal(
+    escaped.raw.some((node) => node.type === "expr"),
+    false,
+    "no interpolation node",
+  );
+
+  // An escaped backslash keeps the escape: the brace is a real interpolation again.
+  const sharp = parseDocument("路径 C:\\\\ 与 {1 + 1}");
+  assert.equal(sharp.diagnosticSummary, "clean");
+  assert.ok(
+    sharp.raw.some((node) => node.type === "expr" && node.code === "1 + 1"),
+    "a brace after an escaped backslash is still an interpolation",
+  );
+});
+
 test("parses prose mixed with elements, attributes and interpolations", () => {
   const result = parse('前文 **粗体**。\n\n<box padding={3} gap="2" border>\n  <text>{n} 次</text>\n</box>');
   assert.equal(result.diagnosticSummary, "clean");

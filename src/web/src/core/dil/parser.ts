@@ -154,7 +154,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
 
     // 3. Inline math (`$…$`, `\(…\)`) is a DIL node, not prose: the Markdown lexer
     //    would otherwise eat `\(` as an escape and mistake currency for LaTeX.
-    if (c === "$" || (c === "\\" && next === "(")) {
+    if ((c === "$" || (c === "\\" && next === "(")) && !isEscaped(src, ctx.i)) {
       const math = readInlineMathSpan(src, ctx.i);
       if (math) {
         flush(ctx.i);
@@ -166,7 +166,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 4. Closing element tag.
-    if (c === "<" && next === "/") {
+    if (c === "<" && next === "/" && !isEscaped(src, ctx.i)) {
       const closing = readClosingTag(src, ctx.i);
       if (closing) {
         flush(ctx.i);
@@ -193,7 +193,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 5. Block terminators: `{:else}`, `{:else if x}`, `{/if}`, `{/each}`.
-    if (c === "{" && (next === ":" || next === "/")) {
+    if (c === "{" && (next === ":" || next === "/") && !isEscaped(src, ctx.i)) {
       const terminator = readTerminator(ctx);
       if (terminator) {
         flush(ctx.i);
@@ -209,7 +209,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 6. `{@body …}` declarations.
-    if (c === "{" && next === "@") {
+    if (c === "{" && next === "@" && !isEscaped(src, ctx.i)) {
       flush(ctx.i);
       const statement = readAppDirective(ctx);
       if (statement) nodes.push(statement);
@@ -217,7 +217,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 7. Control flow blocks.
-    if (c === "{" && next === "#") {
+    if (c === "{" && next === "#" && !isEscaped(src, ctx.i)) {
       flush(ctx.i);
       const block = readBlock(ctx, closeTag);
       if (block.node) nodes.push(block.node);
@@ -226,7 +226,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 8. DIL elements. A `<` that cannot start a tag (`a < b`, `<https://…>`) is prose.
-    if (c === "<" && isTagStart(src, ctx.i)) {
+    if (c === "<" && !isEscaped(src, ctx.i) && isTagStart(src, ctx.i)) {
       flush(ctx.i);
       const element = readElement(ctx);
       if (element.node) nodes.push(element.node);
@@ -234,8 +234,8 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
       continue;
     }
 
-    // 9. `{expression}` interpolation.
-    if (c === "{") {
+    // 9. `{expression}` interpolation. An escaped brace stays prose.
+    if (c === "{" && !isEscaped(src, ctx.i)) {
       flush(ctx.i);
       const pos = ctx.i;
       const braced = readBalanced(src, pos);
@@ -269,6 +269,17 @@ function execAt(pattern: RegExp, src: string, index: number): RegExpExecArray | 
 function matchAt(pattern: RegExp, src: string, index: number): string | null {
   const match = execAt(pattern, src, index);
   return match ? match[0] : null;
+}
+
+/**
+ * `\{` and `\<` are Markdown escapes: the character is prose, not a DIL construct. An odd
+ * number of preceding backslashes escapes; `\\{x}` is a literal backslash plus a real
+ * interpolation. Escaped text is left as written so Markdown lowering decodes it.
+ */
+function isEscaped(src: string, index: number): boolean {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && src[i] === "\\"; i--) backslashes++;
+  return backslashes % 2 === 1;
 }
 
 function skipWhitespace(src: string, index: number): number {
