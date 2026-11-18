@@ -1,6 +1,10 @@
 /**
  * DIL eval cases — "can the model write a UI, not just prose?"
  *
+ * Prompts are user asks, not format orders: no "draw a diagram", no "use a grid".
+ * If a prompt asked for the layout, the score would measure instruction-following of
+ * our own hint instead of whether the DIL system section makes the model reach for one.
+ *
  * Four positive prompts, each a real coding-agent pain point where prose Markdown is
  * the wrong shape, plus one negative control that must stay plain Markdown. They follow
  * the benchmark design in `docs/` (category, typical prompt, hoped-for DIL shape, why
@@ -39,8 +43,7 @@ export const DIL_CASES: readonly DilCase[] = [
   {
     id: "flow",
     category: "架构分层与因果流",
-    prompt:
-      "解释 pi-web-ui 中从浏览器点击发送按钮到 mirror-server.ts 再到 Pi 进程的事件流转与返回路径。用图的形式让我一眼看出跨了哪些进程边界。",
+    prompt: "解释 pi-web-ui 中从浏览器点击发送按钮到 mirror-server.ts 再到 Pi 进程的事件流转与返回路径。",
     why: "纯文字列表看不出谁包着谁、哪一步跨了进程边界。",
     checks: [
       hasTag("box", { atLeast: 2, label: "进程边界用 <box> 分组" }),
