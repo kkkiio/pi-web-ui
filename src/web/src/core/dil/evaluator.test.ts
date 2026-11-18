@@ -20,6 +20,16 @@ function fallback(source: string, scope: Record<string, unknown> = {}): unknown 
   return safeEvaluate(source, scope, "<failed>");
 }
 
+test("grouping parentheses are part of the expression", () => {
+  assert.equal(value("(1 + 2)"), 3);
+  assert.equal(value("(((7)))"), 7);
+  assert.equal(value("(n) * 2", { n: 4 }), 8);
+  assert.equal(evaluateCondition("(true)", {}), true);
+  // Trailing input is still a syntax error, not a silently truncated expression.
+  assert.equal(fallback("(1) 2"), "<failed>");
+  assert.equal(fallback("1) + 2"), "<failed>");
+});
+
 test("literals, arithmetic and precedence", () => {
   assert.equal(value("42"), 42);
   assert.equal(value("2 + 3 * 4"), 14);

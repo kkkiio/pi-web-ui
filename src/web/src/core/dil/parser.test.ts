@@ -29,6 +29,15 @@ function expression(element: DilElementNode, name: string): string {
   return String(attribute.value);
 }
 
+test("an out-of-range code point escape does not throw", () => {
+  const doc = parseDocument('<box title="\\u{FFFFFF}">ok</box>');
+  assert.equal(doc.diagnosticSummary, "clean");
+  const box = only(doc.raw, "box");
+  const title = box.attrs.find((attribute) => attribute.name === "title");
+  assert.ok(title);
+  assert.ok(String(title.value).includes("FFFFFF"), "invalid escape stays visible");
+});
+
 test("email autolinks are prose, not elements", () => {
   const doc = parseDocument("Contact <dev@example.com> for help.");
   assert.equal(doc.diagnosticSummary, "clean");

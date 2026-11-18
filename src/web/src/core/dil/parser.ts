@@ -764,7 +764,13 @@ function decodeString(raw: string): string {
     else if (escaped === "u") {
       const braced = /^\{([0-9a-fA-F]{1,6})\}/.exec(raw.slice(i + 1));
       if (braced) {
-        out += String.fromCodePoint(Number.parseInt(braced[1], 16));
+        const codePoint = Number.parseInt(braced[1], 16);
+        // `String.fromCodePoint` throws above U+10FFFF; keep the escape visible instead.
+        if (codePoint <= 0x10ffff) {
+          out += String.fromCodePoint(codePoint);
+        } else {
+          out += `\\u${braced[0]}`;
+        }
         i += braced[0].length;
         continue;
       }

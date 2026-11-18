@@ -127,7 +127,7 @@ export function evaluateStatements(statements: readonly string[], seed: DilScope
 }
 
 // ---------------------------------------------------------------------------
-// Parsing — acorn, with the tail checked so trailing junk is a failure
+// Parsing — acorn, wrapped in parentheses so grouping is legal and trailing input is not
 // ---------------------------------------------------------------------------
 
 const EXPRESSION_CACHE = new Map<string, Expression | DilEvaluationError>();
@@ -141,9 +141,14 @@ function parseExpression(source: string): Expression {
 
   let parsed: Expression | DilEvaluationError;
   try {
-    const expression = parseExpressionAt(source, 0, ACORN_OPTIONS);
-    if (source.slice(expression.end).trim() !== "") throw new DilEvaluationError("trailing input");
-    parsed = expression;
+    // Wrapping means `(1 + 2)` is a complete expression (acorn's `end` stops before the
+    // closing paren) while `1) 2` or `1 2` stay syntax errors.
+    const program = parse(`(${source})`, ACORN_OPTIONS);
+    const statement = program.body[0];
+    if (program.body.length !== 1 || statement.type !== "ExpressionStatement") {
+      throw new DilEvaluationError("not a single expression");
+    }
+    parsed = statement.expression;
   } catch (error) {
     parsed = error instanceof DilEvaluationError ? error : new DilEvaluationError(String(error));
   }
