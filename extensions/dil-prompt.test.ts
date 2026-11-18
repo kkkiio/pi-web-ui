@@ -133,6 +133,16 @@ test("the prompt embeds every example and names every tag they use", () => {
   }
 });
 
+test("shape comes before the reference tables", () => {
+  // The examples are what the model imitates; the tag and value lists only resolve doubts
+  // about spelling. Putting the tables first buries the shape under a vocabulary dump.
+  const reference = DIL_SYSTEM_PROMPT.indexOf("Reference —");
+  assert.ok(reference > 0, "the prompt needs a reference section");
+  for (const [name, source] of Object.entries(DIL_PROMPT_EXAMPLES)) {
+    assert.ok(DIL_SYSTEM_PROMPT.indexOf(source) < reference, `${name} example must come before the reference tables`);
+  }
+});
+
 test("the prompt stays small enough to sit in every turn", () => {
   // The section is diffed into the system prompt once per activation; it must not grow
   // into a manual. 4000 characters is roughly 1k tokens.

@@ -5,8 +5,8 @@
  * is injected as a `<dil>` section through `before_agent_start` (see `dil-prompt.ts`), so
  * Pi diffs it into one mid-conversation system patch instead of rewriting the prompt head.
  *
- * Shape is taught by example (`dil-prompt-examples.ts`, parsed by a test); the tag and
- * attribute lines stay because a closed vocabulary cannot be inferred from two examples —
+ * Shape is taught by the examples first (parsed by a test), and the tag and attribute
+ * tables follow as reference; they stay because a closed vocabulary cannot be inferred —
  * models otherwise invent `size="small"` or `color="muted"`, which the token map drops
  * silently. Only tags the renderer implements are listed (#46 vocabulary); `#49`/`#47`/`#48`
  * primitives are deliberately absent so the model is not told to emit markup that still
@@ -74,7 +74,16 @@ export const DIL_SYSTEM_PROMPT = `Pi Web UI supports DIL (Dynamic Interface Lang
 
 Keep paragraphs, lists, tables and fenced code in Markdown. Put spatial structure in DIL, output it directly (no code fence), and close every tag.
 
-Tags:
+${DIL_EXAMPLE_PROPORTIONS}
+
+${DIL_EXAMPLE_CONTAINMENT}
+
+${DIL_EXAMPLE_SVG}
+
+That is the whole idea: a container for what groups, a repeated block for what varies, and an expression wherever a number depends on the data.
+
+Reference — every tag and value the Web UI renders:
+
 - Layout: <box> (group or card), <row>, <col>, <grid columns={n}>, <grid-item>, <divider/>
 - Text: <title>, <text>, <caption>, <badge>, <bold>, <italic>, <code>
 - Icons: <icon name="arrow-down" size="sm"/> — lucide names such as arrow-down, check-circle, file-text
@@ -83,15 +92,8 @@ Tags:
 - Expressions: literals, arithmetic and comparison, ternary, template strings, member/index access with optional chaining, .map/.filter/.slice/.join/.includes/.toFixed/.toLocaleString, and the Math/Number/String/Array allowlist.
 
 Attributes:
+
 - Spacing: gap={2}, padding={3} or padding={{x: 2, y: 1}} (1 unit = 4px)
 - Surface: background="surface|surface-secondary|surface-tertiary|card|muted|accent|success|warning|danger|info", radius="sm|md|lg|xl|full", border, border={{size: 1, color: "success"}}
 - Text: size="2xs|xs|sm|md|lg|xl|2xl", weight="medium|semibold|bold", color="secondary|success|warning|danger", textAlign, tabularNums
-- Sizing: width, height, flex. Alignment: align="center|start|baseline", justify="between|center"
-
-Three shapes:
-
-${DIL_EXAMPLE_PROPORTIONS}
-
-${DIL_EXAMPLE_CONTAINMENT}
-
-${DIL_EXAMPLE_SVG}`;
+- Sizing: width, height, flex. Alignment: align="center|start|baseline", justify="between|center"`;
