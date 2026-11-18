@@ -84,6 +84,7 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 | `scanner.ts` | Balanced `{}`/`()` scanning that skips strings, templates, regex and comments; top-level splits; inline code/math spans (shared with the parser) |
 | `parser.ts` | Recursive descent over `dil.ebnf`: elements, attributes, `{#if}`/`{#each}`, `{@body}`, `{expr}`, fenced blocks, raw text elements |
 | `markdown.ts` | Prose injection layers: `BlockProse` (GFM via `unified`/`remark`) and `InlineFlow` (blank-line runs) → DIL elements |
+| `stream-repair.ts` | Streaming tail repair: closes an unclosed `**`/`*`/`~~`/`` ` `` and drops a half-received link target before the prose is lexed |
 | `inline.ts` | `InlineRun` — the element-interior inline subset (`**bold**`, `*italic*`, `~~strike~~`, code, math, links, autolinks) |
 | `entities.ts` | Shared character-reference decoding (prose once, raw text at parse time) |
 | `prune.ts` | Streaming pass: unclosed empty containers are not rendered (anti-flash) |
@@ -109,7 +110,9 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
    lineThrough`, task lists → `☑`/`☐`. Element-interior `InlineFlow` uses `inline.ts`
    only. Fences reach the same vocabulary as `code-block`/`math`. Inline math is the
    exception: `$…$` and `\(…\)` become `<math>` in `parser.ts`, because micromark would
-   read `\(` as an escape and `$20 … $` as LaTeX.
+   read `\(` as an escape and `$20 … $` as LaTeX. Two micromark constructs are off:
+   `codeIndented` (indentation is layout) and `setextUnderline` (a lone `-` or `=` under a
+   streamed paragraph is a list item or an underline starting, not an H2).
 5. **Control flow and state declarations.** `{#if}` / `{:else if}` / `{:else}`,
    `{#each xs as x, i}`, `{@body …}` — parsed, but not evaluated here.
 
@@ -133,6 +136,26 @@ failure is recorded as a `DilDiagnostic` and parsing continues with a best-effor
 `pruneEmptyIncomplete` then removes unclosed **empty** containers (`box`, `row`, `grid`,
 `list-item`, `table-cell`, …) — the frame that would otherwise flash as an empty box
 while tokens stream in.
+
+### Stream repair
+
+A prefix is not only structurally incomplete, it is also *lexically* incomplete: `**LLM
+Encoder` is not an error, it is two literal asterisks, so a streaming answer flashes `**`
+for a few frames. ChatGPT's transcripts (`data/streams`, Frame 29 `**LLM Encoder…`, Frame
+126 `    **CL`) compile that tail to `<bold>` immediately; `stream-repair.ts` does the
+same before the prose reaches the lexer, for the one fragment that still owns the end of
+the source (`pos + length === source.length`):
+
+| tail | repaired to | because |
+| --- | --- | --- |
+| `**LLM Encoder` | `**LLM Encoder**` | an opener that hugs a non-space character is emphasis, not punctuation |
+| `` `192.168.1.1 `` | `` `192.168.1.1` `` | one backtick run; a run of three or more is a fence and is left to `parser.ts` |
+| `~~删` | `~~删~~` | same rule, `lineThrough` |
+| `[文档](https://exa` | `文档` | a half-received target would render as `(https://…`; the label is what a reader keeps |
+| `a * b`, `20~25` | unchanged | not an opener: a space follows, so it is a multiplication sign |
+| earlier paragraphs | unchanged | only the tail is active; a finished paragraph keeps its bytes |
+
+Both prose tiers share the implementation, so `<box>**CL` and `**CL` lower the same way.
 
 ### Tests & snapshots
 

@@ -95,7 +95,7 @@ class Diagnostics {
 }
 
 /** CRLF → LF and a leading BOM removed, so offsets and `LineIndex` agree everywhere. */
-function normalizeSource(source: string): string {
+export function normalizeSource(source: string): string {
   const withoutBom = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
   return withoutBom.includes("\r") ? withoutBom.replace(/\r\n?/g, "\n") : withoutBom;
 }

@@ -36,18 +36,26 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { isInlineTag, parseInline } from "./inline.ts";
+import { repairStreamTail } from "./stream-repair.ts";
 import type { DilAttribute, DilElementNode, DilFenceNode, DilNode } from "./types.ts";
 
 const HEADING_SIZE: Record<number, string> = { 1: "xl", 2: "lg", 3: "md", 4: "md", 5: "md", 6: "md" };
 
 /**
  * One processor for the whole session: building it per prose run is the expensive part.
- * `codeIndented` is off — in DIL a four-space line is indentation, never a code block.
+ *
+ * Two constructs are off:
+ *
+ *   `codeIndented`  in DIL a four-space line is indentation, never a code block.
+ *   `setextUnderline`
+ *                   (`remark`'s setext heading) a streamed paragraph becomes a heading
+ *                   the moment a lone `-` or `=` lands on the next line — the author was
+ *                   starting a list item or an underline, not an H2. Headings stay ATX.
  */
 const markdown = unified()
   .use(remarkParse)
   .use(remarkGfm)
-  .data("micromarkExtensions", [{ disable: { null: ["codeIndented"] } }]);
+  .data("micromarkExtensions", [{ disable: { null: ["codeIndented", "setextUnderline"] } }]);
 
 /** Which grammar tier the prose being lowered belongs to (`dil.ebnf` §1). */
 export type ProseTier = "document" | "element";
@@ -55,10 +63,17 @@ export type ProseTier = "document" | "element";
 export interface LowerOptions {
   /** `document` (default) or `element`. */
   readonly document?: boolean;
+  /**
+   * Length of the source these nodes came from. The prose fragment that reaches it is
+   * the streaming tail, and it is the only one `stream-repair.ts` is allowed to touch.
+   * Omitted → nothing is repaired.
+   */
+  readonly sourceLength?: number;
 }
 
 export function lowerMarkdown(nodes: DilNode[], options: LowerOptions = {}): DilNode[] {
-  return lowerNodes(nodes, options.document === false ? "element" : "document");
+  const tier = options.document === false ? "element" : "document";
+  return lowerNodes(nodes, tier, options.sourceLength);
 }
 
 /** InlineRun on a bare string — the element-interior subset, no block parsing. */
@@ -82,18 +97,21 @@ export function fenceToElement(fence: DilFenceNode): DilElementNode {
   return { ...el("code-block", children, fence.pos, fence.end, attrs), closed: fence.closed };
 }
 
-function lowerNodes(nodes: DilNode[], tier: ProseTier): DilNode[] {
-  return tier === "document" ? lowerDocumentProse(nodes) : lowerInlineFlow(nodes);
+function lowerNodes(nodes: DilNode[], tier: ProseTier, sourceLength?: number): DilNode[] {
+  return tier === "document" ? lowerDocumentProse(nodes, sourceLength) : lowerInlineFlow(nodes, sourceLength);
 }
 
-function lowerNode(node: DilNode, tier: ProseTier): DilNode {
+function lowerNode(node: DilNode, tier: ProseTier, sourceLength?: number): DilNode {
   switch (node.type) {
     case "element":
-      return node.synthetic ? node : { ...node, children: lowerNodes(node.children, "element") };
+      return node.synthetic ? node : { ...node, children: lowerNodes(node.children, "element", sourceLength) };
     case "if":
-      return { ...node, branches: node.branches.map((branch) => ({ ...branch, body: lowerNodes(branch.body, tier) })) };
+      return {
+        ...node,
+        branches: node.branches.map((branch) => ({ ...branch, body: lowerNodes(branch.body, tier, sourceLength) })),
+      };
     case "each":
-      return { ...node, body: lowerNodes(node.body, tier) };
+      return { ...node, body: lowerNodes(node.body, tier, sourceLength) };
     case "fence":
       return fenceToElement(node);
     default:
@@ -105,7 +123,7 @@ function lowerNode(node: DilNode, tier: ProseTier): DilNode {
 // Document tier — BlockProse (full GFM)
 // ---------------------------------------------------------------------------
 
-function lowerDocumentProse(nodes: DilNode[]): DilNode[] {
+function lowerDocumentProse(nodes: DilNode[], sourceLength?: number): DilNode[] {
   const out: DilNode[] = [];
   let run: DilNode[] = [];
 
@@ -113,7 +131,7 @@ function lowerDocumentProse(nodes: DilNode[]): DilNode[] {
     if (!run.length) return;
     // Inline nodes become placeholders, so CommonMark still sees one line and can
     // recognize `- <Link/>` as a list item; the nodes are substituted back afterwards.
-    const prose = composeProse(run);
+    const prose = composeProse(run, isTail(run, sourceLength));
     // A run that is only layout whitespace carries no paragraph.
     if (!prose.nodes.length && !/\S/.test(prose.text)) return;
     out.push(...blockProse(prose));
@@ -134,10 +152,30 @@ function lowerDocumentProse(nodes: DilNode[]): DilNode[] {
       continue;
     }
     flushRun();
-    out.push(lowerNode(node, "document"));
+    out.push(lowerNode(node, "document", sourceLength));
   }
   flushRun();
   return out;
+}
+
+/** Raw source offset just past `node` — the tail test needs the source, not the tree. */
+function nodeEnd(node: DilNode): number {
+  switch (node.type) {
+    case "text":
+      return node.pos + node.value.length;
+    case "element":
+    case "fence":
+      return node.end;
+    default:
+      return -1;
+  }
+}
+
+/** True when this run still owns the end of the source: the streaming tail. */
+function isTail(run: readonly DilNode[], sourceLength?: number): boolean {
+  if (sourceLength === undefined) return false;
+  const last = run[run.length - 1];
+  return last !== undefined && nodeEnd(last) === sourceLength;
 }
 
 function blockProse(prose: CompositeProse): DilNode[] {
@@ -174,7 +212,7 @@ interface Piece {
  * replaced by private-use placeholders of the same role, and the composite→source
  * offset map keeps every node position pointing at the real source.
  */
-function composeProse(run: readonly DilNode[]): CompositeProse {
+function composeProse(run: readonly DilNode[], atTail = false): CompositeProse {
   const nodes: DilNode[] = [];
   const pieces: Piece[] = [];
   let text = "";
@@ -190,6 +228,10 @@ function composeProse(run: readonly DilNode[]): CompositeProse {
     text += token;
     nodes.push(lowerNode(node, "document"));
   }
+
+  // Only at the streaming tail: a finished prose run keeps its bytes, so a document
+  // that is already complete lowers to exactly what its author wrote.
+  if (atTail) text = repairStreamTail(text);
 
   const toOriginal = (offset: number): number => {
     let low = 0;
@@ -237,13 +279,14 @@ function stripPlaceholders(value: string): string {
  * A single run is emitted unwrapped, so `<row>数量：{n} 与 **两种**</row>` stays a flex
  * row of inline nodes; several runs (blank-line separated) each become one `<text>`.
  */
-function lowerInlineFlow(nodes: DilNode[]): DilNode[] {
-  const pieces: Array<{ readonly nodes: DilNode[] } | { readonly block: DilNode }> = [];
+function lowerInlineFlow(nodes: DilNode[], sourceLength?: number): DilNode[] {
+  const pieces: Array<{ readonly nodes: DilNode[]; readonly tail: boolean } | { readonly block: DilNode }> = [];
   let flow: DilNode[] = [];
 
   const flushFlow = (): void => {
+    const tail = isTail(flow, sourceLength);
     const trimmed = trimFlowEdges(flow);
-    if (trimmed.length) pieces.push({ nodes: trimmed });
+    if (trimmed.length) pieces.push({ nodes: trimmed, tail });
     flow = [];
   };
 
@@ -265,7 +308,7 @@ function lowerInlineFlow(nodes: DilNode[]): DilNode[] {
       continue;
     }
     flushFlow();
-    pieces.push({ block: lowerNode(node, "element") });
+    pieces.push({ block: lowerNode(node, "element", sourceLength) });
   }
   flushFlow();
 
@@ -277,10 +320,15 @@ function lowerInlineFlow(nodes: DilNode[]): DilNode[] {
       continue;
     }
     const children: DilNode[] = [];
-    for (const node of piece.nodes) {
-      if (node.type === "text") children.push(...parseInline(node.value, node.pos));
-      else children.push(lowerNode(node, "element"));
-    }
+    const lastIndex = piece.nodes.length - 1;
+    piece.nodes.forEach((node, index) => {
+      if (node.type === "text") {
+        const value = piece.tail && index === lastIndex ? repairStreamTail(node.value) : node.value;
+        children.push(...parseInline(value, node.pos));
+      } else {
+        children.push(lowerNode(node, "element", sourceLength));
+      }
+    });
     if (!children.length) continue;
     if (flowCount > 1) {
       const pos = piece.nodes[0].pos;

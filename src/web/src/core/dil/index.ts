@@ -5,6 +5,7 @@
  * in Node against real corpus fixtures:
  *
  *   source ── parse ──────► structural AST + recovery diagnostics   (parser.ts)
+ *          ── stream repair ─► close the constructs the tail left open (stream-repair.ts)
  *          ── lowerMarkdown ─► prose → title / text / list / table … (markdown.ts)
  *          ── pruneEmptyIncomplete ─► drop half-streamed containers  (prune.ts)
  *          ── toFallbackMarkdown ─► Markdown projection for copy      (fallback.ts)
@@ -14,7 +15,7 @@
  */
 
 import { lowerMarkdown, resolveSpanningEmphasis } from "./markdown.ts";
-import { parse } from "./parser.ts";
+import { normalizeSource, parse } from "./parser.ts";
 import { pruneEmptyIncomplete } from "./prune.ts";
 import { findStateDeclarations, splitStatements } from "./statements.ts";
 import type { DilDocument, DilNode } from "./types.ts";
@@ -22,7 +23,11 @@ import type { DilDocument, DilNode } from "./types.ts";
 export function parseDocument(source: string): DilDocument {
   const result = parse(source);
   const prepared = resolveSpanningEmphasis(result.nodes);
-  const tree = pruneEmptyIncomplete(lowerMarkdown(prepared, { document: true }));
+  // `sourceLength` marks the fragment that still owns the end of the source: the only
+  // one `stream-repair.ts` may close constructs in.
+  const tree = pruneEmptyIncomplete(
+    lowerMarkdown(prepared, { document: true, sourceLength: normalizeSource(source).length }),
+  );
   return {
     raw: result.nodes,
     tree,
@@ -57,7 +62,7 @@ function collectStatements(nodes: readonly DilNode[], out: string[] = []): strin
 
 export { tidyFallback, toFallbackMarkdown } from "./fallback.ts";
 export { fenceToElement, lowerInline, lowerMarkdown, resolveSpanningEmphasis } from "./markdown.ts";
-export { mergeText, parse, RAW_TEXT_TAGS } from "./parser.ts";
+export { mergeText, normalizeSource, parse, RAW_TEXT_TAGS } from "./parser.ts";
 export { CONTAINER_TAGS, pruneEmptyIncomplete } from "./prune.ts";
 export { findTopLevel, LineIndex, readBalanced, splitEachClause, topLevelIndex } from "./scanner.ts";
 export type { StateDeclaration } from "./statements.ts";
