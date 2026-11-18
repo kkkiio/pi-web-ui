@@ -12,6 +12,7 @@
       "components.json",
       "e2e/**/*.ts",
       "evals/**/*.ts",
+      "evals/**/*.tsx",
       "extensions/**/*.ts",
       "package.json",
       "public/**/*.js",

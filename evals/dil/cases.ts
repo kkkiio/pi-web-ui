@@ -33,19 +33,7 @@ import {
   noDil,
 } from "./scoring.ts";
 
-/** The instruction a real system prompt would carry; kept short on purpose. */
-export const DIL_SYSTEM_PROMPT = `你是 Pi Web UI 的助手。回答可以用 DIL（Dynamic Interface Language）把密集信息变成可扫读的界面。
-
-DIL 是 Markdown 的超集：普通文字继续用 Markdown；需要空间关系时用这些标签：
-<box> <row> <col> <grid columns={n}> <grid-item> <divider>
-<title> <text> <caption> <badge> <icon name="…"/> <bold> <italic> <code>
-控制流：{#each list as item, i}…{/each}、{#if cond}…{:else}…{/if}、{expr} 插值
-常用属性：gap={2} padding={3} background="surface|surface-secondary|surface-tertiary" radius="md|lg|xl|full" border color="secondary|success|warning|danger" size="xs|sm|md|lg|xl" weight="medium|semibold" align="start|center|between" justify="between|center" tabularNums width height flex
-
-规则：
-1. 只有空间/关系/对比/流程真的比文字更清楚时才用 DIL；两句话能说清就保持纯 Markdown 和代码块。
-2. 标签必须闭合；属性值用 {表达式} 时只写可安全求值的 JS 子集（字面量、算术、比较、模板串、.map/.filter/.toFixed 等）。
-3. 不要在 DIL 外层再包一个代码围栏，直接输出。`;
+export { DIL_SYSTEM_PROMPT } from "../../extensions/dil-system-prompt.ts";
 
 export const DIL_CASES: readonly DilCase[] = [
   {

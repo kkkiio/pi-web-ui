@@ -46,7 +46,8 @@
     "test:dil": "node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"evals/dil/*.test.ts\"",
     "test:dil:update": "UPDATE_SNAPSHOTS=1 node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"evals/dil/*.test.ts\"",
     "eval:dil": "node evals/dil/run.ts",
-    "eval:dil:vitest": "vitest run --config vitest.evals.config.ts"
+    "eval:dil:vitest": "vitest run --config vitest.evals.config.ts",
+    "eval:dil:preview": "node evals/dil/preview.mjs"
   },
   "dependencies": {
     "@pierre/diffs": "^1.6.4",

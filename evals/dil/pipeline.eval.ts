@@ -13,8 +13,8 @@
 
 import { expect } from "vitest";
 import { createHarness, describeEval } from "vitest-evals";
+import { apiKeyFor, createDilAgent } from "./agent.ts";
 import { DIL_CASES, DIL_SYSTEM_PROMPT } from "./cases.ts";
-import { apiKeyFor, createGenerator } from "./generate.ts";
 import { scoreCase } from "./scoring.ts";
 
 const PROVIDER = process.env.DIL_EVAL_PROVIDER ?? "deepseek";
@@ -29,16 +29,16 @@ const configured = (() => {
   }
 })();
 
-const harness = createHarness<string, string>({
+const harness = createHarness<string, { text: string; systemPrompt: string }>({
   name: `${PROVIDER}/${MODEL}`,
   async run({ input }) {
-    const generator = await createGenerator({ provider: PROVIDER, model: MODEL });
-    const output = await generator.generate(DIL_SYSTEM_PROMPT, input);
+    const agent = await createDilAgent({ provider: PROVIDER, model: MODEL });
+    const result = await agent.run(input, DIL_SYSTEM_PROMPT);
     return {
-      output,
+      output: result,
       messages: [
         { role: "user", content: input },
-        { role: "assistant", content: output },
+        { role: "assistant", content: result.text },
       ],
       usage: { provider: PROVIDER, model: MODEL },
     };
@@ -49,9 +49,10 @@ describeEval("DIL output", { harness }, (it) => {
   for (const dilCase of DIL_CASES) {
     it.skipIf(!configured)(`${dilCase.id}: ${dilCase.category}`, async ({ run }) => {
       const result = await run(dilCase.prompt);
-      const scored = scoreCase(dilCase, result.output);
+      const scored = scoreCase(dilCase, result.output.text);
+      expect(result.output.systemPrompt).toContain("<dil>");
       const missed = scored.checks.filter((check) => !check.pass).map((check) => check.label);
-      const preview = result.output.slice(0, 400);
+      const preview = result.output.text.slice(0, 400);
       expect(missed, `${scored.score}% — parse: ${scored.diagnostics}\n--- model output ---\n${preview}`).toEqual([]);
       expect(scored.diagnostics).toBe("clean");
     });

@@ -24,8 +24,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createDilAgent, type DilAgent } from "./agent.ts";
 import { DIL_CASES, DIL_SYSTEM_PROMPT } from "./cases.ts";
-import { createGenerator, type DilGenerator } from "./generate.ts";
 import { type CaseResult, scoreCase, summarize, type VariantSummary } from "./scoring.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -76,7 +76,7 @@ function recordingPath(caseId: string, variant: string, run: number): string {
 async function runVariant(
   variant: "with" | "without",
   options: Options,
-  generator: DilGenerator | null,
+  generator: DilAgent | null,
 ): Promise<VariantSummary> {
   const cases: CaseResult[] = [];
   for (const dilCase of DIL_CASES) {
@@ -88,15 +88,14 @@ async function runVariant(
     }
 
     for (let run = 1; run <= options.runs; run++) {
-      const text = await (generator as DilGenerator).generate(
-        variant === "with" ? DIL_SYSTEM_PROMPT : null,
-        dilCase.prompt,
-      );
+      const answered = await (generator as DilAgent).run(dilCase.prompt, variant === "with" ? DIL_SYSTEM_PROMPT : null);
+      const text = answered.text;
+      const section = answered.systemPrompt.includes("<dil>") ? "dil" : "no-dil";
       const result = scoreCase(dilCase, text);
       cases.push(result);
       if (options.record) writeFile(recordingPath(dilCase.id, variant, run), `${text}\n`);
       process.stdout.write(
-        `  ${dilCase.id.padEnd(12)} run ${run}  ${String(result.score).padStart(3)}%  (${result.passed}/${result.total})  ${result.diagnostics}\n`,
+        `  ${dilCase.id.padEnd(12)} run ${run}  ${String(result.score).padStart(3)}%  (${result.passed}/${result.total})  prompt:${section}  ${result.diagnostics}\n`,
       );
     }
   }
@@ -114,7 +113,7 @@ function writeFile(path: string, text: string): void {
   writeFileSync(path, text);
 }
 
-function report(summaries: readonly VariantSummary[], options: Options, generator: DilGenerator | null): void {
+function report(summaries: readonly VariantSummary[], options: Options, generator: DilAgent | null): void {
   const lines: string[] = [];
   lines.push(`# DIL eval — ${generator?.label ?? "recordings"}${options.dry ? " (dry)" : ""}`, "");
 
@@ -150,7 +149,7 @@ function report(summaries: readonly VariantSummary[], options: Options, generato
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
-  const generator = options.dry ? null : await createGenerator(options);
+  const generator = options.dry ? null : await createDilAgent(options);
   if (generator) process.stdout.write(`model: ${generator.label}\n`);
 
   const summaries: VariantSummary[] = [];
