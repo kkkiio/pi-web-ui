@@ -42,6 +42,34 @@ Each run prints a table and writes `report.json` (gitignored). Recordings under
 [`recordings/`](./recordings) are committed so `--dry` and the scorer tests run without a
 key.
 
+## Two lanes: CLI and Vitest
+
+The CLI above answers "how good is the model, per case, right now". The same cases also
+run through **[`vitest-evals`](https://vitest-evals.sentry.dev)** when you want
+test-shaped output, filtering, retries, judges and reporters:
+
+```bash
+npm run eval:dil:vitest                                   # all cases, live
+npx vitest run --config vitest.evals.config.ts -t flow     # one case
+npx vitest run --config vitest.evals.config.ts --retry 2   # sample variance
+```
+
+[`pipeline.eval.ts`](./pipeline.eval.ts) is a ~30-line `createHarness` wrapper around
+`generate.ts`, and the assertions are the same `scoreCase` checks. Both lanes share the
+cases, the scoring and the credentials.
+
+What is usable today, and what is not:
+
+| piece | status |
+| --- | --- |
+| `vitest-evals@0.18.1` | works; peers `vitest >=5` (this repo pins `vitest@5.1.1`), `ai >=4 <7`, `zod` |
+| `createHarness` + `describeEval` | works with our own pi-ai harness |
+| `@vitest-evals/harness-pi-ai` | **not** usable: peers `@mariozechner/pi-ai >=0.67 <1`, while this repo uses `@earendil-works/pi-ai@1.5.x` |
+| judges (`createJudgeHarness`, `toSatisfyJudge`) | available for a future LLM rubric |
+
+`vitest.evals.config.ts` is live-only (a real model call per test), so it stays out of
+`just check` and CI; the offline contract remains `npm run test:dil`.
+
 ## Scoring
 
 `scoring.ts` walks the AST and evaluates labelled checks: tag presence and counts,

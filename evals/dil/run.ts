@@ -22,10 +22,10 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DIL_CASES, DIL_SYSTEM_PROMPT } from "./cases.ts";
+import { createGenerator, type DilGenerator } from "./generate.ts";
 import { type CaseResult, scoreCase, summarize, type VariantSummary } from "./scoring.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -61,67 +61,6 @@ function parseOptions(argv: readonly string[]): Options {
 }
 
 // ---------------------------------------------------------------------------
-// Credentials — env, then a repo `.env`, then Pi's own store
-// ---------------------------------------------------------------------------
-
-function apiKeyFor(provider: string): string {
-  const envName = `${provider.toUpperCase().replaceAll("-", "_")}_API_KEY`;
-  if (process.env[envName]) return process.env[envName] as string;
-
-  const dotenv = join(HERE, "..", "..", ".env");
-  if (existsSync(dotenv)) {
-    for (const line of readFileSync(dotenv, "utf8").split("\n")) {
-      const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
-      if (match && match[1] === envName) return match[2].replace(/^["']|["']$/g, "");
-    }
-  }
-
-  const authFile = join(homedir(), ".pi", "agent", "auth.json");
-  if (existsSync(authFile)) {
-    const entry = JSON.parse(readFileSync(authFile, "utf8"))[provider] as { key?: string } | undefined;
-    if (entry?.key) return entry.key;
-  }
-  throw new Error(`no ${envName}: set it, add it to .env, or log in through Pi`);
-}
-
-// ---------------------------------------------------------------------------
-// Generation — pi-ai, so it is the same model runtime the product uses
-// ---------------------------------------------------------------------------
-
-interface Generator {
-  readonly label: string;
-  generate(system: string | null, prompt: string): Promise<string>;
-}
-
-async function createGenerator(options: Options): Promise<Generator> {
-  const { createModels, InMemoryCredentialStore, contentText } = await import("@earendil-works/pi-ai");
-  const { builtinProviders } = await import("@earendil-works/pi-ai/providers/all");
-
-  const credentials = new InMemoryCredentialStore();
-  await credentials.modify(options.provider, async () => ({ type: "api_key", key: apiKeyFor(options.provider) }));
-  const models = createModels({ credentials });
-  for (const provider of builtinProviders()) models.setProvider(provider);
-
-  const model = models.getModel(options.provider, options.model) ?? models.getModels(options.provider)[0];
-  if (!model) throw new Error(`unknown model ${options.provider}/${options.model}`);
-
-  return {
-    label: `${model.provider}/${model.id}`,
-    async generate(system, prompt) {
-      const message = await models.completeSimple(
-        model,
-        {
-          ...(system ? { systemPrompt: system } : {}),
-          messages: [{ role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() }],
-        },
-        { maxTokens: 3000 },
-      );
-      return contentText(message.content).trim();
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------
 
@@ -137,7 +76,7 @@ function recordingPath(caseId: string, variant: string, run: number): string {
 async function runVariant(
   variant: "with" | "without",
   options: Options,
-  generator: Generator | null,
+  generator: DilGenerator | null,
 ): Promise<VariantSummary> {
   const cases: CaseResult[] = [];
   for (const dilCase of DIL_CASES) {
@@ -149,7 +88,7 @@ async function runVariant(
     }
 
     for (let run = 1; run <= options.runs; run++) {
-      const text = await (generator as Generator).generate(
+      const text = await (generator as DilGenerator).generate(
         variant === "with" ? DIL_SYSTEM_PROMPT : null,
         dilCase.prompt,
       );
@@ -175,7 +114,7 @@ function writeFile(path: string, text: string): void {
   writeFileSync(path, text);
 }
 
-function report(summaries: readonly VariantSummary[], options: Options, generator: Generator | null): void {
+function report(summaries: readonly VariantSummary[], options: Options, generator: DilGenerator | null): void {
   const lines: string[] = [];
   lines.push(`# DIL eval — ${generator?.label ?? "recordings"}${options.dry ? " (dry)" : ""}`, "");
 
