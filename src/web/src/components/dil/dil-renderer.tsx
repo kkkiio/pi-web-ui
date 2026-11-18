@@ -18,7 +18,7 @@
  * is only JSX glue.
  */
 
-import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { collectStatements, evaluateStatements, hasDilElements, parseDocument } from "../../core/dil/index";
 import {
@@ -64,6 +64,10 @@ export function DilRenderer({
   className,
   markdown,
 }: DilRendererProps) {
+  // Render keys are only unique inside this instance; SVGs in two messages would
+  // otherwise share `dil-n-0-arrow` and the second marker reference would resolve to the
+  // first diagram. `useId` gives every message its own namespace.
+  const instance = useId();
   const text = useThrottledText(source, isStreaming, throttleMs);
   const document = useMemo(() => parseDocument(text), [text]);
   const dil = useMemo(() => hasDilElements(document.tree), [document]);
@@ -77,7 +81,7 @@ export function DilRenderer({
 
   return (
     <div className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
-      {renderNodes(resolved, "n", null)}
+      {renderNodes(resolved, instance, null)}
     </div>
   );
 }

@@ -88,14 +88,25 @@ Then("the DIL layout is rendered", async ({ page }) => {
 
 Then("the DIL diagram is rendered", async ({ page }) => {
   const log = page.getByRole("log");
-  const svg = log.locator(".dil-root svg");
+  const svg = log.locator(".dil-root svg").first();
   await expect(svg).toBeVisible();
   // 4 rows × 8 columns of tiles, each one a <rect>.
   await expect(svg.locator("rect")).toHaveCount(32);
   // The marker is declared per diagram, so its id must be namespaced rather than "arrow".
   await expect(svg.locator("marker")).toHaveAttribute("id", /^dil-.+-arrow$/);
   await expect(svg.locator("line")).toHaveAttribute("marker-end", /^url\(#dil-.+-arrow\)$/);
-  await expect(log.getByText("4 × 8 tiles")).toBeVisible();
+  await expect(log.getByText("4 × 8 tiles").first()).toBeVisible();
+});
+
+Then("each diagram keeps its own marker namespace", async ({ page }) => {
+  const ids = await page
+    .getByRole("log")
+    .locator(".dil-root svg marker")
+    .evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(ids.length).toBeGreaterThan(1);
+  // Two messages, two `<marker id="arrow">`: without a per-message prefix the second
+  // reference would resolve to the first diagram's marker.
+  expect(new Set(ids).size).toBe(ids.length);
 });
 
 Then("the transcript does not show raw DIL tags", async ({ page }) => {

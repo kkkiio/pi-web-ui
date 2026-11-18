@@ -5,7 +5,7 @@ import { fauxAssistantMessage } from "@earendil-works/pi-ai";
  * marker declared in `<defs>` and referenced from a `<line>`. It is the shape `#47`
  * promises, so the scenario can assert geometry, not just "some layout appeared".
  */
-export default [
+const diagram = () =>
   fauxAssistantMessage(
     [
       "## Tile 布局",
@@ -25,5 +25,7 @@ export default [
       '  <text x="150" y="124" fontSize="9" textAnchor="middle" fill="currentColor">4 × 8 tiles</text>',
       "</svg>",
     ].join("\n"),
-  ),
-];
+  );
+
+/** Two answers, so the scenario can prove that two diagrams do not share an id namespace. */
+export default [diagram(), diagram()];
