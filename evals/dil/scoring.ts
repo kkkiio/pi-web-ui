@@ -288,6 +288,20 @@ export function attrPresent(name: string, label: string): CaseCheck {
   };
 }
 
+/** `<badge color="success">` or `<badge color="warning">`: one of a known set. */
+export function attributeIn(name: string, attr: string, values: readonly string[], label: string): CaseCheck {
+  return {
+    id: `attr:${name}.${attr}∈${values.join("|")}`,
+    label,
+    test: (context) =>
+      context.elements.some(
+        (node) =>
+          elementName(node) === name &&
+          attrsOf(node).some((attribute) => attribute.name === attr && values.includes(attrText(attribute))),
+      ),
+  };
+}
+
 export function attributeContains(name: string, attr: string, contains: string, label: string): CaseCheck {
   return {
     id: `attr:${name}.${attr}`,
@@ -319,6 +333,22 @@ export function fenceAtLeast(count: number, label: string): CaseCheck {
 
 function countFences(nodes: readonly DilNode[]): number {
   return nodes.reduce((sum, node) => sum + (node.type === "fence" ? 1 : countFences(childrenOf(node))), 0);
+}
+
+/** Sentence count instead of a word budget: "两句话以内" is about sentences, not tokens. */
+export function maxSentences(limit: number, label: string): CaseCheck {
+  return {
+    id: "max-sentences",
+    label,
+    test: (context) => {
+      const prose = context.text.replace(/```[\s\S]*?```/g, " ").replace(/<[^>]+>/g, " ");
+      const sentences = prose
+        .split(/[。！？!?]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      return sentences.length <= limit;
+    },
+  };
 }
 
 export function maxWords(limit: number, label: string): CaseCheck {

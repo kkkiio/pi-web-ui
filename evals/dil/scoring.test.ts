@@ -31,7 +31,7 @@ test("every case is satisfied by a hand-written ideal answer", () => {
 });
 
 test("the negative control rejects DIL and accepts plain Markdown", () => {
-  const negative = dilCase("restraint");
+  const negative = dilCase("restraint-refactor");
   const prose = scoreCase(negative, PROSE);
   assert.equal(prose.checks.find((check) => check.id === "no-dil")?.pass, true);
   assert.equal(prose.checks.find((check) => check.id === "fence")?.pass, false);
@@ -39,6 +39,10 @@ test("the negative control rejects DIL and accepts plain Markdown", () => {
   const overTriggered = `${PROSE}\n\n<box padding={2}><text>结论</text></box>`;
   const result = scoreCase(negative, overTriggered);
   assert.equal(result.checks.find((check) => check.id === "no-dil")?.pass, false);
+
+  // The two-sentence control has no fence requirement — a short answer is the pass.
+  const closure = scoreCase(dilCase("restraint-closure"), IDEAL_ANSWERS["restraint-closure"]);
+  assert.equal(closure.score, 100);
 });
 
 test("positive cases fail on plain prose", () => {

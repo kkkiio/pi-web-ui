@@ -1,117 +1,99 @@
-已读取当前实现（`src/web/src/components/dil/dil-renderer.tsx`、`src/web/src/core/dil/evaluator.ts`），下面的对比以现状为基准。
-
-## 三个方案在同一条流水线上的切分点
-
-<box gap={2} padding={3} background="surface-secondary" radius="lg">
-  <row align="center" gap={2}>
-    <caption>流式文本</caption><icon name="arrow-right" size="sm"/>
-    <caption>repair / parse → AST</caption><icon name="arrow-right" size="sm"/>
-    <caption>scope 求值 {expr}</caption><icon name="arrow-right" size="sm"/>
-    <caption>resolve → 组件树</caption><icon name="arrow-right" size="sm"/>
-    <caption>React 渲染</caption>
+<box gap={3} padding={3} background="surface-secondary" radius="lg">
+  <row justify="between" align="center">
+    <text weight="semibold" size="lg">选型结论</text>
+    <badge>main decision</badge>
   </row>
-  <text size="sm">差异只在于「前四段跑在哪里」：iframe 内一整页、Worker 里一整条、或者就在当前组件里。</text>
+  <text>维持现状：<bold>主线程 AST 求值</bold>。iframe 与 Worker 都不是渲染问题，而是把问题搬到别处，并且都要付与设计系统断联的代价。</text>
+  <row gap={2} align="center">
+    <icon name="check-circle" size="sm"/>
+    <caption>现有实现即第三种：parseDocument → evaluateStatements → resolveNodes → React（src/components/dil/dil-renderer.tsx）</caption>
+  </row>
 </box>
 
-## 逐项对比
+## 对比矩阵
 
-<grid columns={4} gap={2}>
-  <caption>维度</caption><caption>iframe 沙箱</caption><caption>Worker 虚拟树</caption><caption>主线程 AST（现方案）</caption>
+| 维度 | iframe 沙箱 | Web Worker 虚拟树 | 主线程 AST 求值（现状） |
+|---|---|---|---|
+| 安全隔离 | 强（跨源 + CSP） | 弱（仅隔离线程） | 依赖 allowlist，无隔离 |
+| 每 tick 成本 | postMessage 全量 HTML/树 + 重排 | 结构化克隆整棵 AST + 双份内存 | 直接 React 复用，零序列化 |
+| 流式更新 | 需在 iframe 内重建或 diff | 需在主线程重建树 | 节流 60 ms 全量重解析 |
+| 设计系统一致性 | 需复制 Tailwind/shadcn/KaTeX/Shiki | 无影响（仅算树） | 原生复用 |
+| 交互能力 | 跨边界传事件，`useState` 需代理 | 无 DOM，回调寄回主线程 | 直接是 React state |
+| 高度/滚动/选中/查找 | 需 ResizeObserver 自适应高度，Cmd+F 失效 | 无影响 | 天然正确 |
+| 调试成本 | 高（两套上下文） | 中（消息协议） | 低（单调用栈） |
+| 改动量 | 全量重写 | 中 | 0 |
 
-  <text size="sm">安全边界</text>
-  <text size="sm" color="success">最强：origin + sandbox 隔离</text>
-  <text size="sm" color="warning">中：只隔离计算，不回传能力</text>
-  <text size="sm" color="warning">中：靠 acorn allowlist 白名单</text>
+## 逐项展开
 
-  <text size="sm">与 React/设计令牌集成</text>
-  <text size="sm" color="danger">差：跨 document，主题/CSS 变量/portal 全要重做</text>
-  <text size="sm" color="danger">差：不能产出 React 元素</text>
-  <text size="sm" color="success">天然：`renderNodes` 直接出组件</text>
+<box gap={2} padding={3} background="surface" radius="md" border={{size: 1, color: "danger"}}>
+  <row gap={2} align="center">
+    <icon name="shield" size="sm"/>
+    <text weight="semibold">iframe 沙箱 — 用错了工具</text>
+  </row>
+  <text>它防的是「执行任意 HTML/JS」。但 DIL 不是 HTML：求值器是纯函数式白名单（`evaluator-allowlist.ts`），没有 <code>eval</code> / <code>new Function</code>、无原型链、无赋值、无 DOM、无网络，字符串长度与 <code>Array.from</code> 上限硬编码。<caption>攻击面比「沙箱化一段用户 HTML」小一个数量级。</caption></text>
+  <col gap={1}>
+    <text color="secondary">代价却是全量的：设计 token 只能靠注入 CSS 变量勉强同步；自动高度、文本选中、页内查找、无障碍朗读、复制粘贴全部退化；KaTeX/Shiki 要么在 iframe 里再装一遍，要么退化成纯文本。</text>
+    <text color="secondary">而且 <code>sandbox</code> 只有取舍：加 <code>allow-same-origin</code> 就失去隔离，不加就难共享样式。</text>
+  </col>
+</box>
 
-  <text size="sm">流式增量</text>
-  <text size="sm" color="danger">跨帧 postMessage 协议 + 高度同步，尾部长文本抖动</text>
-  <text size="sm" color="warning">需双份 repair 状态，结构化克隆有固定开销</text>
-  <text size="sm" color="success">`useThrottledText` 60ms 窗口，尾修复就地完成</text>
+<box gap={2} padding={3} background="surface" radius="md" border={{size: 1, color: "warning"}}>
+  <row gap={2} align="center">
+    <icon name="cpu" size="sm"/>
+    <text weight="semibold">Web Worker 虚拟树 — 优化了不存在的瓶颈</text>
+  </row>
+  <text>Worker 不能跑 React DOM，所以它只能产出<bold>虚拟树</bold>再由主线程渲染。每 tick 就要把一棵全新的 AST 结构化克隆过来 —— 每一次 parse 都产生新对象，无法增量传递。</text>
+  <box gap={1} padding={2} background="surface-tertiary" radius="sm" tabularNums>
+    <row justify="between"><caption>parseDocument 全量</caption><text>≈ 1 ms</text></row>
+    <row justify="between"><caption>60 ms 节流窗口占比</caption><text>≈ 1.7%</text></row>
+    <row justify="between"><caption>postMessage 克隆 + 重建</caption><text>同量级或更高</text></row>
+  </box>
+  <caption>仓库 README 已测得 parse 约 1 ms（corpus fixtures / Node）。花一次跨线程拷贝去省 1 ms 的同步执行，净收益接近零，还多出一条消息协议和双份内存。</caption>
+  <text>唯一真正受益的场景：单条消息体积异常大（数万节点）或低端设备主线程被 Shiki 高亮挤占 —— 而后者用 <code>React.memo</code> + 「闭合后才高亮」已经解决。</text>
+</box>
 
-  <text size="sm">主线程开销</text>
-  <text size="sm" color="success">最低（布局在子帧）</text>
-  <text size="sm" color="success">低（但 IPC 反向抵消）</text>
-  <text size="sm" color="warning">每窗口一次 parse+eval</text>
+<box gap={2} padding={3} background="surface" radius="md" border={{size: 1, color: "success"}}>
+  <row gap={2} align="center">
+    <icon name="check-circle" size="sm"/>
+    <text weight="semibold">主线程 AST 求值 — 唯一能保持「DOM 与设计系统同一份」的方案</text>
+  </row>
+  <col gap={1}>
+    <text>零序列化：解析、求值、展开控制在一次同步调用栈内，错误按节点降级（一个坏表达式不带走兄弟节点）。</text>
+    <text>可用的缓存模型极简：节流即全部缓存，纯函数 parse 保证永不渲染陈旧树，丢帧也不会与正文分叉。</text>
+    <text>安全边界落在求值器而非进程：风险从「任意代码执行」降级为「求值器有 bug」，这是可审计、可单测（Node 无依赖跑）的边界。</text>
+  </col>
+  <caption>代价诚实记录：解析与求值占用主线程；恶意输入可构造大文档造成单帧卡顿。用体积上限与节流兜底，而不是上沙箱。</caption>
+</box>
 
-  <text size="sm">可调试性</text>
-  <text size="sm" color="danger">差：跨 realm 堆栈断裂</text>
-  <text size="sm" color="warning">中</text>
-  <text size="sm" color="success">好：单栈、可单测</text>
+## 落地建议
 
-  <text size="sm">可访问性 / 键盘序</text>
-  <text size="sm" color="danger">退化</text>
-  <text size="sm">—</text>
-  <text size="sm" color="success">正常</text>
-
-  <text size="sm">改动成本</text>
-  <text size="sm" color="danger">高</text>
-  <text size="sm" color="warning">中高</text>
-  <text size="sm" color="success">零（已在跑）</text>
+<grid columns={2} gap={2}>
+  <grid-item>
+    <box gap={1} padding={3} background="surface" radius="md" border>
+      <text weight="semibold" size="sm">现在做</text>
+      <text size="sm">保持主线程方案不变；为单条消息节点数/字符数加上限，超出即降级为 Markdown fallback。</text>
+    </box>
+  </grid-item>
+  <grid-item>
+    <box gap={1} padding={3} background="surface" radius="md" border>
+      <text weight="semibold" size="sm">暂不做</text>
+      <text size="sm">不引入 Worker、不引入 iframe；不为「理论上更安全」牺牲查找、选中、主题与无障碍。</text>
+    </box>
+  </grid-item>
 </grid>
 
-## 各自的关键取舍
+<divider/>
 
-<box gap={2} padding={3} border radius="lg">
-  <text weight="semibold">1 · iframe 沙箱</text>
-  <row gap={2} align="start">
-    <text size="sm" color="success">优势</text>
-    <text size="sm">真正的安全隔离；子帧自带布局引擎，overflow/高度/百分比这类空间语义不用自己实现；崩溃不传染主页面。</text>
+<box gap={2} padding={3} background="surface-secondary" radius="md">
+  <row gap={2} align="center">
+    <icon name="refresh-cw" size="sm"/>
+    <text weight="semibold" size="sm">重新评估的触发条件</text>
   </row>
-  <row gap={2} align="start">
-    <text size="sm" color="danger">代价</text>
-    <text size="sm">DIL 的核心价值是「嵌进对话流」，而 iframe 天然是一个外来盒子：主题令牌要注入、高度要 postMessage 回传、选中/复制/滚动锚定/查找全都失效。等于为了隔离放弃组件化。</text>
-  </row>
+  {#each ["DIL 未来引入任意表达式/自定义组件/外链资源", "需要渲染他人提供的不可信 DIL（多租户/分享链接）", "实测单帧 parse 超过 8 ms 或长任务告警出现", "需要 DIL 内执行副作用（fetch、跳转、持久化）"] as trigger, i}
+    <row gap={2} align="start">
+      <badge>{i + 1}</badge>
+      <text size="sm">{trigger}</text>
+    </row>
+  {/each}
+  <caption>命中第 1/2/4 条才考虑 iframe；只命中第 3 条才考虑 Worker，且应优先做「大文档分片渲染」而不是搬线程。</caption>
 </box>
-
-<box gap={2} padding={3} border radius="lg">
-  <text weight="semibold">2 · Web Worker 虚拟树</text>
-  <row gap={2} align="start">
-    <text size="sm" color="success">优势</text>
-    <text size="sm">长文档（数百节点、多层 `{#each}`）下把 parse + 求值 + 差分真正移出主线程；可以顺手做超时熔断，防止病态表达式卡 UI。</text>
-  </row>
-  <row gap={2} align="start">
-    <text size="sm" color="danger">代价</text>
-    <text size="sm">Worker 里没有 DOM，虚拟树到 layout 的最后一公里还是得回主线程做；于是每帧多一次结构化克隆 + 一次序列化协议版本负担。流式场景下每次只增量几十个字符，克隆开销往往大于省下的解析时间——收益为负直到文档真的很大。</text>
-  </row>
-</box>
-
-<box gap={2} padding={3} border radius="lg">
-  <text weight="semibold">3 · 主线程 AST 求值（当前）</text>
-  <row gap={2} align="start">
-    <text size="sm" color="success">优势</text>
-    <text size="sm">信任边界收敛在一处（acorn 产物 + `evaluator-allowlist` 的节点白名单），scope、`DIL.useState`、事件回调和 React 状态同住一个世界，流式前缀靠 `__dilSafe` 兜底并可在纯函数单测里验证。</text>
-  </row>
-  <row gap={2} align="start">
-    <text size="sm" color="danger">风险</text>
-    <text size="sm">任何一次 parse/eval 都在关键路径上，病态输入（超长表达式、深嵌套 each、大数组 map）会直接卡帧。缓解不靠换架构，靠预算：节点数上限、每窗口单一 snapshot、超限降级为纯 Markdown。</text>
-  </row>
-</box>
-
-## 选型结论
-
-<box gap={2} padding={3} background="surface-secondary" radius="lg">
-  <row align="center" gap={2}><badge>决策</badge><text weight="semibold">保持主线程 AST 求值，不引入 iframe / Worker</text></row>
-  <text size="sm">理由排序：① 隔离需求已被 allowlist 覆盖，iframe 买到的是不需要的隔离，付出的是需要的组件化；② Worker 解决的 `parse` 成本目前被 60ms 节流窗口摊薄，而它带来的协议与克隆开销是每帧必付；③ 现方案的失败模式（安静降级）正好匹配流式输出这一主场景。</text>
-</box>
-
-何时才值得改：
-
-<grid columns={3} gap={2}>
-  <box padding={3} border radius="md" gap={1}>
-    <text size="sm" weight="semibold">先加预算，不换架构</text>
-    <text size="2xs" color="secondary">panic 指标：单次 parse+eval p95 超过约 8ms，或文档节点数p95 破千。先做节点上限 + 降级。</text>
-  </box>
-  <box padding={3} border radius="md" gap={1}>
-    <text size="sm" weight="semibold">再考虑 Worker</text>
-    <text size="2xs" color="secondary">预算做完仍超，且瓶颈确实在 parse 而非渲染：只把 parse+repair 搬进 Worker，求值仍留主线程，避免克隆组件树。</text>
-  </box>
-  <box padding={3} border radius="md" gap={1}>
-    <text size="sm" weight="semibold">iframe 只在一种情况</text>
-    <text size="2xs" color="secondary">DIL 要渲染严格不可信的第三方内容（非本模型输出），且可以接受它不参与对话流排版——那更像「预览面板」而非「消息渲染」。</text>
-  </box>
-</grid>

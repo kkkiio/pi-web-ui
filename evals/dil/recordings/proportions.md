@@ -1,90 +1,124 @@
-<box gap={3} padding={3} background="surface-secondary" radius="lg">
+<box gap={3}>
   <row justify="between" align="baseline">
-    <text size="lg" weight="semibold">128k Context Window 占用分布</text>
-    <caption>总计 131,072 tokens · 已满 100%</caption>
+    <title>128k Context Window 占用分布</title>
+    <badge>128,000 tokens</badge>
   </row>
 
-  <box height="44px" radius="md" border>
+  <box height="28px" radius="md" background="surface-tertiary" border={{size: 1, color: "warning"}}>
     <row gap={0} height="100%">
-      <box width="12%" height="100%" background="surface-tertiary" radius={{size: 0, color: "surface"}}>
-      </box>
-      <box width="28%" height="100%" background="warning">
-      </box>
-      <box width="45%" height="100%" background="danger">
-      </box>
-      <box width="15%" height="100%" background="surface">
-      </box>
+      <box width="12%" height="100%" background="surface" radius="md" />
+      <box width="28%" height="100%" background="surface-secondary" />
+      <box width="45%" height="100%" background="surface" />
+      <box width="15%" height="100%" background="surface-secondary" radius="md" />
     </row>
   </box>
 
-  <row gap={4}>
-    <row gap={1} align="center"><box width="10px" height="10px" radius="full" background="surface-tertiary"/><caption>System Prompt</caption></row>
-    <row gap={1} align="center"><box width="10px" height="10px" radius="full" background="warning"/><caption>Tool Definitions</caption></row>
-    <row gap={1} align="center"><box width="10px" height="10px" radius="full" background="danger"/><caption>File Reads</caption></row>
-    <row gap={1} align="center"><box width="10px" height="10px" radius="full" background="surface"/><caption>Conversation</caption></row>
-  </row>
+  <grid columns={2} gap={2}>
+    {#each [{ name: "System Prompt", p: 12, tok: "15.4k" }, { name: "Tool Definitions", p: 28, tok: "35.8k" }, { name: "File Reads", p: 45, tok: "57.6k" }, { name: "Conversation", p: 15, tok: "19.2k" }] as item}
+      <box padding={2} border radius="md" gap={1}>
+        <row justify="between" align="center">
+          <text weight="semibold">{item.name}</text>
+          <text tabularNums color={item.p >= 40 ? "danger" : item.p >= 25 ? "warning" : "secondary"}>{item.p}%</text>
+        </row>
+        <row justify="between" align="center">
+          <caption>≈ {item.tok} tokens</caption>
+          <caption>剩余 {100 - item.p}%</caption>
+        </row>
+        <box height="6px" radius="full" background="surface-tertiary">
+          <box height="100%" radius="full" width={`${item.p}%`} background="surface" />
+        </box>
+      </box>
+    {/each}
+  </grid>
 
-  {#each [{ name: "System Prompt", pct: 12, tok: "15,728", color: "secondary", note: "角色设定 + DIL/工具使用规范" }, { name: "Tool Definitions", pct: 28, tok: "36,700", color: "warning", note: "所有工具的 JSON Schema" }, { name: "File Reads", pct: 45, tok: "58,982", color: "danger", note: "整文件读取的历史内容" }, { name: "Conversation", pct: 15, tok: "19,662", color: "secondary", note: "用户提问与模型回复" }] as s}
-    <row justify="between" align="center" gap={2}>
-      <row gap={2} align="center" flex>
-        <box width="8px" height="8px" radius="full" background={s.color === "danger" ? "danger" : s.color === "warning" ? "warning" : "surface-tertiary"}/>
-        <text size="sm" weight="medium">{s.name}</text>
-        <caption>{s.note}</caption>
-      </row>
-      <row gap={3} align="center">
-        <caption tabularNums>{s.tok} tok</caption>
-        <text size="sm" weight="semibold" tabularNums color={s.pct >= 40 ? "danger" : s.pct >= 25 ? "warning" : "secondary"}>{s.pct}%</text>
-        <box width={`${s.pct * 1.6}px`} height="8px" radius="full" background={s.color === "danger" ? "danger" : s.color === "warning" ? "warning" : "surface-tertiary"}/>
-      </row>
+  <box padding={2} background="surface-secondary" radius="md" gap={1}>
+    <row gap={2} align="center">
+      <icon name="alert-triangle" size="sm" />
+      <text weight="semibold">诊断</text>
     </row>
-  {/each}
+    <text>File Reads（45%，57.6k）是最大头，工具定义 35.8k 属异常偏高，两者合计 73% —— 核心问题是"一次性读太多、工具暴露太多"。</text>
+  </box>
 </box>
 
-<box gap={2} padding={3} border radius="lg">
-  <text weight="semibold">裁剪优先级</text>
-  <caption>按「可回收 token ÷ 改动风险」排序</caption>
+<box gap={3} padding={3} radius="lg" border>
+  <row gap={2} align="center">
+    <icon name="scissors" size="sm" />
+    <text weight="semibold" size="lg">裁剪建议（按收益排序）</text>
+  </row>
 
-  <grid columns={3} gap={2}>
-    <box padding={2} background="surface-secondary" radius="md">
-      <row justify="between" align="center"><badge>P0</badge><text size="sm" color="danger" tabularNums>−45k</text></row>
-      <text size="sm" weight="medium">File Reads</text>
-      <caption>先 grep 定位再 read(offset, limit)；只读相关行段；读完后把结论写入对话，丢弃原文。</caption>
+  {#each [
+    { n: 1, title: "File Reads：改为按需 + 增量读取", gain: "可回收 30~40k", color: "danger",
+      pts: [
+        "禁止整仓/整文件通读，先用 grep/find 定位再 read 目标行段（offset/limit）",
+        "长文件分段读，只保留与当前任务相关的代码块，其余丢弃",
+        "读完即用即弃：把结论摘要写入上下文，而不是原始文件内容",
+        "对大文件先看结构（函数名/导出列表）再决定读哪段"
+      ] },
+    { n: 2, title: "Tool Definitions：精简到当前任务所需", gain: "可回收 20~28k", color: "warning",
+      pts: [
+        "每个工具的描述/参数 schema 都是常驻成本，只加载本任务要用的工具集",
+        "删除冗余工具（重复能力的 CLI 封装、从不调用的集成）",
+        "缩短工具描述文案，去掉示例之外的重复说明",
+        "用 MCP/子代理按需挂载重型工具，而不是全量常驻"
+      ] },
+    { n: 3, title: "System Prompt：删重复、去示例冗余", gain: "可回收 4~8k", color: "secondary",
+      pts: [
+        "规则去重，把长示例压缩为一行要点",
+        "把低频规则移入可按需加载的 skill/文档",
+        "保留硬约束（输出格式、安全边界），删掉软性风格说明"
+      ] },
+    { n: 4, title: "Conversation：滚动摘要 + 剪枝", gain: "可回收 8~12k", color: "secondary",
+      pts: [
+        "早期轮次折叠为要点摘要，只保留最近 N 轮原文",
+        "删掉已被取代的中间尝试与失败输出",
+        "工具返回的大块 JSON/日志先抽取字段再入上下文"
+      ] }
+  ] as s}
+    <box gap={2} padding={2} radius="md" background="surface-secondary">
+      <row justify="between" align="center">
+        <row gap={2} align="center">
+          <badge color={s.color}>#{s.n}</badge>
+          <text weight="semibold">{s.title}</text>
+        </row>
+        <caption color={s.color}>{s.gain}</caption>
+      </row>
+      <col gap={1}>
+        {#each s.pts as p}
+          <row gap={2} align="start">
+            <icon name="chevron-right" size="sm" />
+            <text size="sm" color="secondary">{p}</text>
+          </row>
+        {/each}
+      </col>
     </box>
-    <box padding={2} background="surface-secondary" radius="md">
-      <row justify="between" align="center"><badge>P1</badge><text size="sm" color="warning" tabularNums>−25k</text></row>
-      <text size="sm" weight="medium">Tool Definitions</text>
-      <caption>关闭未使用的 MCP server / 工具集；精简 description 与枚举；按任务阶段动态加载工具。</caption>
-    </box>
-    <box padding={2} background="surface-secondary" radius="md">
-      <row justify="between" align="center"><badge>P2</badge><text size="sm" tabularNums>−6k</text></row>
-      <text size="sm" weight="medium">System Prompt</text>
-      <caption>移除与当前任务无关的示例与 DIL 组件说明；把长规范外置成按需加载的 skill。</caption>
-    </box>
-  </grid>
+  {/each}
 
   <divider/>
 
-  <row justify="between" align="center">
-    <caption>裁剪后预估占用</caption>
-    <text weight="semibold" tabularNums>≈ 40% · 约 52k / 128k</text>
+  <row justify="between" align="center" gap={2}>
+    <row gap={2} align="center">
+      <icon name="target" size="sm" />
+      <text weight="semibold">目标形态</text>
+    </row>
+    <caption>裁剪后利用率 ≈ 55~65%，留出充足余量</caption>
   </row>
-  <box height="12px" radius="full" background="surface-tertiary">
+
+  <box height="24px" radius="md" background="surface-tertiary">
     <row gap={0} height="100%">
-      <box width="8%" height="100%" background="surface-tertiary"/>
-      <box width="10%" height="100%" background="warning" radius={{size: 0, color: "surface"}}/>
-      <box width="12%" height="100%" background="danger" radius={{size: 0, color: "surface"}}/>
-      <box width="15%" height="100%" background="surface" radius={{size: 0, color: "surface"}}/>
+      <box width="8%" height="100%" background="surface" radius="md" />
+      <box width="12%" height="100%" background="surface-secondary" />
+      <box width="22%" height="100%" background="surface" />
+      <box width="13%" height="100%" background="surface-secondary" radius="md" />
+      <box width="45%" height="100%" background="surface-tertiary" />
     </row>
   </box>
-  <caption>System 5% · Tools 10% · Files 12% · Conversation 15% —— 剩余 60% 留给后续推理</caption>
+  <row justify="between">
+    <caption>Sys 8%</caption>
+    <caption>Tools 12%</caption>
+    <caption>Files 22%</caption>
+    <caption>Conv 13%</caption>
+    <caption color="success">Free 45%</caption>
+  </row>
 </box>
 
-<box gap={2} padding={3} background="surface-secondary" radius="lg">
-  <text weight="semibold">具体动作清单</text>
-  {#each ["用 grep / find 先缩小范围，再用 read 的 offset+limit 只取命中行附近 40–80 行", "禁止整文件读取 >500 行的文件；需要全览时先看大纲（函数签名、导出列表）", "读过的文件用 3–5 行摘要替换原文，保留路径+行号引用", "把 5+ 轮前的工具调用结果从上下文中移除（compaction / 会话摘要）", "工具层面：只挂载当前任务的 server，MCP 工具描述控制在 1 行内", "把 DIL、代码风格等长规范拆成 skill，按需加载而不是常驻 System Prompt"] as tip, i}
-    <row gap={2} align="start">
-      <badge>{i + 1}</badge>
-      <text size="sm">{tip}</text>
-    </row>
-  {/each}
-</box>
+**关键判断：** 问题不在"上下文不够大"，而在前两类（System + Tools，40%）本可压缩到 20% 以内却长期常驻。优先做 ①File Reads 增量读取 ②Tool 按需挂载，两项即可回收 ~60k，其余三项是锦上添花。

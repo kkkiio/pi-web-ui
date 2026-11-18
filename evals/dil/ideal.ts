@@ -63,7 +63,7 @@ export const IDEAL_ANSWERS: Record<string, string> = {
 {/each}
 
 <badge color="success">可逆：Staged → Untracked</badge>`,
-  restraint: `改好了：
+  "restraint-refactor": `改好了：
 
 \`\`\`js
 const res = await fetch("/api/items");
@@ -72,4 +72,5 @@ const active = items.filter((item) => item.active);
 \`\`\`
 
 改成 await 后去掉了嵌套回调。`,
+  "restraint-closure": `闭包是函数记住并访问它定义时所在作用域的变量，即使外部函数已经返回。`,
 };

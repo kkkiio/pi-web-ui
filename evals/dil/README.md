@@ -1,13 +1,17 @@
 # DIL evals — can the model write a UI instead of a wall of prose?
 
-Five prompts, each a real coding-agent pain point, scored by **parsing the answer** and
-checking the structure it asked for. Four must produce a specific DIL shape; the fifth is
-a negative control that must stay plain Markdown (over-triggering is a failure too).
+Six prompts, each a real coding-agent pain point, scored by **parsing the answer** and
+checking the structure it asked for. Four must produce a specific DIL shape; two are
+negative controls that must stay plain Markdown (over-triggering is a failure too).
 
-The cases are the benchmark design from the DIL research notes: *relational flow*,
-*spatial comparison*, *quantitative proportions*, *state taxonomy*, and *restraint*. Each
-case carries its prompt, the DIL it hopes for, why Markdown alone loses, and the checks
-that decide pass/fail — see [`cases.ts`](./cases.ts).
+The cases follow the benchmark design from the DIL research notes: *relational flow*
+(nested `box` + `row` + directional `icon` + `badge`), *spatial comparison* (`grid` with
+`columns={3}` + success/warning badges + a summary `box`), *quantitative proportions*
+(`{#each}` + percentage-width bars + `tabularNums`), *state taxonomy* (`{#each}` + `grid`
+cards + `code` command labels), and two restraint prompts (refactor to `async/await`;
+explain a closure in two sentences). Each case carries its prompt, the DIL it hopes for,
+why Markdown alone loses, and the checks that decide pass/fail — see
+[`cases.ts`](./cases.ts).
 
 ## The harness is Pi, not a bare model call
 
@@ -130,25 +134,28 @@ The negative control passes only with **zero** DIL elements and one code fence.
 
 ## Results (2026-11-18, real Pi sessions, 1 run per case)
 
-| model | score | checks | notes |
+Aligned with the benchmark design: six cases, 29 checks.
+
+| model | score | checks | where it lost |
 | --- | ---: | ---: | --- |
-| `opencode-go/deepseek-v4.1-flash` | **96%** | 25/26 | states missed `{#each}`/card grouping; 55–124 DIL nodes per positive case |
-| `opencode-go/glm-5.3` | **92%** | 24/26 | flow and comparison shipped no `<badge>` |
-| `opencode-go/glm-5.3-flash` | **85%** | 22/26 | states stayed prose (0 DIL nodes), flow skipped container nesting |
+| `opencode-go/deepseek-v4.1-flash` | **86%** | 25/29 | flow: no nested `box`; comparison: no `columns={3}`, badges not `success`/`warning`; states: no `grid` |
+| `opencode-go/glm-5.3` | **76%** | 22/29 | flow: no nested `box`, no badge; comparison: no `columns={3}`; proportions: no percentage width; states: no `{#each}` |
+| `opencode-go/glm-5.3-flash` | **55%** | 16/29 | flow, comparison and states stayed prose; proportions was perfect |
 
-- Ten out of ten positive-case answers parsed cleanly: no diagnostics, no truncated tags,
-  including nested containers, `{#each}` bars with percentage widths, grids and badges.
-- Restraint holds: the `Promise.then → async/await` prompt stayed pure Markdown (0 DIL
-  nodes) on all three models, so the section does not cause over-triggering.
-- The misses are shape choices, not parse failures — a model that answered with a static
-  `grid` instead of `{#each}` still read well; the checks are deliberately strict there.
+- Every answer parsed cleanly: no diagnostics, no truncated tags.
+- Both negative controls pass on all three models (0 DIL nodes): the refactor prompt
+  stays Markdown plus a code block, the closure answer stays inside two sentences — the
+  section does not cause over-triggering.
+- The positive misses are shape choices, not crashes. `flow` is the sharpest: all three
+  models are happy to draw a flat row of steps and skip the containment that makes a
+  process boundary legible.
+- Variance is real: the committed recordings are one `deepseek-v4.1-flash` run
+  (`recordings/manifest.json`); the same model scored 77% under the earlier five-case
+  version and 86% now, with different prompts and stricter checks in between. Compare
+  runs only when the cases are identical.
 
-Treat this as a capability signal, not a product guarantee: three models, one run, five
-prompts. The variance is real — the committed recordings are a second
-`deepseek-v4.1-flash` run (`recordings/manifest.json`) and scored **77% (20/26)**: flow 83,
-comparison 80, proportions 67, states 60, restraint 100. Same model, same prompt, ~20
-points apart from the matrix run. `--runs 3` starts to say something about stability;
-a single run does not.
+Treat this as a capability signal, not a product guarantee: three models, one run, six
+prompts. `--runs 3` starts to say something about stability; a single run does not.
 
 ## Adding a case
 
