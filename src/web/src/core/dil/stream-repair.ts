@@ -208,7 +208,15 @@ function closePendingMarkers(text: string, openCode: OpenCodeRun | null = openCo
   // Everything after an unmatched backtick run is code content, so only the part before
   // it can still hold emphasis; the backtick closer has to come first.
   const before = text.slice(0, openCode.index);
-  return `${text}${"`".repeat(openCode.run)}${pendingClosers(before)}`;
+
+  // A closer only closes when it is its own run: appending `run` backticks next to an
+  // existing trailing run of length r produces r + run, which the scanner rejects, and the
+  // next pass tries again — ` ``double `tick` ` grew to 3 then 5 backticks. Complete the
+  // trailing run instead, and when it is already as long as the opener, leave it alone.
+  const trailing = runLengthAtEnd(text, "`");
+  if (trailing >= openCode.run) return text + pendingClosers(before);
+
+  return `${text}${"`".repeat(openCode.run - trailing)}${pendingClosers(before)}`;
 }
 
 interface OpenCodeRun {
@@ -240,6 +248,13 @@ function openCodeRun(text: string): OpenCodeRun | null {
     return { index: i, run };
   }
   return null;
+}
+
+/** Length of the delimiter run the text ends with (`0` when it ends with anything else). */
+function runLengthAtEnd(text: string, marker: string): number {
+  let length = 0;
+  while (length < text.length && text[text.length - 1 - length] === marker) length++;
+  return length;
 }
 
 /** Closers for every marker still open at the end, innermost first. */
