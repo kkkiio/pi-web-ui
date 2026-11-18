@@ -37,7 +37,8 @@ export const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["code", "pre", "code-
 
 const TAG_NAME = /[A-Za-z_$][\w$]*(?:[-.][A-Za-z_$][\w$]*)*/y;
 const ATTR_NAME = /[A-Za-z_$][\w$:-]*/y;
-const AUTOLINK = /^<[A-Za-z][A-Za-z0-9+.-]*:/;
+// `<https://…>` and `<dev@example.com>` are Markdown autolinks, not tags called `https`/`dev`.
+const AUTOLINK = /^<[A-Za-z][A-Za-z0-9+.-]*:|^<[^\s<>@]+@[^\s<>]+>/;
 const SIMPLE_CLOSE = /\{\/([A-Za-z_$][\w$]*)\s*\}/y;
 const SIMPLE_ELSE = /\{:else\s*\}/y;
 const ELSE_IF = /\{:else\s+if\s/y;

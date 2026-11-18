@@ -323,6 +323,12 @@ function lowerInlineFlow(nodes: DilNode[], sourceLength?: number): DilNode[] {
     const lastIndex = piece.nodes.length - 1;
     piece.nodes.forEach((node, index) => {
       if (node.type === "text") {
+        if (node.raw) {
+          // `<code>`, `<code-block>` and `<pre>` hold literal text: `**x**` stays four
+          // characters, and the tail is not repaired because nothing here is Markdown.
+          children.push(node);
+          return;
+        }
         const value = piece.tail && index === lastIndex ? repairStreamTail(node.value) : node.value;
         children.push(...parseInline(value, node.pos));
       } else {

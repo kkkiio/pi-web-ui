@@ -3,6 +3,33 @@ import test from "node:test";
 import { lowerInline, parseDocument } from "./index.ts";
 import type { DilElementNode, DilNode } from "./types.ts";
 
+test("code elements keep their literal text", () => {
+  const code = only(tree('<code-block>const p = "**x**";</code-block>'), "code-block");
+  assert.deepEqual(
+    code.children.map((child) => (child.type === "text" ? [child.value, child.raw] : child.type)),
+    [['const p = "**x**";', true]],
+    "asterisks inside code must not become bold nodes",
+  );
+
+  // Inline `<code>` sits inside a synthetic `<text>`, so walk to find it.
+  const found: DilNode[] = [];
+  const walk = (nodes: readonly DilNode[]) => {
+    for (const node of nodes) {
+      if (node.type === "element") {
+        if (node.name === "code") found.push(node);
+        walk(node.children);
+      }
+    }
+  };
+  walk(tree("<code>**x**</code>"));
+  assert.equal(found.length, 1, "expected one <code>");
+  const inline = found[0] as DilElementNode;
+  assert.deepEqual(
+    inline.children.map((child) => (child.type === "text" ? child.value : child.type)),
+    ["**x**"],
+  );
+});
+
 function tree(source: string): DilNode[] {
   return parseDocument(source).tree;
 }

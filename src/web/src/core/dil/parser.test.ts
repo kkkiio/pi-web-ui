@@ -29,6 +29,17 @@ function expression(element: DilElementNode, name: string): string {
   return String(attribute.value);
 }
 
+test("email autolinks are prose, not elements", () => {
+  const doc = parseDocument("Contact <dev@example.com> for help.");
+  assert.equal(doc.diagnosticSummary, "clean");
+  assert.equal(
+    doc.raw.some((node) => node.type === "element"),
+    false,
+    "no element may be read out of an autolink",
+  );
+  assert.ok(JSON.stringify(doc.tree).includes("dev@example.com"));
+});
+
 test("Markdown escapes keep braces and tags as prose", () => {
   // `\{` is a literal brace: it must not open an interpolation that then vanishes.
   const escaped = parseDocument("The set is \\{a, b\\}. Use \\<box\\> to group.");
