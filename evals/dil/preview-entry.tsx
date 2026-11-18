@@ -32,13 +32,17 @@ interface CaseResult {
   readonly checks: readonly { readonly label: string; readonly pass: boolean }[];
 }
 
+interface Summary {
+  readonly variant: string;
+  readonly score: number;
+  readonly cases: readonly CaseResult[];
+}
+
 interface Report {
   readonly model: string;
-  readonly summaries: readonly {
-    readonly variant: string;
-    readonly score: number;
-    readonly cases: readonly CaseResult[];
-  }[];
+  readonly summary?: Summary;
+  /** Shape written by the earlier with/without runner; still readable. */
+  readonly summaries?: readonly Summary[];
 }
 
 function builtCss(): string {
@@ -57,18 +61,17 @@ function escapeHtml(value: string): string {
  * committed recordings instead, so the preview works without a key or a fresh run.
  */
 function fromRecordings(): Report {
-  const summaries = ["with", "without"].map((variant) => {
-    const cases = DIL_CASES.flatMap((dilCase) => {
-      const file = join(ROOT, "evals", "dil", "recordings", `${dilCase.id}.${variant}.md`);
-      if (!existsSync(file)) return [];
-      const scored = scoreCase(dilCase, readFileSync(file, "utf8"));
-      return [{ ...scored, checks: scored.checks }];
-    });
-    const passed = cases.reduce((sum, item) => sum + item.passed, 0);
-    const total = cases.reduce((sum, item) => sum + item.total, 0);
-    return { variant, cases, score: total === 0 ? 0 : Math.round((passed / total) * 100) };
+  const cases = DIL_CASES.flatMap((dilCase) => {
+    const file = join(ROOT, "evals", "dil", "recordings", `${dilCase.id}.md`);
+    if (!existsSync(file)) return [];
+    return [scoreCase(dilCase, readFileSync(file, "utf8"))];
   });
-  return { model: "recordings", summaries };
+  const passed = cases.reduce((sum, item) => sum + item.passed, 0);
+  const total = cases.reduce((sum, item) => sum + item.total, 0);
+  return {
+    model: "recordings",
+    summary: { variant: "with-dil", cases, score: total === 0 ? 0 : Math.round((passed / total) * 100) },
+  };
 }
 
 const report: Report =
@@ -83,7 +86,10 @@ interface TocGroup {
 }
 
 const toc: TocGroup[] = [];
-const sections = report.summaries
+const headline = report.summary ?? report.summaries?.[0];
+if (!headline) throw new Error("report.json has no summary; run npm run eval:dil again");
+
+const sections = [headline]
   .map((summary) => {
     const group: TocGroup = { variant: summary.variant, score: summary.score, items: [] };
     const items = [...group.items] as { anchor: string; label: string; score: number }[];

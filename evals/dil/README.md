@@ -37,14 +37,17 @@ the suite works without a key and a check that can never pass fails loudly.
 ## Run
 
 ```bash
-npm run eval:dil                              # live Pi session, deepseek-flash, DIL section
-npm run eval:dil -- --variant both            # also run without the section (lift)
+npm run eval:dil                              # live Pi session, deepseek-flash
 npm run eval:dil -- --provider opencode-go --model glm-5.3
-npm run eval:dil -- --runs 3
+npm run eval:dil -- --runs 3                  # sample variance
 npm run eval:dil -- --dry                     # score the committed recordings
 npm run eval:dil -- --record                  # refresh the recordings from a live run
 npm run eval:dil -- flow comparison           # selected cases only
 ```
+
+Every run carries the `<dil>` section — that is the product's state after `/webui`; there
+is no "without prompt" arm, because the interesting question is not whether a model uses
+DIL spontaneously (it does not) but whether the shipped prompt makes it use DIL well.
 
 Credentials, in order: `<PROVIDER>_API_KEY` in the environment, the same name in a repo
 `.env`, then `~/.pi/agent/auth.json` (what `pi` login writes). API-key providers only —
@@ -105,25 +108,23 @@ punished for choosing different tags.
 
 The negative control passes only with **zero** DIL elements and one code fence.
 
-## Results (2026-11-18, `deepseek-flash`, 1 run per case)
+## Results (2026-11-18, real Pi sessions, 1 run per case)
 
-| variant | score | checks | DIL nodes |
-| --- | ---: | ---: | ---: |
-| with DIL system prompt | **96%** | 25/26 | 62–93 per positive case |
-| without any prompt | 35% | 9/26 | 0 |
+| model | score | checks | notes |
+| --- | ---: | ---: | --- |
+| `opencode-go/deepseek-v4.1-flash` | **96%** | 25/26 | states missed `{#each}`/card grouping; 55–124 DIL nodes per positive case |
+| `opencode-go/glm-5.3` | **92%** | 24/26 | flow and comparison shipped no `<badge>` |
+| `opencode-go/glm-5.3-flash` | **85%** | 22/26 | states stayed prose (0 DIL nodes), flow skipped container nesting |
 
-- The model never reaches for DIL unprompted (0 nodes in every positive case).
-- With five lines of instruction it produces valid DIL every time: no parse diagnostics in
-  any of the ten recordings, including nested containers, `{#each}` bars with percentage
-  widths, and badges.
-- The one miss: `tabularNums` on the proportion numbers — a token detail, not a structural
-  failure.
-- Restraint holds: the `Promise.then → async/await` prompt stays pure Markdown in both
-  variants (0 DIL nodes), so the prompt does not cause over-triggering.
+- Ten out of ten positive-case answers parsed cleanly: no diagnostics, no truncated tags,
+  including nested containers, `{#each}` bars with percentage widths, grids and badges.
+- Restraint holds: the `Promise.then → async/await` prompt stayed pure Markdown (0 DIL
+  nodes) on all three models, so the section does not cause over-triggering.
+- The misses are shape choices, not parse failures — a model that answered with a static
+  `grid` instead of `{#each}` still read well; the checks are deliberately strict there.
 
-Treat these as a capability signal, not a product guarantee: one model, one run, five
-prompts. Recordings make regressions reviewable; `--runs 3` starts to say something about
-stability.
+Treat this as a capability signal, not a product guarantee: three models, one run, five
+prompts. `--runs 3` starts to say something about stability.
 
 ## Adding a case
 

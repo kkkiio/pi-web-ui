@@ -14,7 +14,7 @@
 import { expect } from "vitest";
 import { createHarness, describeEval } from "vitest-evals";
 import { apiKeyFor, createDilAgent } from "./agent.ts";
-import { DIL_CASES, DIL_SYSTEM_PROMPT } from "./cases.ts";
+import { DIL_CASES } from "./cases.ts";
 import { scoreCase } from "./scoring.ts";
 
 const PROVIDER = process.env.DIL_EVAL_PROVIDER ?? "deepseek";
@@ -33,7 +33,7 @@ const harness = createHarness<string, { text: string; systemPrompt: string }>({
   name: `${PROVIDER}/${MODEL}`,
   async run({ input }) {
     const agent = await createDilAgent({ provider: PROVIDER, model: MODEL });
-    const result = await agent.run(input, DIL_SYSTEM_PROMPT);
+    const result = await agent.run(input);
     return {
       output: result,
       messages: [

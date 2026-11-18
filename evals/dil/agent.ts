@@ -31,6 +31,8 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 
+import { DIL_SYSTEM_PROMPT } from "../../extensions/dil-system-prompt.ts";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Providers whose credential variable is not just `<PROVIDER>_API_KEY`. */
@@ -79,8 +81,8 @@ export interface AgentRun {
 
 export interface DilAgent {
   readonly label: string;
-  /** `dilSection` non-null runs the "with prompt" variant through `before_agent_start`. */
-  run(prompt: string, dilSection: string | null): Promise<AgentRun>;
+  /** Every run carries the `<dil>` section, i.e. the state after `/webui`. */
+  run(prompt: string): Promise<AgentRun>;
 }
 
 export interface AgentOptions {
@@ -119,7 +121,7 @@ export async function createDilAgent(options: AgentOptions): Promise<DilAgent> {
   const tools = options.tools ?? ["read", "grep", "find", "ls"];
   return {
     label: `${model.provider}/${model.id}`,
-    run: (prompt, dilSection) => runPiSession(modelRuntime, model, prompt, dilSection, { cwd, tools }),
+    run: (prompt) => runPiSession(modelRuntime, model, prompt, { cwd, tools }),
   };
 }
 
@@ -129,7 +131,6 @@ async function runPiSession(
   modelRuntime: ModelRuntime,
   model: ResolvedModel,
   prompt: string,
-  dilSection: string | null,
   layout: { readonly cwd: string; readonly tools: readonly string[] },
 ): Promise<AgentRun> {
   // The workspace is the project itself; only Pi's global config is isolated per run so
@@ -138,21 +139,19 @@ async function runPiSession(
   const agentDir = join(root, "agent");
   await mkdir(agentDir, { recursive: true });
 
-  const extensionFactories: InlineExtension[] = dilSection
-    ? [
-        {
-          name: "dil-eval-prompt",
-          hidden: true,
-          // Exactly the production mechanism: a new `<dil>` section, diffed by Pi into
-          // one mid-conversation system patch instead of rewriting the prompt head.
-          factory: (pi) => {
-            pi.on("before_agent_start", async (event) => {
-              event.systemPromptOptions.sections.dil = dilSection;
-            });
-          },
-        },
-      ]
-    : [];
+  // Exactly the production mechanism: a new `<dil>` section, diffed by Pi into one
+  // mid-conversation system patch instead of rewriting the prompt head.
+  const extensionFactories: InlineExtension[] = [
+    {
+      name: "dil-eval-prompt",
+      hidden: true,
+      factory: (pi) => {
+        pi.on("before_agent_start", async (event) => {
+          event.systemPromptOptions.sections.dil = DIL_SYSTEM_PROMPT;
+        });
+      },
+    },
+  ];
 
   const services = await createAgentSessionServices({
     cwd: layout.cwd,
