@@ -70,6 +70,7 @@ const ACORN_OPTIONS = { ecmaVersion: "latest" } as const;
 
 /** Evaluate an expression; throws `DilEvaluationError` on any problem. */
 export function evaluateExpression(source: string, scope: DilScope = {}): unknown {
+  steps = 0;
   return evaluate(parseExpression(source), [BUILTIN_SCOPE, scope]);
 }
 
@@ -114,6 +115,7 @@ export function evaluateList(source: string, scope: DilScope): readonly unknown[
  * the rest of the document has to keep rendering.
  */
 export function evaluateStatements(statements: readonly string[], seed: DilScope = {}): DilScope {
+  steps = 0;
   const scope: Record<string, unknown> = { ...seed };
   const context: Context = [BUILTIN_SCOPE, scope];
   for (const source of statements) {
@@ -184,7 +186,19 @@ function parseStatement(source: string): Statement | null {
 // Tree-walking evaluator
 // ---------------------------------------------------------------------------
 
+/**
+ * Total node visits allowed for one evaluation.
+ *
+ * A recursive arrow (`const f = n => n > 0 ? f(n - 1) + f(n - 1) : 1`) stays shallow —
+ * `f(40)` is 40 frames — but performs 2^40 calls. Array-size caps do not see it, and the
+ * renderer runs on the main thread, so the cap has to be on work, not on depth or size.
+ */
+const MAX_STEPS = 200_000;
+let steps = 0;
+
 function evaluate(node: Expression, context: Context): unknown {
+  if (++steps > MAX_STEPS) throw new DilEvaluationError("evaluation budget exceeded");
+
   switch (node.type) {
     case "Literal":
       if ("regex" in node || "bigint" in node) throw new DilEvaluationError("unsupported literal");

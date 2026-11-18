@@ -20,6 +20,17 @@ function fallback(source: string, scope: Record<string, unknown> = {}): unknown 
   return safeEvaluate(source, scope, "<failed>");
 }
 
+test("a recursive expression cannot run unbounded work", () => {
+  const scope = evaluateStatements(["const f = n => n > 0 ? f(n - 1) + f(n - 1) : 1"]);
+  const started = Date.now();
+  // Exponential work at shallow depth: a depth limit or an array cap would not stop it.
+  assert.equal(safeEvaluate("f(40)", scope, "budget"), "budget");
+  assert.ok(Date.now() - started < 5_000, "the budget must cut the work off quickly");
+
+  // Ordinary bulk work stays inside the budget.
+  assert.equal(value("Array.from({ length: 10000 }).map((x) => x * 2).length"), 10000);
+});
+
 test("grouping parentheses are part of the expression", () => {
   assert.equal(value("(1 + 2)"), 3);
   assert.equal(value("(((7)))"), 7);
