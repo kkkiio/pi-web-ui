@@ -140,7 +140,12 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     // 1. FencedBlock — only ever at a line start, so inline backticks stay prose.
     if (!quoted && (ctx.i === 0 || src[ctx.i - 1] === "\n")) {
       const fence = readFenceOpen(src, ctx.i);
-      if (fence) {
+      // An indented fence at document level belongs to a Markdown container (a list
+      // item's example), so it is prose that the Markdown lexer must see: taking it as a
+      // DIL fence ends the list and splits it in two. Inside an element the indentation
+      // is layout, so the fence stays a fence.
+      const indented = fence !== null && documentLevelIndent(src, ctx.i) > 0 && ctx.tagStack.length === 0;
+      if (fence && !indented) {
         flush(ctx.i);
         nodes.push(readFence(ctx, fence));
         continue;
@@ -281,6 +286,17 @@ function matchAt(pattern: RegExp, src: string, index: number): string | null {
  * number of preceding backslashes escapes; `\\{x}` is a literal backslash plus a real
  * interpolation. Escaped text is left as written so Markdown lowering decodes it.
  */
+/** Leading spaces/tabs of the line that starts at or before `index`. */
+function documentLevelIndent(src: string, index: number): number {
+  let i = index;
+  let indent = 0;
+  while (indent < 4 && (src[i] === " " || src[i] === "\t")) {
+    i++;
+    indent++;
+  }
+  return indent;
+}
+
 /** True when `index` sits on a line that carries a Markdown blockquote marker. */
 function isQuoteLine(src: string, index: number): boolean {
   let i = src.lastIndexOf("\n", index - 1) + 1;

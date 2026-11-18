@@ -25,6 +25,22 @@ test("inline neighbours keep the whitespace between them", () => {
   assert.ok(JSON.stringify(interpolation).includes('" "'), "the space between two values survives");
 });
 
+test("a fenced example inside a list item stays inside the list", () => {
+  // `<box>…</box>` ends a prose run; the indented fence that follows belongs to item 1,
+  // not to a top-level DIL fence, or the list renders as two lists around a code block.
+  const source = "<box>Summary</box>\n\n1. First\n\n   ~~~js\n   const x = 1;\n   ~~~\n\n2. Second";
+  const lists = elements(tree(source), "list");
+  assert.equal(lists.length, 1, "one list, not two");
+  const first = lists[0].children[0];
+  assert.equal(first?.type, "element");
+  const item = first as DilElementNode;
+  assert.equal(item.name, "list-item");
+  assert.ok(
+    item.children.some((child) => child.type === "element" && child.name === "code-block"),
+    "the example belongs to the first item",
+  );
+});
+
 test("a loose list stays one list (Markdown owns blank lines)", () => {
   const lists = only(tree("1. first\n\n2. second"), "list");
   const items = lists.children.filter((child) => child.type === "element" && child.name === "list-item");
