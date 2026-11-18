@@ -131,6 +131,28 @@ The labels below are deliberately not rendered yet, because each is a slice of i
 | `svg`, `defs`, `marker`, `rect`, `path`, … | **rendered** (`#47`): allowlisted attributes, namespaced ids, `<text>` is SVG text inside `<svg>` | done |
 | `button`, `radio-group`, `radio`, `textarea`, `label` | children only; no handlers | #48 |
 
+## Markdown constructs this renderer degrades
+
+Parsing is not the issue: `unified`/`remark-parse`/`remark-gfm` produce a complete mdast, and
+the lowering in `core/dil/markdown.ts` decides what a *renderer* wants to show. Only answers
+that contain DIL go through it; a plain Markdown answer never does (`hasDilElements`), so
+these degradations appear exactly when an answer mixes both.
+
+Reference-style links are the clearest example of a deliberate cut: they are rare in an agent
+answer, and resolving them would need a document-wide definition table because a definition
+can sit in a different prose run than its use.
+
+| construct | behaviour in a mixed answer | why |
+| --- | --- | --- |
+| `[label](url)` | `<Link url title>` | — |
+| `[label][id]` + `[id]: url` | label and the definition line stay **literal text** | resolution needs a document-wide definition map; rare in answers |
+| `![alt](src)` / `![alt][id]` | literal `![alt](src)` | no image primitive yet |
+| `footnote[^1]` / `[^1]: …` | literal `[^1]`; the definition renders as a paragraph | no footnote UI |
+| hard break (`␠␠␠␠\n`) | one space | `<Text>` is a plain block; no `<br>` node yet |
+| inline HTML (`<kbd>`) | literal text | a `<tag>` in DIL is an element, so HTML is not reinterpreted |
+
+Anything not listed behaves as its Markdown counterpart does.
+
 ## Roadmap
 
 - **[#46 Core MVP](https://github.com/kkkiio/pi-web-ui/issues/46)** — layout primitives,

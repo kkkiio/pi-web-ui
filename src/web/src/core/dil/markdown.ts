@@ -423,7 +423,16 @@ function contentNode(node: RootContent, prose: CompositeProse): DilNode[] {
       // front matter and stray markup stay literal.
       return node.value ? [{ type: "text", value: node.value, pos }] : [];
     case "definition":
-      return [];
+      // Reference links are not resolved (a definition may live in another prose run),
+      // but the destination must not vanish: keep the source line as text so the URL is
+      // still readable. See the renderer README for the supported Markdown subset.
+      return [
+        {
+          type: "text",
+          value: `[${node.label ?? node.identifier}]: ${node.url}${node.title ? ` "${node.title}"` : ""}`,
+          pos,
+        },
+      ];
     case "footnoteDefinition":
       return contentNodes(node.children, prose);
     default:

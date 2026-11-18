@@ -3,6 +3,15 @@ import test from "node:test";
 import { lowerInline, parseDocument } from "./index.ts";
 import type { DilElementNode, DilNode } from "./types.ts";
 
+test("a reference definition stays visible instead of vanishing", () => {
+  // Reference links are not resolved; the destination still has to be readable rather
+  // than silently deleted with the definition node.
+  const document = parseDocument("See [documentation][docs].\n\n[docs]: https://example.com");
+  const text = JSON.stringify(document.tree);
+  assert.ok(text.includes("[documentation][docs]"), "the reference stays literal");
+  assert.ok(text.includes("https://example.com"), "the destination stays visible");
+});
+
 test("inline neighbours keep the whitespace between them", () => {
   // `<bold>Hello</bold> <italic>world</italic>` is one paragraph with a space node in the
   // middle; dropping whitespace-only nodes renders `Helloworld`.
