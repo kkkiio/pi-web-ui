@@ -144,11 +144,10 @@ function lowerDocumentProse(nodes: DilNode[], sourceLength?: number): DilNode[] 
       continue;
     }
     if (node.type === "text") {
-      const pieces = node.value.split(/\n[ \t]*\n/);
-      pieces.forEach((piece, index) => {
-        if (index > 0) flushRun();
-        if (/\S/.test(piece)) run.push({ ...node, value: piece });
-      });
+      // Feed the whole run to the Markdown lexer: blank lines are *its* block separator.
+      // Splitting here makes a loose list (`1. a\n\n2. b`) two lists, both starting at 1,
+      // and moves a list item's continuation paragraph out of the item.
+      if (/\S/.test(node.value)) run.push(node);
       continue;
     }
     flushRun();

@@ -198,8 +198,10 @@ export function readInlineCodeSpan(text: string, start: number): InlineSpan | nu
       continue;
     }
     const value = text.slice(start + run, found);
-    if (!value || value.includes("\n")) return null;
-    return { value, end: found + run, syntax: "code" };
+    if (!value) return null;
+    // CommonMark allows a code span to cross line endings and turns them into spaces;
+    // rejecting it lets the span's braces leak into DIL recognition.
+    return { value: value.replace(/\r?\n/g, " "), end: found + run, syntax: "code" };
   }
   return null;
 }

@@ -3,6 +3,44 @@ import test from "node:test";
 import { lowerInline, parseDocument } from "./index.ts";
 import type { DilElementNode, DilNode } from "./types.ts";
 
+test("a loose list stays one list (Markdown owns blank lines)", () => {
+  const lists = only(tree("1. first\n\n2. second"), "list");
+  const items = lists.children.filter((child) => child.type === "element" && child.name === "list-item");
+  assert.equal(items.length, 2, "blank lines separate items, not lists");
+
+  // A continuation paragraph belongs to its item, not to the document.
+  const withContinuation = only(tree("1. first\n\n   more detail\n\n2. second"), "list");
+  const first = withContinuation.children[0];
+  assert.equal(first?.type, "element");
+  assert.equal((first as DilElementNode).name, "list-item");
+  assert.ok((first as DilElementNode).children.length > 1, "the item keeps its paragraph");
+});
+
+test("a code span may cross a line ending", () => {
+  // Rejecting the span let its braces through as an interpolation, which is how
+  // `{a: 1}` used to disappear from the answer.
+  const source = "Use `const x =\n{a: 1}` here";
+  const document = parseDocument(source);
+  assert.equal(document.diagnosticSummary, "clean");
+
+  const found: DilNode[] = [];
+  const walk = (nodes: readonly DilNode[]) => {
+    for (const node of nodes) {
+      if (node.type === "element") {
+        if (node.name === "code") found.push(node);
+        walk(node.children);
+      }
+    }
+  };
+  walk(document.tree);
+  assert.equal(found.length, 1, "expected one code span");
+  const code = found[0] as DilElementNode;
+  assert.deepEqual(
+    code.children.map((child) => (child.type === "text" ? child.value.replace(/\s+/g, " ") : child.type)),
+    ["const x = {a: 1}"],
+  );
+});
+
 test("code elements keep their literal text", () => {
   const code = only(tree('<code-block>const p = "**x**";</code-block>'), "code-block");
   assert.deepEqual(
