@@ -43,7 +43,8 @@ export interface ArrowValue {
 
 export interface CallableValue {
   readonly [SAFE]: "callable";
-  readonly invoke: (args: readonly unknown[]) => unknown;
+  /** `callback` is supplied for members reached through a namespace (`Array.from`). */
+  readonly invoke: (args: readonly unknown[], callback?: CallbackFactory) => unknown;
 }
 
 export interface NamespaceValue {
@@ -59,7 +60,7 @@ export function isSafeObject(value: unknown): value is SafeObject {
   return typeof value === "object" && value !== null && SAFE in value;
 }
 
-export function callable(invoke: (args: readonly unknown[]) => unknown): CallableValue {
+export function callable(invoke: (args: readonly unknown[], callback?: CallbackFactory) => unknown): CallableValue {
   return { [SAFE]: "callable", invoke };
 }
 
@@ -108,6 +109,11 @@ export function getMember(target: unknown, key: string, callback: CallbackFactor
     if (target[SAFE] === "namespace") {
       const member = target.members.get(key);
       if (member === undefined) throw new DilEvaluationError(`${key} is not available`);
+      // Namespace members can need a callback (`Array.from({ length }, (_, i) => …)`).
+      if (isSafeObject(member) && member[SAFE] === "callable") {
+        const invoke = (member as CallableValue).invoke;
+        return callable((args) => invoke(args, callback));
+      }
       return member;
     }
     throw new DilEvaluationError(`cannot read ${key} of a function`);
@@ -332,13 +338,26 @@ function stringNamespace(): NamespaceValue {
 
 function arrayNamespace(): NamespaceValue {
   return namespace({
-    from: callable((args) => {
+    from: callable((args, callback) => {
       const source = args[0];
-      if (Array.isArray(source)) return [...source].slice(0, MAX_ARRAY_LENGTH);
-      if (typeof source !== "object" || source === null || !Object.hasOwn(source, "length")) return [];
-      const raw = (source as { length: unknown }).length;
-      const length = typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? Math.min(raw, MAX_ARRAY_LENGTH) : 0;
-      return Array.from({ length }, (_, index) => index);
+      let list: readonly unknown[];
+      if (Array.isArray(source)) {
+        list = [...source].slice(0, MAX_ARRAY_LENGTH);
+      } else if (typeof source === "object" && source !== null && Object.hasOwn(source, "length")) {
+        const raw = (source as { length: unknown }).length;
+        const length =
+          typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? Math.min(raw, MAX_ARRAY_LENGTH) : 0;
+        list = Array.from({ length }, (_, index) => index);
+      } else {
+        return [];
+      }
+
+      // The optional mapFn only runs when it is an arrow we can evaluate; anything else is
+      // ignored rather than treated as a value to call.
+      const map = args[1];
+      if (!callback || !isSafeObject(map) || map[SAFE] !== "arrow") return list;
+      const run = callback(map);
+      return list.map((value, index) => run(value, index));
     }),
     isArray: callable((args) => Array.isArray(args[0])),
     of: callable((args) => args.slice(0, MAX_ARRAY_LENGTH)),

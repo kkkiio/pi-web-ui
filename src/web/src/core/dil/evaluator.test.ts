@@ -119,6 +119,10 @@ test("safe builtins: Math, Number, String, Array", () => {
   assert.equal(value("String(1) + String(2)"), "12");
   assert.deepEqual(value("Array.from([1, 2]).map(x => x + 1)"), [2, 3]);
   assert.deepEqual(value("Array.from({ length: 3 })"), [0, 1, 2]);
+  assert.deepEqual(value("Array.from({ length: 3 }, (_, i) => i * 2)"), [0, 2, 4]);
+  assert.deepEqual(value("Array.from([4, 5], (v) => v + 1)"), [5, 6]);
+  // A mapFn that is not an arrow is ignored, not called as a value.
+  assert.deepEqual(value("Array.from({ length: 2 }, 7)"), [0, 1]);
   assert.equal(value("Array.isArray([])"), true);
 });
 
