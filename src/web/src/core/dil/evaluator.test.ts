@@ -20,6 +20,32 @@ function fallback(source: string, scope: Record<string, unknown> = {}): unknown 
   return safeEvaluate(source, scope, "<failed>");
 }
 
+test("an optional chain short-circuits the rest of the chain", () => {
+  // `greet` must be an arrow the evaluator created — a host function is (correctly) not
+  // callable, so it is built through a statement instead.
+  const scope = {
+    ...evaluateStatements(["const greet = () => 'hi'"]),
+    user: null,
+    other: { profile: { name: "Ada" } },
+  };
+
+  // `user?.profile.name` must skip `.name`, not read it off `undefined`.
+  assert.equal(value("user?.profile.name", scope), undefined);
+  assert.equal(value("user?.profile.name ?? 'Unknown'", scope), "Unknown");
+  assert.equal(value("user?.profile.name", scope) ?? "Unknown", "Unknown");
+  assert.equal(value("other?.profile?.name", scope), "Ada");
+
+  // A skipped call is skipped too: `greet` lives in the scope, `missing` is null.
+  const calls = { ...scope, missing: null };
+  assert.equal(value("greet?.()", calls), "hi");
+  assert.equal(value("missing?.()", calls), undefined);
+  assert.equal(value("missing?.() ?? 'none'", calls), "none");
+
+  // Parentheses end the chain: `(user?.profile).name` is a real read of `name` on
+  // `undefined`, which is an error rather than `undefined`.
+  assert.equal(fallback("(user?.profile).name", scope), "<failed>");
+});
+
 test("a recursive expression cannot run unbounded work", () => {
   const scope = evaluateStatements(["const f = n => n > 0 ? f(n - 1) + f(n - 1) : 1"]);
   const started = Date.now();

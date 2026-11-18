@@ -196,6 +196,12 @@ function parseStatement(source: string): Statement | null {
 const MAX_STEPS = 200_000;
 let steps = 0;
 
+/**
+ * `a?.b.c` sentinel: the chain was skipped at an optional access, so every remaining
+ * access in the same chain is skipped too. It never escapes a `ChainExpression`.
+ */
+const SHORT_CIRCUIT = Symbol("optional-chain-short-circuit");
+
 function evaluate(node: Expression, context: Context): unknown {
   if (++steps > MAX_STEPS) throw new DilEvaluationError("evaluation budget exceeded");
 
@@ -261,13 +267,19 @@ function evaluate(node: Expression, context: Context): unknown {
     case "ConditionalExpression":
       return evaluate(node.test, context) ? evaluate(node.consequent, context) : evaluate(node.alternate, context);
 
-    case "ChainExpression":
-      return evaluate(node.expression, context);
+    case "ChainExpression": {
+      // A short-circuit inside `a?.b.c` skips the *rest of the chain*, not just the one
+      // access: `user?.profile.name` with a null `user` must be `undefined`, not a read
+      // of `name` on `undefined`. The sentinel travels up to here and becomes `undefined`.
+      const value = evaluate(node.expression, context);
+      return value === SHORT_CIRCUIT ? undefined : value;
+    }
 
     case "MemberExpression": {
       if (node.object.type === "Super") throw new DilEvaluationError("super is not available");
       const object = evaluate(node.object, context);
-      if (node.optional && (object === null || object === undefined)) return undefined;
+      if (object === SHORT_CIRCUIT) return SHORT_CIRCUIT;
+      if (node.optional && (object === null || object === undefined)) return SHORT_CIRCUIT;
       return getMember(object, memberKey(node, context), callback);
     }
 
@@ -291,6 +303,8 @@ function memberKey(node: Extract<Expression, { type: "MemberExpression" }>, cont
 }
 
 function call(node: CallExpression, context: Context): unknown {
+  // `a?.b()` / `fn?.(x)`: the callee may have short-circuited, and then the call is skipped.
+
   const args = node.arguments.map((argument) => {
     if (argument.type === "SpreadElement") throw new DilEvaluationError("spread is not allowed");
     return evaluate(argument, context);
@@ -298,7 +312,8 @@ function call(node: CallExpression, context: Context): unknown {
 
   if (node.callee.type === "Super") throw new DilEvaluationError("super is not available");
   const value = evaluate(node.callee, context);
-  if (node.optional && (value === null || value === undefined)) return undefined;
+  if (value === SHORT_CIRCUIT) return SHORT_CIRCUIT;
+  if (node.optional && (value === null || value === undefined)) return SHORT_CIRCUIT;
   return callValue(value, args);
 }
 
