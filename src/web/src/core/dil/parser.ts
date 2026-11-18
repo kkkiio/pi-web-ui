@@ -133,8 +133,12 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     const c = src[ctx.i];
     const next = src[ctx.i + 1];
 
+    // A blockquote line is prose: a fence inside it (`> ~~~js`) has its prefix between the
+    // line start and the marker, so DIL scanning must not read its braces as expressions.
+    const quoted = isQuoteLine(src, ctx.i);
+
     // 1. FencedBlock — only ever at a line start, so inline backticks stay prose.
-    if (ctx.i === 0 || src[ctx.i - 1] === "\n") {
+    if (!quoted && (ctx.i === 0 || src[ctx.i - 1] === "\n")) {
       const fence = readFenceOpen(src, ctx.i);
       if (fence) {
         flush(ctx.i);
@@ -167,7 +171,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 4. Closing element tag.
-    if (c === "<" && next === "/" && !isEscaped(src, ctx.i)) {
+    if (!quoted && c === "<" && next === "/" && !isEscaped(src, ctx.i)) {
       const closing = readClosingTag(src, ctx.i);
       if (closing) {
         flush(ctx.i);
@@ -194,7 +198,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 5. Block terminators: `{:else}`, `{:else if x}`, `{/if}`, `{/each}`.
-    if (c === "{" && (next === ":" || next === "/") && !isEscaped(src, ctx.i)) {
+    if (!quoted && c === "{" && (next === ":" || next === "/") && !isEscaped(src, ctx.i)) {
       const terminator = readTerminator(ctx);
       if (terminator) {
         flush(ctx.i);
@@ -210,7 +214,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 6. `{@body …}` declarations.
-    if (c === "{" && next === "@" && !isEscaped(src, ctx.i)) {
+    if (!quoted && c === "{" && next === "@" && !isEscaped(src, ctx.i)) {
       flush(ctx.i);
       const statement = readAppDirective(ctx);
       if (statement) nodes.push(statement);
@@ -218,7 +222,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 7. Control flow blocks.
-    if (c === "{" && next === "#" && !isEscaped(src, ctx.i)) {
+    if (!quoted && c === "{" && next === "#" && !isEscaped(src, ctx.i)) {
       flush(ctx.i);
       const block = readBlock(ctx, closeTag);
       if (block.node) nodes.push(block.node);
@@ -227,7 +231,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 8. DIL elements. A `<` that cannot start a tag (`a < b`, `<https://…>`) is prose.
-    if (c === "<" && !isEscaped(src, ctx.i) && isTagStart(src, ctx.i)) {
+    if (!quoted && c === "<" && !isEscaped(src, ctx.i) && isTagStart(src, ctx.i)) {
       flush(ctx.i);
       const element = readElement(ctx);
       if (element.node) nodes.push(element.node);
@@ -236,7 +240,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 9. `{expression}` interpolation. An escaped brace stays prose.
-    if (c === "{" && !isEscaped(src, ctx.i)) {
+    if (!quoted && c === "{" && !isEscaped(src, ctx.i)) {
       flush(ctx.i);
       const pos = ctx.i;
       const braced = readBalanced(src, pos);
@@ -277,6 +281,19 @@ function matchAt(pattern: RegExp, src: string, index: number): string | null {
  * number of preceding backslashes escapes; `\\{x}` is a literal backslash plus a real
  * interpolation. Escaped text is left as written so Markdown lowering decodes it.
  */
+/** True when `index` sits on a line that carries a Markdown blockquote marker. */
+function isQuoteLine(src: string, index: number): boolean {
+  let i = src.lastIndexOf("\n", index - 1) + 1;
+  let markers = 0;
+  while (i < index) {
+    while (i < index && (src[i] === " " || src[i] === "\t")) i++;
+    if (src[i] !== ">") break;
+    markers++;
+    i++;
+  }
+  return markers > 0;
+}
+
 function isEscaped(src: string, index: number): boolean {
   let backslashes = 0;
   for (let i = index - 1; i >= 0 && src[i] === "\\"; i--) backslashes++;

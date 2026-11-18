@@ -160,6 +160,24 @@ function numberMember(value: number, key: string, callback: CallbackFactory): un
 const MAX_REPEAT = 100_000;
 const MAX_ARRAY_LENGTH = 10_000;
 
+/**
+ * Builtins allocate natively, so the evaluator's step budget cannot interrupt them:
+ * `'a'.repeat(1000).repeat(100000)` is two node visits and 100 MB of string. Results are
+ * therefore checked *after* the call as well as before it — cheap insurance, and it also
+ * bounds `+` chains that would otherwise concatenate without limit.
+ */
+export const MAX_STRING_LENGTH = 100_000;
+
+export function boundedString(value: string): string {
+  if (value.length > MAX_STRING_LENGTH) throw new DilEvaluationError("result is too large");
+  return value;
+}
+
+export function boundedArray<T>(value: readonly T[]): readonly T[] {
+  if (value.length > MAX_ARRAY_LENGTH) throw new DilEvaluationError("result is too large");
+  return value;
+}
+
 type Method<Self> = (self: Self, args: readonly unknown[], callback: CallbackFactory) => unknown;
 
 const ARRAY_METHODS: Record<string, Method<readonly unknown[]>> = {
@@ -171,16 +189,16 @@ const ARRAY_METHODS: Record<string, Method<readonly unknown[]>> = {
   every: (self, args, callback) => self.every(callback(args[0]) as (value: unknown) => unknown),
   reduce: (self, args, callback) => self.reduce(callback(args[0]) as (a: unknown, b: unknown) => unknown, args[1]),
   slice: (self, args) => self.slice(optionalIndex(args[0]), optionalIndex(args[1])),
-  join: (self, args) => self.join(typeof args[0] === "string" ? args[0] : ","),
+  join: (self, args) => boundedString(self.join(typeof args[0] === "string" ? args[0] : ",")),
   includes: (self, args) => self.includes(args[0]),
   indexOf: (self, args) => self.indexOf(args[0]),
   at: (self, args) => self.at(toIndex(args[0])),
-  concat: (self, args) => [...self, ...args.flat()],
-  flat: (self, args) => self.flat(optionalDepth(args[0])),
+  concat: (self, args) => boundedArray([...self, ...args.flat()]),
+  flat: (self, args) => boundedArray(self.flat(optionalDepth(args[0]))),
 };
 
 const STRING_METHODS: Record<string, Method<string>> = {
-  split: (self, args) => (args[0] === undefined ? [self] : self.split(String(args[0]))),
+  split: (self, args) => boundedArray(args[0] === undefined ? [self] : self.split(String(args[0]))),
   slice: (self, args) => self.slice(optionalIndex(args[0]), optionalIndex(args[1])),
   substring: (self, args) => self.substring(optionalIndex(args[0]) ?? 0, optionalIndex(args[1])),
   includes: (self, args) => self.includes(String(args[0])),
@@ -193,16 +211,19 @@ const STRING_METHODS: Record<string, Method<string>> = {
   replace: (self, args, callback) => {
     const search = String(args[0]);
     const value = replacement(args[1], callback);
-    return typeof value === "string" ? self.replace(search, value) : self.replace(search, value);
+    // `value` is either a literal replacement or a callback produced by `replacement()`.
+    return boundedString(self.replace(search, value as string));
   },
   replaceAll: (self, args, callback) => {
     const search = String(args[0]);
     const value = replacement(args[1], callback);
-    return typeof value === "string" ? self.replaceAll(search, value) : self.replaceAll(search, value);
+    return boundedString(self.replaceAll(search, value as string));
   },
-  padStart: (self, args) => self.padStart(boundedLength(args[0]), typeof args[1] === "string" ? args[1] : " "),
-  padEnd: (self, args) => self.padEnd(boundedLength(args[0]), typeof args[1] === "string" ? args[1] : " "),
-  repeat: (self, args) => self.repeat(boundedLength(args[0])),
+  padStart: (self, args) =>
+    boundedString(self.padStart(boundedLength(args[0]), typeof args[1] === "string" ? args[1] : " ")),
+  padEnd: (self, args) =>
+    boundedString(self.padEnd(boundedLength(args[0]), typeof args[1] === "string" ? args[1] : " ")),
+  repeat: (self, args) => boundedString(self.repeat(boundedLength(args[0]))),
   charAt: (self, args) => self.charAt(toIndex(args[0])),
   at: (self, args) => self.at(toIndex(args[0])),
   toString: (self: string) => self,

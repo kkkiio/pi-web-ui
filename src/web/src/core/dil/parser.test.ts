@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parse, parseDocument } from "./index.ts";
+import { hasDilElements, parse, parseDocument } from "./index.ts";
 import type { DilElementNode, DilNode } from "./types.ts";
 
 function elements(nodes: readonly DilNode[], name: string): DilElementNode[] {
@@ -36,6 +36,16 @@ test("an out-of-range code point escape does not throw", () => {
   const title = box.attrs.find((attribute) => attribute.name === "title");
   assert.ok(title);
   assert.ok(String(title.value).includes("FFFFFF"), "invalid escape stays visible");
+});
+
+test("a blockquoted fence keeps its braces", () => {
+  // The quote marker sits between the line start and the fence, so the fence used to be
+  // missed and `{a: 1}` became an interpolation — the code sample lost content.
+  const source = "> ~~~js\n> const x = {a: 1};\n> ~~~";
+  const doc = parseDocument(source);
+  assert.equal(doc.diagnosticSummary, "clean");
+  assert.equal(hasDilElements(doc.tree), false, "a quoted fence is not DIL");
+  assert.ok(JSON.stringify(doc.tree).includes("{a: 1}"), "the code keeps its braces");
 });
 
 test("email autolinks are prose, not elements", () => {

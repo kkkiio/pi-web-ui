@@ -44,6 +44,7 @@ import {
 import {
   type ArrowValue,
   BUILTIN_SCOPE,
+  boundedString,
   type CallbackFactory,
   DilEvaluationError,
   type DilScope,
@@ -51,6 +52,7 @@ import {
   getMember,
   isForbiddenKey,
   isSafeObject,
+  MAX_STRING_LENGTH,
   noopSetter,
   SAFE,
 } from "./evaluator-allowlist.ts";
@@ -214,12 +216,14 @@ function evaluate(node: Expression, context: Context): unknown {
       return node.name === "undefined" ? undefined : lookup(node.name, context);
 
     case "TemplateLiteral":
-      return node.quasis
-        .map((quasi, index) => {
-          const expression = node.expressions[index];
-          return (quasi.value.cooked ?? "") + (expression ? formatValue(evaluate(expression, context)) : "");
-        })
-        .join("");
+      return boundedString(
+        node.quasis
+          .map((quasi, index) => {
+            const expression = node.expressions[index];
+            return (quasi.value.cooked ?? "") + (expression ? formatValue(evaluate(expression, context)) : "");
+          })
+          .join(""),
+      );
 
     case "ArrayExpression":
       return node.elements.map((element) => {
@@ -460,6 +464,8 @@ function add(left: unknown, right: unknown): unknown {
   const a = primitiveText(left);
   const b = primitiveText(right);
   if (a === null || b === null) throw new DilEvaluationError("cannot add objects");
+  // A `+` chain is bounded by its operands, not by the step budget alone.
+  if (a.length + b.length > MAX_STRING_LENGTH) throw new DilEvaluationError("result is too large");
   return a + b;
 }
 

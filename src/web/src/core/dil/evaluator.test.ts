@@ -20,6 +20,19 @@ function fallback(source: string, scope: Record<string, unknown> = {}): unknown 
   return safeEvaluate(source, scope, "<failed>");
 }
 
+test("allocating builtins are bounded by their result, not just their argument", () => {
+  // Two node visits, 100 MB of string: the step budget cannot see this.
+  assert.equal(fallback("'a'.repeat(1000).repeat(100000)"), "<failed>");
+  assert.equal(fallback("'a'.repeat(100000).split('')"), "<failed>");
+  assert.equal(fallback("'x'.repeat(100000) + 'y'.repeat(100000)"), "<failed>");
+  assert.equal(fallback("Array.from({ length: 10 }).join('ab').repeat(1e6)"), "<failed>");
+
+  // Ordinary sizes stay usable.
+  assert.equal(value("'ab'.repeat(3)"), "ababab");
+  assert.equal(value("'a,b'.split(',').length"), 2);
+  assert.equal(value("Array.from({ length: 3 }).join('-')"), "0-1-2");
+});
+
 test("an optional chain short-circuits the rest of the chain", () => {
   // `greet` must be an arrow the evaluator created — a host function is (correctly) not
   // callable, so it is built through a statement instead.
