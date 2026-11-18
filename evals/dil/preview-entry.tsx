@@ -149,7 +149,7 @@ const sections = entries
   <ul class="checks">${checks}</ul>
   ${result.diagnostics === "clean" ? "" : `<p class="diagnostics">diagnostics: ${escapeHtml(result.diagnostics)}</p>`}
   <div class="render">${rendered}</div>
-  <details><summary>raw source</summary><pre>${escapeHtml(result.text)}</pre></details>
+  <details class="raw"><summary>raw source</summary><pre>${escapeHtml(result.text)}</pre></details>
 </section>`;
       })
       .join("");
@@ -217,6 +217,15 @@ const html = `<!doctype html>
   .diagnostics { color: #b45309; font-size: 12px; margin: 0 0 8px; }
   .render { border-top: 1px dashed var(--border); padding-top: 12px; }
   details { margin-top: 12px; font-size: 12px; } pre { white-space: pre-wrap; word-break: break-word; }
+  details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--muted);
+    color: var(--foreground); font-size: 13px; font-weight: 500; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸"; color: var(--muted-foreground); }
+  details[open] > summary::before { content: "▾"; }
+  details > summary:hover { background: var(--accent); }
+  details > pre { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--card); }
 </style>
 </head><body><div class="layout" id="top">
 ${nav}
