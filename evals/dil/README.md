@@ -54,8 +54,9 @@ Each run prints a table (`prompt:dil` confirms the section was in Pi's prompt) a
 `report.json` (gitignored). To *see* the answers instead of the score table:
 
 ```bash
-npm run eval:dil:preview                 # render the last report.json
-node evals/dil/preview.mjs --recordings  # render the committed recordings
+just preview-eval               # last live report, or the recordings when there is none
+just preview-eval recordings    # only the committed recordings (no key needed)
+npm run eval:dil:preview        # same as the first, without opening a browser
 ```
 
 The preview bundles the real renderer with Vite and writes
