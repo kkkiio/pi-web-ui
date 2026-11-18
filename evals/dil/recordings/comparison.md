@@ -1,99 +1,117 @@
-<box gap={3}>
+已读取当前实现（`src/web/src/components/dil/dil-renderer.tsx`、`src/web/src/core/dil/evaluator.ts`），下面的对比以现状为基准。
 
-<title>三种 DIL 渲染方案对比</title>
+## 三个方案在同一条流水线上的切分点
 
-<text>用户写的标签像 <code>{#each}</code>、<code>{expr}</code>，本质是“模板 + 表达式求值 + 转成 DOM”。差别只在<bold>在哪求值</bold>和<bold>如何落地</bold>。</text>
-
-<grid columns={3} gap={3}>
-
-<grid-item background="surface-secondary" radius="md" padding={3}>
-<row align="between" gap={2}>
-<title size="sm">① iframe 沙箱</title>
-<badge color="warning">隔离强</badge>
-</row>
-<text size="sm">每个渲染单元放进 <code>srcdoc</code> iframe，脚本在独立 origin/realm 跑，DOM 直接在内层长出。</text>
-<caption>适合：不可信内容、多租户</caption>
-</grid-item>
-
-<grid-item background="surface-secondary" radius="md" padding={3}>
-<row align="between" gap={2}>
-<title size="sm">② Worker 虚拟树</title>
-<badge color="warning">无阻塞</badge>
-</row>
-<text size="sm">Worker 里求值成虚拟树，postMessage 回主线程，主线程只做 diff 打补丁。</text>
-<caption>适合：大列表、重计算</caption>
-</grid-item>
-
-<grid-item background="surface-secondary" radius="md" padding={3}>
-<row align="between" gap={2}>
-<title size="sm">③ 主线程 AST 求值</title>
-<badge color="success">最简单</badge>
-</row>
-<text size="sm">Markdown 解析成 AST，直接解释执行生成 DOM，不跨线程不跨 realm。</text>
-<caption>适合：自产内容、首版</caption>
-</grid-item>
-
-</grid>
-
-<divider />
-
-<grid columns={3} gap={3}>
-
-<grid-item>
-<title size="sm">① iframe 沙箱</title>
-<box gap={1}>
-<text size="sm"><bold color="success">优</bold> 同源策略天然兜底，脚本无法碰宿主 DOM/存储；崩溃互不影响；实现心智简单（写页面即可）。</text>
-<text size="sm"><bold color="danger">劣</bold> 每个实例一套文档与脚本上下文，内存/启动开销大；样式无法继承，主题要二次注入；高度自适应靠 ResizeObserver + 握手，滚动、弹层、焦点、无障碍全部跨边界失真。</text>
+<box gap={2} padding={3} background="surface-secondary" radius="lg">
+  <row align="center" gap={2}>
+    <caption>流式文本</caption><icon name="arrow-right" size="sm"/>
+    <caption>repair / parse → AST</caption><icon name="arrow-right" size="sm"/>
+    <caption>scope 求值 {expr}</caption><icon name="arrow-right" size="sm"/>
+    <caption>resolve → 组件树</caption><icon name="arrow-right" size="sm"/>
+    <caption>React 渲染</caption>
+  </row>
+  <text size="sm">差异只在于「前四段跑在哪里」：iframe 内一整页、Worker 里一整条、或者就在当前组件里。</text>
 </box>
-</grid-item>
 
-<grid-item>
-<title size="sm">② Worker 虚拟树</title>
-<box gap={1}>
-<text size="sm"><bold color="success">优</bold> 求值不占主线程，大 <code>#each</code> 不卡输入；纯数据通信，可结构化克隆/可转移对象；天然支持算完再合并批量更新。</text>
-<text size="sm"><bold color="danger">劣</bold> 没有 DOM，只能产出虚拟树，等于自建一套 diff/patch；事件与状态要往返序列化，交互延迟多一跳；Worker 里没有 <code>document</code>，样式计算、测量类能力缺失，调试链路长。</text>
-</box>
-</grid-item>
-
-<grid-item>
-<title size="sm">③ 主线程 AST 求值</title>
-<box gap={1}>
-<text size="sm"><bold color="success">优</bold> 零跨域成本，样式继承、事件、焦点、滚动、无障碍全正常；代码量最小，调试栈直白；与现有组件库直接互操作。</text>
-<text size="sm"><bold color="danger">劣</bold> 求值即阻塞，表达式写坏（大循环、深递归）会冻 UI；没有隔离，恶意/错误表达式直接改宿主；只能靠白名单解释器 + 超时防护补。</text>
-</box>
-</grid-item>
-
-</grid>
-
-<divider />
-
-<row align="between">
-<text weight="semibold">典型成本量级</text>
-<caption>相对值，用于排序而非绝对值</caption>
-</row>
+## 逐项对比
 
 <grid columns={4} gap={2}>
-<text size="sm" color="secondary">维度</text>
-<text size="sm" color="secondary">iframe</text>
-<text size="sm" color="secondary">Worker</text>
-<text size="sm" color="secondary">主线程 AST</text>
+  <caption>维度</caption><caption>iframe 沙箱</caption><caption>Worker 虚拟树</caption><caption>主线程 AST（现方案）</caption>
 
-<text size="sm">首屏启动</text><badge>高</badge><badge>中</badge><badge color="success">低</badge>
-<text size="sm">单实例内存</text><badge>高</badge><badge>中</badge><badge color="success">低</badge>
-<text size="sm">主线程卡顿风险</text><badge color="success">无</badge><badge color="success">无</badge><badge color="danger">有</badge>
-<text size="sm">样式/交互还原</text><badge color="danger">差</badge><badge>中</badge><badge color="success">好</badge>
-<text size="sm">实现工作量</text><badge>中</badge><badge color="danger">高</badge><badge color="success">低</badge>
+  <text size="sm">安全边界</text>
+  <text size="sm" color="success">最强：origin + sandbox 隔离</text>
+  <text size="sm" color="warning">中：只隔离计算，不回传能力</text>
+  <text size="sm" color="warning">中：靠 acorn allowlist 白名单</text>
+
+  <text size="sm">与 React/设计令牌集成</text>
+  <text size="sm" color="danger">差：跨 document，主题/CSS 变量/portal 全要重做</text>
+  <text size="sm" color="danger">差：不能产出 React 元素</text>
+  <text size="sm" color="success">天然：`renderNodes` 直接出组件</text>
+
+  <text size="sm">流式增量</text>
+  <text size="sm" color="danger">跨帧 postMessage 协议 + 高度同步，尾部长文本抖动</text>
+  <text size="sm" color="warning">需双份 repair 状态，结构化克隆有固定开销</text>
+  <text size="sm" color="success">`useThrottledText` 60ms 窗口，尾修复就地完成</text>
+
+  <text size="sm">主线程开销</text>
+  <text size="sm" color="success">最低（布局在子帧）</text>
+  <text size="sm" color="success">低（但 IPC 反向抵消）</text>
+  <text size="sm" color="warning">每窗口一次 parse+eval</text>
+
+  <text size="sm">可调试性</text>
+  <text size="sm" color="danger">差：跨 realm 堆栈断裂</text>
+  <text size="sm" color="warning">中</text>
+  <text size="sm" color="success">好：单栈、可单测</text>
+
+  <text size="sm">可访问性 / 键盘序</text>
+  <text size="sm" color="danger">退化</text>
+  <text size="sm">—</text>
+  <text size="sm" color="success">正常</text>
+
+  <text size="sm">改动成本</text>
+  <text size="sm" color="danger">高</text>
+  <text size="sm" color="warning">中高</text>
+  <text size="sm" color="success">零（已在跑）</text>
 </grid>
 
-<divider />
+## 各自的关键取舍
 
-<box gap={2} background="surface-tertiary" radius="md" padding={3}>
-<title size="sm">选型结论</title>
-<text size="sm"><bold>主方案走 ③ 主线程 AST 求值</bold>：解释器只接受白名单语法子集，求值前做节点数与循环上限、执行时长软超时，异常降级为纯文本。这是唯一能保住样式继承、事件与无障碍的路径，也最省工。</text>
-<text size="sm"><bold>② Worker 不进 v1</bold>，留作后续优化：仅当出现“超长 <code>#each</code> 导致掉帧”的实测数据时，把纯计算部分（表达式求值、列表映射）下沉到 Worker，diff 仍留主线程——即 ③ 的性能补丁，而非替代架构。</text>
-<text size="sm"><bold>① iframe 只在明确需要不可信输入时启用</bold>（如分享/嵌入第三方生成内容），作为可选“隔离档”，并接受其样式与交互损失。</text>
+<box gap={2} padding={3} border radius="lg">
+  <text weight="semibold">1 · iframe 沙箱</text>
+  <row gap={2} align="start">
+    <text size="sm" color="success">优势</text>
+    <text size="sm">真正的安全隔离；子帧自带布局引擎，overflow/高度/百分比这类空间语义不用自己实现；崩溃不传染主页面。</text>
+  </row>
+  <row gap={2} align="start">
+    <text size="sm" color="danger">代价</text>
+    <text size="sm">DIL 的核心价值是「嵌进对话流」，而 iframe 天然是一个外来盒子：主题令牌要注入、高度要 postMessage 回传、选中/复制/滚动锚定/查找全都失效。等于为了隔离放弃组件化。</text>
+  </row>
 </box>
 
-<caption>一句话：默认 ③，安全场景按需切 ①，性能告急时给 ③ 加 ② 的计算旁路。三者是分层选项，不是互斥替代。</caption>
-
+<box gap={2} padding={3} border radius="lg">
+  <text weight="semibold">2 · Web Worker 虚拟树</text>
+  <row gap={2} align="start">
+    <text size="sm" color="success">优势</text>
+    <text size="sm">长文档（数百节点、多层 `{#each}`）下把 parse + 求值 + 差分真正移出主线程；可以顺手做超时熔断，防止病态表达式卡 UI。</text>
+  </row>
+  <row gap={2} align="start">
+    <text size="sm" color="danger">代价</text>
+    <text size="sm">Worker 里没有 DOM，虚拟树到 layout 的最后一公里还是得回主线程做；于是每帧多一次结构化克隆 + 一次序列化协议版本负担。流式场景下每次只增量几十个字符，克隆开销往往大于省下的解析时间——收益为负直到文档真的很大。</text>
+  </row>
 </box>
+
+<box gap={2} padding={3} border radius="lg">
+  <text weight="semibold">3 · 主线程 AST 求值（当前）</text>
+  <row gap={2} align="start">
+    <text size="sm" color="success">优势</text>
+    <text size="sm">信任边界收敛在一处（acorn 产物 + `evaluator-allowlist` 的节点白名单），scope、`DIL.useState`、事件回调和 React 状态同住一个世界，流式前缀靠 `__dilSafe` 兜底并可在纯函数单测里验证。</text>
+  </row>
+  <row gap={2} align="start">
+    <text size="sm" color="danger">风险</text>
+    <text size="sm">任何一次 parse/eval 都在关键路径上，病态输入（超长表达式、深嵌套 each、大数组 map）会直接卡帧。缓解不靠换架构，靠预算：节点数上限、每窗口单一 snapshot、超限降级为纯 Markdown。</text>
+  </row>
+</box>
+
+## 选型结论
+
+<box gap={2} padding={3} background="surface-secondary" radius="lg">
+  <row align="center" gap={2}><badge>决策</badge><text weight="semibold">保持主线程 AST 求值，不引入 iframe / Worker</text></row>
+  <text size="sm">理由排序：① 隔离需求已被 allowlist 覆盖，iframe 买到的是不需要的隔离，付出的是需要的组件化；② Worker 解决的 `parse` 成本目前被 60ms 节流窗口摊薄，而它带来的协议与克隆开销是每帧必付；③ 现方案的失败模式（安静降级）正好匹配流式输出这一主场景。</text>
+</box>
+
+何时才值得改：
+
+<grid columns={3} gap={2}>
+  <box padding={3} border radius="md" gap={1}>
+    <text size="sm" weight="semibold">先加预算，不换架构</text>
+    <text size="2xs" color="secondary">panic 指标：单次 parse+eval p95 超过约 8ms，或文档节点数p95 破千。先做节点上限 + 降级。</text>
+  </box>
+  <box padding={3} border radius="md" gap={1}>
+    <text size="sm" weight="semibold">再考虑 Worker</text>
+    <text size="2xs" color="secondary">预算做完仍超，且瓶颈确实在 parse 而非渲染：只把 parse+repair 搬进 Worker，求值仍留主线程，避免克隆组件树。</text>
+  </box>
+  <box padding={3} border radius="md" gap={1}>
+    <text size="sm" weight="semibold">iframe 只在一种情况</text>
+    <text size="2xs" color="secondary">DIL 要渲染严格不可信的第三方内容（非本模型输出），且可以接受它不参与对话流排版——那更像「预览面板」而非「消息渲染」。</text>
+  </box>
+</grid>

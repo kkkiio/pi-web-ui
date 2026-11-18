@@ -31,6 +31,8 @@ import { type CaseResult, scoreCase, summarize, type VariantSummary } from "./sc
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RECORDINGS = join(HERE, "recordings");
 const REPORT = join(HERE, "report.json");
+/** One file per model, so a matrix does not overwrite itself. */
+const REPORTS = join(HERE, "reports");
 
 interface Options {
   readonly provider: string;
@@ -124,8 +126,16 @@ function report(summary: VariantSummary, options: Options, generator: DilAgent |
 
   const text = lines.join("\n");
   process.stdout.write(`\n${text}\n`);
-  writeFile(REPORT, `${JSON.stringify({ model: generator?.label ?? "recordings", summary }, null, 2)}\n`);
-  process.stdout.write(`\nreport: ${REPORT}\n`);
+  if (options.dry) {
+    process.stdout.write("\nreport: (dry run — report.json left untouched)\n");
+    return;
+  }
+  const body = `${JSON.stringify({ model: generator?.label ?? "unknown", capturedAt: new Date().toISOString(), summary }, null, 2)}\n`;
+  // `<reports>/<provider>-<model>.json` keeps a matrix; `report.json` stays the latest run.
+  const slug = (generator?.label ?? "unknown").replaceAll("/", "-").replaceAll(" ", "-");
+  writeFile(join(REPORTS, `${slug}.json`), body);
+  writeFile(REPORT, body);
+  process.stdout.write(`\nreport: ${join(REPORTS, `${slug}.json`)} (latest: ${REPORT})\n`);
 }
 
 async function main(): Promise<void> {
@@ -134,6 +144,12 @@ async function main(): Promise<void> {
   if (generator) process.stdout.write(`model: ${generator.label}\n`);
 
   const summary = await runCases(options, generator);
+  if (options.record && generator) {
+    writeFile(
+      join(RECORDINGS, "manifest.json"),
+      `${JSON.stringify({ model: generator.label, harness: "pi-agent", capturedAt: new Date().toISOString() }, null, 2)}\n`,
+    );
+  }
   report(summary, options, generator);
 }
 

@@ -1,133 +1,91 @@
-# Pi Web UI 发送消息：跨进程事件流转
+## 结论先行
 
-<box padding={3} background="surface-secondary" radius="lg">
-  <text weight="semibold">一句话总览</text>
-  <caption>点击发送 → 浏览器事件 → mirror-server 转发 → Pi 进程执行 → 流式回推 → UI 渲染</caption>
+`mirror-server.ts` 不是一个独立进程，它是跑在 Pi 进程内部的 extension，用 `http` + `ws` 在 Pi 进程里开了一个监听端口。所以真正的跨进程边界只有 **3 处**：浏览器渲染进程 ↔ Pi 进程（WebSocket）、Pi 进程内的 extension 宿主 ↔ agent 内核（函数调用）、Pi 进程 ↔ 模型服务商（HTTPS）。
+
+<box gap={3} padding={3} background="surface-secondary" radius="lg">
+
+<title>发送路径（点击 Send → 模型开始推理）</title>
+
+{#each [
+ { n: "1", zone: "浏览器进程", at: "#app.tsx:186 · submitMessage", do: "sendPrompt({message, images})", edge: null },
+ { n: "2", zone: "浏览器进程", at: "store/session-slice.ts:160", do: "校验 connected / 非 busy → chatStatus=\"submitted\" → send(\"prompt\")", edge: null },
+ { n: "3", zone: "浏览器进程", at: "core/store/connection-slice.ts:11 → core/pi-client.ts:send()", do: "生成 req-<ts>-<n>，挂进 pendingRequests，JSON.stringify 后 ws.send()", edge: "WS 帧 /ws" },
+ { n: "4", zone: "Pi 进程", at: "mirror-server.ts:1042 ws.on(\"connection\") → ws.on(\"message\")", do: "JSON.parse 校验 type===\"req\" → handleRequest(ws, request)", edge: null },
+ { n: "5", zone: "Pi 进程", at: "mirror-server.ts:565 case \"prompt\"", do: "ctx.isIdle() / hasPendingMessages() 双重忙判定；拼接 text+image content block", edge: null },
+ { n: "6", zone: "Pi 进程", at: "pi.sendUserMessage(...)", do: "extension 宿主 → agent 内核，入队一轮 turn（非阻塞）", edge: "进程内调用" },
+ { n: "7", zone: "Pi 进程", at: "mirror-server.ts:594 sendTo(ws, success())", do: "立即回 ack（注意：这不是最终答案）", edge: "WS 帧 back" },
+ { n: "8", zone: "外部网络", at: "agent loop → provider API", do: "HTTPS 流式请求模型", edge: "HTTPS" }
+] as s}
+  <row gap={2} align="start">
+    <badge>{s.n}</badge>
+    <col gap={1} flex>
+      <row gap={2} align="baseline">
+        <text weight="semibold" size="sm">{s.zone}</text>
+        {#if s.edge}
+          <caption>→ {s.edge}</caption>
+        {/if}
+      </row>
+      <code size="xs">{s.at}</code>
+      <text size="sm" color="secondary">{s.do}</text>
+    </col>
+  </row>
+  <divider/>
+{/each}
+
 </box>
 
-## 三条进程边界
+<box gap={3} padding={3} background="surface-secondary" radius="lg">
+
+<title>返回路径（模型流 → 屏幕）</title>
+
+{#each [
+ { n: "1", zone: "外部网络", at: "provider SSE stream", do: "token/增量 + tool_call 流式抵达 agent 内核", edge: "HTTPS" },
+ { n: "2", zone: "Pi 进程", at: "agent 内核 emit", do: "agent_start / message_start / message_update / tool_execution_* / message_end / agent_end / turn_end", edge: null },
+ { n: "3", zone: "Pi 进程", at: "mirror-server.ts:364 pi.on(eventType)", do: "写 latestCtx、缓存 liveToolEvents（供新连接 replay）→ broadcast({type:\"event\", event, payload})", edge: "WS 帧 broadcast" },
+ { n: "4", zone: "浏览器进程", at: "core/pi-client.ts:onmessage", do: "type===\"event\" → onEvent(data)；type===\"res\" → 解挂 pendingRequests", edge: null },
+ { n: "5", zone: "浏览器进程", at: "core/store/event-dispatch.ts:dispatchPiEvent", do: "按 event 分发到 applyAgentStart/applyMessageUpdate/... 改 Zustand", edge: null },
+ { n: "6", zone: "浏览器进程", at: "React (app.tsx → message-view / DIL renderer)", do: "流式 status=\"streaming\"，增量文本重绘", edge: null }
+] as s}
+  <row gap={2} align="start">
+    <badge>{s.n}</badge>
+    <col gap={1} flex>
+      <row gap={2} align="baseline">
+        <text weight="semibold" size="sm">{s.zone}</text>
+        {#if s.edge}
+          <caption>→ {s.edge}</caption>
+        {/if}
+      </row>
+      <code size="xs">{s.at}</code>
+      <text size="sm" color="secondary">{s.do}</text>
+    </col>
+  </row>
+  <divider/>
+{/each}
+
+</box>
+
+## 进程边界一览
 
 <grid columns={3} gap={2}>
-  <grid-item>
-    <box padding={2} background="surface-tertiary" radius="md" border>
-      <badge color="secondary">边界 ①</badge>
-      <text weight="medium">浏览器 → mirror-server</text>
-      <caption>HTTP POST + 后续 SSE 或 WebSocket 长连接</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} background="surface-tertiary" radius="md" border>
-      <badge color="warning">边界 ②</badge>
-      <text weight="medium">mirror-server → Pi 进程</text>
-      <caption>本地子进程通信，通常使用 stdin/stdout 协议</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} background="surface-tertiary" radius="md" border>
-      <badge color="success">边界 ③</badge>
-      <text weight="medium">Pi 进程 → 外部 provider</text>
-      <caption>模型 API 调用，事件再逐层回传</caption>
-    </box>
-  </grid-item>
+  <box padding={2} background="surface-tertiary" radius="md" gap={1}>
+    <row gap={1} align="center"><icon name="monitor" size="sm"/><text weight="semibold" size="sm">浏览器进程</text></row>
+    <caption>React + Zustand + PiClient</caption>
+    <caption color="secondary">app.tsx · session-slice · pi-client · event-dispatch</caption>
+  </box>
+  <box padding={2} background="surface-tertiary" radius="md" gap={1}>
+    <row gap={1} align="center"><icon name="server" size="sm"/><text weight="semibold" size="sm">Pi 进程</text></row>
+    <caption>extension 宿主(HTTP+WS) + agent 内核</caption>
+    <caption color="secondary">mirror-server.ts 与 agent 同进程，只有函数调用边界</caption>
+  </box>
+  <box padding={2} background="surface-tertiary" radius="md" gap={1}>
+    <row gap={1} align="center"><icon name="cloud" size="sm"/><text weight="semibold" size="sm">模型服务商</text></row>
+    <caption>HTTPS 流式</caption>
+    <caption color="secondary">只有 agent 内核直连，浏览器永不直连</caption>
+  </box>
 </grid>
 
-## 完整流转图
+## 三个容易踩的语义点
 
-```text
-┌──────────────────────────── 浏览器（pi-web-ui） ────────────────────────────┐
-│  ① 用户点击"发送"                                                          │
-│     └─ useSendMessage / submit handler                                     │
-│         └─ 构造 { sessionId, message, model? }                             │
-│  ② fetch POST /api/sessions/:id/messages   ─── 边界① ───┐                  │
-│                                                          │                  │
-│  ⑦ 收到 SSE / WS 事件                                   │                  │
-│     └─ 逐条 append 到 message store                      │                  │
-│         └─ 渲染气泡 / 打字机效果 / tool call 卡片        │                  │
-└──────────────────────────────────────────────────────────┼──────────────────┘
-                                                            ▼
-┌────────────────────────── mirror-server.ts ────────────────────────────────┐
-│  ③ 路由处理：校验 session、取或建 Pi 会话句柄                               │
-│  ④ 写入 Pi stdin（JSON 行 / RPC 调用）  ─── 边界② ───┐                     │
-│                                                      │                      │
-│  ⑥ 读 Pi stdout，转为 SSE/WS 事件                   │                      │
-│     └─ 按 type 分派：text_delta / tool_start / done │                      │
-│         └─ 通过长连接推回浏览器                     │                      │
-└──────────────────────────────────────────────────────┼─────────────────────┘
-                                                        ▼
-┌──────────────────────────── Pi 进程 ────────────────────────────────────────┐
-│  ⑤ 解析指令 → 组装上下文 → 调模型   ─── 边界③ ───┐                         │
-│                                                  │                          │
-│     模型返回流式 token                          │                          │
-│     └─ 逐个 yield 到 stdout（每行一个事件） ◄────┘                          │
-│     └─ 期间可能触发 tool 执行，再回填结果                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## 去程与回程对照
-
-<row gap={3}>
-  <col flex={1}>
-    <box padding={2} background="surface" radius="md" border color="secondary">
-      <text weight="semibold">去程 ↑</text>
-      <divider />
-      <text>1. 点击发送</text>
-      <text>2. POST 到 mirror-server</text>
-      <text>3. 路由 + 会话定位</text>
-      <text>4. 写 Pi stdin</text>
-      <text>5. Pi 调模型</text>
-    </box>
-  </col>
-  <col flex={1}>
-    <box padding={2} background="surface" radius="md" border color="success">
-      <text weight="semibold">回程 ↓</text>
-      <divider />
-      <text>6. Pi stdout 流式事件</text>
-      <text>7. mirror-server 转 SSE/WS</text>
-      <text>8. 浏览器逐条更新 store</text>
-      <text>9. UI 增量渲染</text>
-    </box>
-  </col>
-</row>
-
-## 关键节点速查
-
-<grid columns={2} gap={2}>
-  <grid-item>
-    <box padding={2} background="surface" radius="md" border>
-      <row align="between">
-        <text weight="medium">浏览器 → mirror-server</text>
-        <badge color="secondary">HTTP</badge>
-      </row>
-      <caption>请求发一次；回复走 SSE 或 WebSocket 长连接，不用轮询。</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} background="surface" radius="md" border>
-      <row align="between">
-        <text weight="medium">mirror-server → Pi</text>
-        <badge color="warning">子进程</badge>
-      </row>
-      <caption>stdin/stdout 按行或 RPC 交换 JSON 事件，mirror 只做转发和分流。</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} background="surface" radius="md" border>
-      <row align="between">
-        <text weight="medium">Pi → Provider</text>
-        <badge color="success">外部 API</badge>
-      </row>
-      <caption>模型调用，token 流在此产生，是回程事件的源头。</caption>
-    </box>
-  </grid-item>
-  <grid-item>
-    <box padding={2} background="surface" radius="md" border>
-      <row align="between">
-        <text weight="medium">UI 渲染</text>
-        <badge color="secondary">增量</badge>
-      </row>
-      <caption>收到某个 delta 事件就 append，不需要等整条消息结束。</caption>
-    </box>
-  </grid-item>
-</grid>
-
-> 说明：具体函数名（如 `useSendMessage`、`handleSend`）和传输细节会随代码版本略有差异，但**三条进程边界与去程、回程的方向**是稳定的。查看代码时，抓住“POST 请求只用来启动，事件靠长连接回推”这一点，就能定位全链路。
+- **ack ≠ 完成**：`case "prompt"` 在 `pi.sendUserMessage()` 之后立刻 `success()` 回包，前端 `sendPrompt` await 的是"已入队"，真正的回答要靠后续 `agent_start`/`message_update` 事件。
+- **双端都做忙判定**：前端 `chatStatus` 挡一次（`session-slice.ts:162`），服务端再挡一次 `!ctx.isIdle() || ctx.hasPendingMessages()`（`mirror-server.ts:570`）——防止多标签页/多客户端并发抢同一 agent。
+- **断线不重放**：`pi-client.ts:onclose` 把所有 pending 和 queued 全部 reject/清空，只有非 `prompt` 的幂等请求才会走 `queuedRequests` 排队重发逻辑。

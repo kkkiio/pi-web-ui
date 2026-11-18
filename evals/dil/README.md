@@ -54,7 +54,27 @@ Credentials, in order: `<PROVIDER>_API_KEY` in the environment, the same name in
 OAuth providers such as `openai-codex` need to be refreshed by Pi itself.
 
 Each run prints a table (`prompt:dil` confirms the section was in Pi's prompt) and writes
-`report.json` (gitignored). To *see* the answers instead of the score table:
+two files: `reports/<provider>-<model>.json` for that model, and `report.json` as the
+"latest run" pointer. A matrix therefore keeps every model's answers — the preview renders
+one section per report, newest first, with the model name in the nav and heading.
+
+`--dry` never touches either file: replaying recordings must not look like a live run.
+
+### Several models
+
+```bash
+# CLI: one report per model, one preview page with all of them
+npm run eval:dil -- --provider opencode-go --model deepseek-v4.1-flash
+npm run eval:dil -- --provider opencode-go --model glm-5.3
+just preview-eval
+
+# vitest-evals: one suite per model, all results in a single Vitest JSON
+DIL_EVAL_MODELS="opencode-go/deepseek-v4.1-flash,opencode-go/glm-5.3" \
+  npm run eval:dil:vitest -- --reporter=json --outputFile=evals/dil/vitest-report.json
+```
+
+Both lanes persist everything; they differ only in the file format (our `reports/*.json`
+summary vs Vitest's native JSON with per-spec results, artifacts and usage). To *see* the answers instead of the score table:
 
 ```bash
 just preview-eval               # last live report, or the recordings when there is none
