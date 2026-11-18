@@ -1,0 +1,127 @@
+/**
+ * Readable fallbacks for the parts of the catalog that later slices own.
+ *
+ * #46 is the core MVP: layout, typography, control flow. The document/data primitives
+ * (`list`, `table`, `blockquote`, `Link`, `math`, `code-block`) are #49, the SVG
+ * primitives are #47, and the interactive controls are #48. Until those land, a mixed
+ * message still has to read well, so these render plain, well-behaved HTML with the same
+ * typography the rest of the transcript uses.
+ *
+ * Nothing here is a placeholder to throw away: the fallbacks are what a reader gets when
+ * a later slice is unavailable, and `math` / `code-block` stay unstyled on purpose (no
+ * KaTeX, no Shiki, no Mermaid) so nothing is computed twice when the real primitives
+ * arrive.
+ */
+
+import { memo, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { safeLinkUrl } from "../tokens";
+
+interface FallbackProps {
+  readonly className?: string;
+  readonly children?: ReactNode;
+  readonly props?: Readonly<Record<string, unknown>>;
+}
+
+export function FallbackList({ props, children }: FallbackProps) {
+  const className = cn("my-1 space-y-1 pl-5", "marker:text-muted-foreground");
+  if (props?.marker === "number") {
+    // `5. Deploy` continues the list it belongs to; dropping `start` renumbers it to 1.
+    const start = typeof props.start === "number" ? props.start : Number.parseInt(String(props.start ?? ""), 10);
+    return (
+      <ol start={Number.isFinite(start) && start > 1 ? start : undefined} className={cn(className, "list-decimal")}>
+        {children}
+      </ol>
+    );
+  }
+  return <ul className={cn(className, "list-disc")}>{children}</ul>;
+}
+
+export function FallbackListItem({ children }: FallbackProps) {
+  return <li className="min-w-0">{children}</li>;
+}
+
+export function FallbackTable({ children }: FallbackProps) {
+  return (
+    <div className="my-2 w-full overflow-x-auto">
+      <table className="w-full border-collapse text-sm">{children}</table>
+    </div>
+  );
+}
+
+export function FallbackTableRow({ children }: FallbackProps) {
+  return <tr className="border-b border-border/60 last:border-0">{children}</tr>;
+}
+
+export function FallbackTableCell({ props, children }: FallbackProps) {
+  if (props?.header === true) {
+    return <th className="px-2 py-1.5 text-left font-medium text-foreground">{children}</th>;
+  }
+  return <td className="px-2 py-1.5 align-top text-foreground/90">{children}</td>;
+}
+
+export function FallbackBlockquote({ children }: FallbackProps) {
+  return <blockquote className="my-2 border-l-2 border-border pl-3 text-muted-foreground">{children}</blockquote>;
+}
+
+/**
+ * `math` and `code-block` are the heavy leaves of a transcript (#49 adds KaTeX and
+ * Shiki). They receive primitives, not nodes, so `memo` can skip a block that finished
+ * while the tail kept streaming — the caching decision in `README.md`.
+ */
+export const MathLeaf = memo(function MathLeaf({ value, block }: { readonly value: string; readonly block: boolean }) {
+  if (block) {
+    return (
+      <pre className="my-2 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
+        {value}
+      </pre>
+    );
+  }
+  return <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]">{value}</code>;
+});
+
+export const CodeBlockLeaf = memo(function CodeBlockLeaf({
+  code,
+  language,
+}: {
+  readonly code: string;
+  readonly language: string | undefined;
+}) {
+  return (
+    <div className="my-2 overflow-hidden rounded-lg border border-border bg-muted/40">
+      {language ? (
+        <div className="border-b border-border/60 px-3 py-1 font-mono text-[0.7rem] text-muted-foreground">
+          {language}
+        </div>
+      ) : null}
+      <pre className="overflow-x-auto px-3 py-2 font-mono text-xs leading-5">{code}</pre>
+    </div>
+  );
+});
+
+export function FallbackLink({ props, children }: FallbackProps) {
+  const url = safeLinkUrl(props?.url);
+  const title = typeof props?.title === "string" ? props.title : undefined;
+  if (!url) return <span className="underline decoration-dotted">{children}</span>;
+  return (
+    <a
+      className="underline decoration-1 decoration-current/40 underline-offset-2 hover:decoration-current"
+      href={url}
+      rel="noreferrer"
+      target="_blank"
+      title={title}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** Any tag later slices own: keep its text, keep its layout block, add no behaviour. */
+export function FallbackBlock({ children }: FallbackProps) {
+  return <div className="min-w-0">{children}</div>;
+}
+
+/** Inline tags without a renderer yet keep their content inline. */
+export function FallbackInline({ children }: FallbackProps) {
+  return <span className="min-w-0">{children}</span>;
+}

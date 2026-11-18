@@ -16,6 +16,7 @@ import { historicalQuestion } from "../../core/ask-user-question";
 import { usePiWebUiStore } from "../../core/store";
 import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
+import { DilRenderer } from "../dil";
 
 import type { TranscriptQuote } from "./transcript-quote";
 
@@ -170,7 +171,11 @@ export function ChatItemView({
       )}
       <MessageContent className={cn("w-full", item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]')}>
         <div data-quote-source="Assistant">
-          <MessageResponse>{item.text}</MessageResponse>
+          <DilRenderer
+            isStreaming={Boolean(item.streaming)}
+            markdown={(text) => <MessageResponse>{text}</MessageResponse>}
+            source={item.text}
+          />
         </div>
       </MessageContent>
     </Message>

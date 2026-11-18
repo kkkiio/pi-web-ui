@@ -11,6 +11,8 @@
     "includes": [
       "components.json",
       "e2e/**/*.ts",
+      "evals/**/*.ts",
+      "evals/**/*.tsx",
       "extensions/**/*.ts",
       "package.json",
       "public/**/*.js",
@@ -19,7 +21,8 @@
       "src/**/*.ts",
       "src/**/*.tsx",
       "tsconfig.json",
-      "vite.config.ts"
+      "vite.config.ts",
+      "vitest.evals.config.ts"
     ]
   },
   "formatter": {

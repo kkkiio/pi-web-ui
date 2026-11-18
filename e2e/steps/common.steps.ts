@@ -23,6 +23,18 @@ Given("Pi replies with plain text", () => {
   world.fixture = "chat-lifecycle";
 });
 
+Given("Pi replies with a DIL layout", () => {
+  world.fixture = "dil-render";
+});
+
+Given("Pi replies with a DIL diagram", () => {
+  world.fixture = "dil-svg";
+});
+
+Given("Pi replies with a continued ordered list", () => {
+  world.fixture = "dil-list";
+});
+
 Given("Pi updates the workspace status document", () => {
   world.fixture = "workspace-artifact";
 });
@@ -61,6 +73,56 @@ When("I reload Pi Web UI", async ({ page }) => {
 
 Then("the transcript shows {string}", async ({ page }, text: string) => {
   await expect(page.getByRole("log").getByText(text, { exact: true })).toBeVisible();
+});
+
+Then("the DIL prompt section is active", async () => {
+  await world.harness?.command("/assert-dil-prompt active");
+});
+
+Then("the DIL prompt section is inactive", async () => {
+  await world.harness?.command("/assert-dil-prompt inactive");
+});
+
+Then("the DIL layout is rendered", async ({ page }) => {
+  const root = page.getByRole("log").locator(".dil-root");
+  await expect(root).toBeVisible();
+  await expect(root.getByText("Request path", { exact: true })).toBeVisible();
+  await expect(root.getByText("62%")).toBeVisible();
+});
+
+Then("the DIL diagram is rendered", async ({ page }) => {
+  const log = page.getByRole("log");
+  const svg = log.locator(".dil-root svg").first();
+  await expect(svg).toBeVisible();
+  // 4 rows × 8 columns of tiles, each one a <rect>.
+  await expect(svg.locator("rect")).toHaveCount(32);
+  // The marker is declared per diagram, so its id must be namespaced rather than "arrow".
+  await expect(svg.locator("marker")).toHaveAttribute("id", /^dil-.+-arrow$/);
+  await expect(svg.locator("line")).toHaveAttribute("marker-end", /^url\(#dil-.+-arrow\)$/);
+  await expect(log.getByText("4 × 8 tiles").first()).toBeVisible();
+});
+
+Then("each diagram keeps its own marker namespace", async ({ page }) => {
+  const ids = await page
+    .getByRole("log")
+    .locator(".dil-root svg marker")
+    .evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(ids.length).toBeGreaterThan(1);
+  // Two messages, two `<marker id="arrow">`: without a per-message prefix the second
+  // reference would resolve to the first diagram's marker.
+  expect(new Set(ids).size).toBe(ids.length);
+});
+
+Then("the ordered list continues at 5", async ({ page }) => {
+  const list = page.getByRole("log").locator(".dil-root ol").first();
+  await expect(list).toHaveAttribute("start", "5");
+  await expect(list.locator("li")).toHaveCount(2);
+});
+
+Then("the transcript does not show raw DIL tags", async ({ page }) => {
+  await expect(page.getByRole("log")).not.toContainText("<box");
+  await expect(page.getByRole("log")).not.toContainText("</box>");
+  await expect(page.getByRole("log")).not.toContainText("<svg");
 });
 
 Then("the transcript shows the tool call {string}", async ({ page }, name: string) => {

@@ -42,7 +42,12 @@
     "prepare": "npm run build:web",
     "prepack": "npm run build:web",
     "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --types node extensions/mirror-server.ts",
-    "e2e:preview": "node e2e/report/serve.mjs e2e/report-out"
+    "e2e:preview": "node e2e/report/serve.mjs e2e/report-out",
+    "test:dil": "node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\"",
+    "test:dil:update": "UPDATE_SNAPSHOTS=1 node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\"",
+    "eval:dil": "node evals/dil/run.ts",
+    "eval:dil:vitest": "vitest run --config vitest.evals.config.ts",
+    "eval:dil:preview": "node evals/dil/preview.mjs"
   },
   "dependencies": {
     "@pierre/diffs": "^1.6.4",
@@ -56,6 +61,7 @@
   "devDependencies": {
     "@ai-sdk/react": "^3.0.193",
     "@biomejs/biome": "2.4.15",
+    "@earendil-works/pi-ai": "^1.5.2",
     "@playwright/test": "^1.61.1",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@streamdown/cjk": "^1.0.3",
@@ -63,15 +69,18 @@
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@tailwindcss/vite": "^4.3.0",
+    "@types/mdast": "^4.0.4",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.0.2",
+    "acorn": "^8.19.0",
     "ai": "^6.0.191",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "fast-check": "^4.10.3",
     "katex": "^0.16.47",
     "lucide-react": "^1.16.0",
     "micromark-util-types": "^2.0.3",
@@ -84,7 +93,9 @@
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
     "shiki": "^4.1.0",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",
@@ -94,7 +105,9 @@
     "typescript": "^6.0.3",
     "unified": "^11.0.5",
     "use-stick-to-bottom": "^1.1.4",
-    "vite": "^8.0.14"
+    "vite": "^8.0.14",
+    "vitest": "^5.1.1",
+    "vitest-evals": "^0.18.1"
   },
   "engines": {
     "node": ">=22.19.0"

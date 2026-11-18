@@ -13,6 +13,7 @@
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "ignoreDeprecations": "6.0",
@@ -21,5 +22,5 @@
       "@/*": ["src/web/*"]
     }
   },
-  "include": ["src/web", "vite.config.ts"]
+  "include": ["src/web", "evals", "vite.config.ts", "vitest.evals.config.ts"]
 }

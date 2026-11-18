@@ -12,6 +12,7 @@ Feature: Web UI activation boundary
     When I have two terminal conversation turns
     Then terminal tools and instructions are unchanged
     And the Web UI question tool is absent
+    And the DIL prompt section is inactive
     And the Web UI server is not listening
 
   @p0
@@ -22,11 +23,14 @@ Feature: Web UI activation boundary
     Given a lazy Web UI session
     When I run webui
     Then the Web UI question tool is active
+    And the DIL prompt section is active
     When I stop webui
     Then the Web UI question tool is inactive
+    And the DIL prompt section is inactive
     And the Web UI server is not listening
     When I run webui
     Then the Web UI question tool is active
+    And the DIL prompt section is active
 
   @p1
   Scenario: A failed activation leaves the terminal session untouched
@@ -36,3 +40,4 @@ Feature: Web UI activation boundary
     When I run webui
     Then the Web UI server is not listening
     And the Web UI question tool is absent
+    And the DIL prompt section is inactive

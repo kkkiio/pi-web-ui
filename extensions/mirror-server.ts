@@ -16,6 +16,7 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { WebSocket, WebSocketServer } from "ws";
 import { createQuestionTool, QUESTION_CHANNEL } from "./ask-user-question";
+import { createDilPrompt } from "./dil-prompt";
 import { readGitChanges } from "./git-changes";
 
 type SettingsData = {
@@ -196,6 +197,7 @@ export default function (pi: ExtensionAPI) {
   let latestExecuteCtx: ExtensionCommandContext | null = null;
   const liveToolEvents = new Map<string, { type: "event"; event: string; payload: Record<string, unknown> }>();
   const questionTool = createQuestionTool(pi);
+  const dilPrompt = createDilPrompt(pi);
   let questionListeners: (() => void)[] = [];
   let serverStarting: Promise<void> | null = null;
   let cancelServerStart: ((error?: Error) => void) | null = null;
@@ -239,6 +241,7 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   function stopServer() {
     questionTool.deactivate();
+    dilPrompt.deactivate();
     for (const unsubscribe of questionListeners) unsubscribe();
     questionListeners = [];
     cancelServerStart?.();
@@ -313,6 +316,7 @@ export default function (pi: ExtensionAPI) {
           });
         }
         questionTool.activate();
+        dilPrompt.activate();
       } catch (error) {
         stopServer();
         latestCtx?.ui.notify(

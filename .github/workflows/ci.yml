@@ -29,6 +29,7 @@ jobs:
           npx tsc --noEmit
           npm run check:extension
           npm run check
+          npm run test:dil
 
       - name: Build
         run: npm run build:web
