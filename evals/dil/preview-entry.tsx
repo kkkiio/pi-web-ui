@@ -114,6 +114,9 @@ const html = `<!doctype html>
 <title>DIL eval preview — ${escapeHtml(report.model)}</title>
 <style>${builtCss()}</style>
 <style>
+  /* The app stylesheet targets a full-height shell (body and #root at height 100%,
+     body overflow hidden). This page is a long document, so undo the shell. */
+  html, body { height: auto; min-height: 100%; overflow: auto; }
   body { margin: 0; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
   main { max-width: 880px; margin: 0 auto; padding: 32px 20px 96px; }
   .meta { color: var(--muted-foreground); font-size: 13px; margin-bottom: 24px; }
