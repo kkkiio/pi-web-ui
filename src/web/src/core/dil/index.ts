@@ -60,6 +60,7 @@ export function collectStatements(nodes: readonly DilNode[], out: string[] = [])
   return out;
 }
 
+export { hasDilElements } from "./detect.ts";
 export type { DilScope } from "./evaluator.ts";
 export { evaluateCondition, evaluateList, evaluateStatements, formatValue, safeEvaluate } from "./evaluator.ts";
 export { tidyFallback, toFallbackMarkdown } from "./fallback.ts";

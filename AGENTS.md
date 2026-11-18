@@ -105,7 +105,7 @@ activation again. Recommend continuing activated sessions in Web UI.
 │   │   │   ├── workspace-artifacts.ts # Markdown artifact recovery from tool events/session entries
 │   │   │   ├── tool-summary.ts  # Tool call summary rendering
 │   │   │   ├── constants.ts     # Shared constants
-│   │   │   ├── dil/             # DIL + Markdown parser (grammar, recovery, lowering; node --test)
+│   │   │   ├── dil/             # DIL + Markdown parser (grammar, recovery, lowering, evaluator; node --test)
 │   │   │   └── store/           # Zustand slices + event dispatcher
 │   │   └── components/
 │   │       ├── pi-web-ui/       # Pi Web UI components

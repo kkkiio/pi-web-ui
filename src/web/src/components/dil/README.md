@@ -104,11 +104,25 @@ over and *what a failure looks like*:
 - `on*` attributes are not wired up in #46: `onClick={() => …}` evaluates to an inert
   closure value that the primitives ignore. Interaction is #48.
 
+## Where it is mounted
+
+`chat-item-view.tsx` renders every assistant message through `<DilRenderer>`. The
+renderer parses (throttled while streaming) and branches on `hasDilElements`
+(`src/core/dil/detect.ts`):
+
+- **no DIL** — it calls the `markdown` prop, so the transcript keeps its existing Streamdown
+  rendering; plain answers are byte-for-byte what they were before;
+- **DIL present** — it renders the primitives below. Fenced code never counts, so a code
+  sample that contains `<box>` still renders as a code block.
+
+The prompt side is `extensions/dil-prompt.ts`: after `/webui`, a `before_agent_start`
+handler adds the `<dil>` system section (copy in `extensions/dil-system-prompt.ts`), and
+`/webui-stop`, a session replacement or shutdown removes it. Nothing is injected before
+activation.
+
 ## Where #46 stops
 
-`<DilRenderer>` is the end-to-end path (`parseDocument` → evaluator → primitives) and is
-what the message view will mount. The labels below are deliberately not rendered yet,
-because each is a slice of its own:
+The labels below are deliberately not rendered yet, because each is a slice of its own:
 
 | tag | today | slice |
 | --- | --- | --- |

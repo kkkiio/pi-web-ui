@@ -18,9 +18,9 @@
  * is only JSX glue.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { collectStatements, evaluateStatements, parseDocument } from "../../core/dil/index";
+import { collectStatements, evaluateStatements, hasDilElements, parseDocument } from "../../core/dil/index";
 import {
   CodeBlockLeaf,
   FallbackBlock,
@@ -43,6 +43,11 @@ export interface DilRendererProps {
   readonly source: string;
   /** True while tokens are still arriving; enables the throttle and tail repair. */
   readonly isStreaming?: boolean;
+  /**
+   * Renderer for answers that contain no DIL (plain Markdown). Called with the throttled
+   * text so the message view keeps one transcript component for both shapes.
+   */
+  readonly markdown?: (text: string) => ReactNode;
   /** Throttle window in ms while streaming. Default 60 (see README). */
   readonly throttleMs?: number;
   readonly className?: string;
@@ -55,12 +60,18 @@ export function DilRenderer({
   isStreaming = false,
   throttleMs = DEFAULT_THROTTLE_MS,
   className,
+  markdown,
 }: DilRendererProps) {
   const text = useThrottledText(source, isStreaming, throttleMs);
   const document = useMemo(() => parseDocument(text), [text]);
-  const statements = useMemo(() => collectStatements(document.raw), [document]);
-  const scope = useMemo(() => evaluateStatements(statements), [statements]);
-  const resolved = useMemo(() => resolveNodes(document.tree, scope), [document, scope]);
+  const dil = useMemo(() => hasDilElements(document.tree), [document]);
+
+  // Plain Markdown never pays for statement evaluation or tree resolution.
+  const statements = useMemo(() => (dil ? collectStatements(document.raw) : []), [dil, document]);
+  const scope = useMemo(() => (dil ? evaluateStatements(statements) : {}), [dil, statements]);
+  const resolved = useMemo(() => (dil ? resolveNodes(document.tree, scope) : []), [dil, document, scope]);
+
+  if (!dil && markdown) return <>{markdown(text)}</>;
 
   return (
     <div className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>

@@ -93,6 +93,7 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 | `inline.ts` | `InlineRun` — the element-interior inline subset (`**bold**`, `*italic*`, `~~strike~~`, code, math, links, autolinks) |
 | `entities.ts` | Shared character-reference decoding (prose once, raw text at parse time) |
 | `prune.ts` | Streaming pass: unclosed empty containers are not rendered (anti-flash) |
+| `detect.ts` | `hasDilElements`: did the model actually write DIL? (non-synthetic elements, `{#each}`/`{#if}`/`{expr}`; fences never count) |
 | `fallback.ts` | Static Markdown projection of the same AST |
 | `statements.ts` | `{@body}` statement splitting and `DIL.useState` slot discovery |
 | `index.ts` | `parseDocument`, re-exports |

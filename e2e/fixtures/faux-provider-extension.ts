@@ -2,6 +2,7 @@ import { fauxProvider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import askUserQuestionResponses from "./responses/ask-user-question.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
+import dilRenderResponses from "./responses/dil-render.ts";
 import duplicateArtifactResponses from "./responses/duplicate-artifact.ts";
 import editHistoryResponses from "./responses/edit-history.ts";
 import exportClarifyResponses from "./responses/export-clarify.ts";
@@ -22,6 +23,7 @@ const responsesByName = {
   "transcript-quote": transcriptQuoteResponses,
   "edit-history": editHistoryResponses,
   "chat-lifecycle": chatLifecycleResponses,
+  "dil-render": dilRenderResponses,
   "duplicate-artifact": duplicateArtifactResponses,
   "external-artifact": externalArtifactResponses,
   "tool-failure": toolFailureResponses,
@@ -65,6 +67,15 @@ export default function (pi: ExtensionAPI) {
       },
     });
   }
+  pi.registerCommand("assert-dil-prompt", {
+    handler: async (args, ctx) => {
+      const expected = (args ?? "").trim() === "active";
+      const present = ctx.getSystemPrompt().includes("<dil>");
+      if (present !== expected) {
+        throw new Error(`DIL prompt section is ${present ? "present" : "absent"}; expected ${args}`);
+      }
+    },
+  });
   pi.registerCommand("assert-tool-state", {
     handler: async (args) => {
       const { active = [], inactive = [] } = JSON.parse(args) as { active?: string[]; inactive?: string[] };

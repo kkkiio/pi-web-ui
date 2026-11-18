@@ -23,6 +23,10 @@ Given("Pi replies with plain text", () => {
   world.fixture = "chat-lifecycle";
 });
 
+Given("Pi replies with a DIL layout", () => {
+  world.fixture = "dil-render";
+});
+
 Given("Pi updates the workspace status document", () => {
   world.fixture = "workspace-artifact";
 });
@@ -61,6 +65,26 @@ When("I reload Pi Web UI", async ({ page }) => {
 
 Then("the transcript shows {string}", async ({ page }, text: string) => {
   await expect(page.getByRole("log").getByText(text, { exact: true })).toBeVisible();
+});
+
+Then("the DIL prompt section is active", async () => {
+  await world.harness?.command("/assert-dil-prompt active");
+});
+
+Then("the DIL prompt section is inactive", async () => {
+  await world.harness?.command("/assert-dil-prompt inactive");
+});
+
+Then("the DIL layout is rendered", async ({ page }) => {
+  const root = page.getByRole("log").locator(".dil-root");
+  await expect(root).toBeVisible();
+  await expect(root.getByText("Request path", { exact: true })).toBeVisible();
+  await expect(root.getByText("62%")).toBeVisible();
+});
+
+Then("the transcript does not show raw DIL tags", async ({ page }) => {
+  await expect(page.getByRole("log")).not.toContainText("<box");
+  await expect(page.getByRole("log")).not.toContainText("</box>");
 });
 
 Then("the transcript shows the tool call {string}", async ({ page }, name: string) => {
