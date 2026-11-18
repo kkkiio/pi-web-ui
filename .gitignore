@@ -19,3 +19,4 @@ evals/dil/report.json
 .eval-preview-out/
 evals/dil/preview-out/
 evals/dil/reports/
+coverage/

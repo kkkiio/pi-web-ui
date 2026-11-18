@@ -12,6 +12,14 @@ check:
 build:
     npm run build:web
 
+# Offline suite with coverage: the table on stdout, lcov in coverage/lcov.info.
+coverage:
+    mkdir -p coverage
+    node --test --experimental-test-coverage --test-reporter=dot --test-reporter=lcov \
+      --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info \
+      "src/web/src/core/dil/*.test.ts" "src/web/src/components/dil/*.test.ts" \
+      "extensions/*.test.ts" "evals/dil/*.test.ts"
+
 # Render a DIL eval run through the product renderer and open the page.
 #   just preview-eval               # the last live report, else the recordings
 #   just preview-eval recordings    # the committed recordings only

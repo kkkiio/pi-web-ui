@@ -1,0 +1,79 @@
+# Coverage for the offline DIL suite → Coveralls, plus the table on the run page.
+#
+# Same shape as pi.mbt's `.github/workflows/coverage.yml`: `continue-on-error` is
+# deliberate, because coverage is a report, not a gate — a Coveralls outage must never
+# block a merge. Make it a gate by adding `--test-coverage-lines=…` to the run step.
+#
+# What is measured: the files the tests import (`src/web/src/core/dil`,
+# `src/web/src/components/dil`, `extensions`, `evals/dil`). React components are covered
+# by `npm run e2e`, which Playwright does not instrument, so they are absent from the
+# report rather than counted as 0%.
+
+name: coverage
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TESTS: >-
+    src/web/src/core/dil/*.test.ts
+    src/web/src/components/dil/*.test.ts
+    extensions/*.test.ts
+    evals/dil/*.test.ts
+
+jobs:
+  coverage:
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # One run, two destinations: the readable table for the summary, lcov for Coveralls.
+      - name: Measure
+        run: |
+          mkdir -p coverage
+          node --test \
+            --experimental-test-coverage \
+            --test-reporter=spec \
+            --test-reporter=lcov \
+            --test-reporter-destination=coverage/report.txt \
+            --test-reporter-destination=coverage/lcov.info \
+            $TESTS
+          cat coverage/report.txt
+
+      - name: Summary
+        run: |
+          {
+            echo '### Coverage'
+            echo ''
+            echo '```'
+            grep -E '^ℹ (all files| src|  web)' coverage/report.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          file: ./coverage/lcov.info
