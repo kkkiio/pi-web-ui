@@ -57,6 +57,15 @@ test("an unclosed strike is closed", () => {
   assert.equal(repairStreamTail("~~删"), "~~删~~");
 });
 
+test("a cut inside a multi-backtick closer completes it instead of growing the tail", () => {
+  // The stream stopped before the second backtick of the closer. Appending a whole run
+  // would merge with the trailing backtick (three backticks cannot close a two-run) and
+  // show raw backticks; completing the run closes the span instead.
+  const once = repairStreamTail("``double `tick`");
+  assert.equal(once, "``double `tick``");
+  assert.equal(repairStreamTail(once), once, "healing must be idempotent");
+});
+
 test("nested openers are closed innermost first", () => {
   assert.equal(repairStreamTail("**a *b"), "**a *b***");
   assert.equal(repairStreamTail("***a"), "***a***");
