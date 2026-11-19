@@ -302,7 +302,14 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
   if (CODE_FAMILY.has(name)) {
     // Primitives, not nodes: `memo` skips a block that finished while the tail streamed.
     if (name === "math") {
-      return <MathLeaf key={key} value={textValue(props.value)} block={props.block === true} />;
+      return (
+        <MathLeaf
+          key={key}
+          value={textValue(props.value)}
+          block={props.block === true}
+          closed={props.closed !== false}
+        />
+      );
     }
     if (name === "CodeBlock") {
       // The model's `<CodeBlock>` carries its own padding newlines; a fence does not.
@@ -311,10 +318,18 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
           key={key}
           code={plainText(children).replace(/^\n+|\n+$/g, "")}
           language={textValue(props.language) || undefined}
+          closed={props.closed !== false}
         />
       );
     }
-    return <CodeBlockLeaf key={key} code={plainText(children)} language={textValue(props.language) || undefined} />;
+    return (
+      <CodeBlockLeaf
+        key={key}
+        code={plainText(children)}
+        language={textValue(props.language) || undefined}
+        closed={props.closed !== false}
+      />
+    );
   }
 
   return <FallbackBlock key={key}>{rendered}</FallbackBlock>;

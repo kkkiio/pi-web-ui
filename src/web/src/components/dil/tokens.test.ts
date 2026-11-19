@@ -100,3 +100,11 @@ test("links only accept inspectable schemes", () => {
   assert.equal(safeLinkUrl("data:text/html,<script>alert(1)</script>"), undefined);
   assert.equal(safeLinkUrl(undefined), undefined);
 });
+
+test("a list takes the spacing scale and a solid connector", () => {
+  assert.equal(layoutSkin("list", { gap: 2 }).className.includes("space-y-2"), true);
+  assert.equal(layoutSkin("list", {}).className.includes("space-y-1"), true, "default item spacing");
+  assert.equal(layoutSkin("list", { gap: 99 }).className.includes("space-y-1"), true, "off-scale falls back");
+  assert.equal(layoutSkin("list", { connector: "solid" }).className.includes("[&>li]:border-l-2"), true);
+  assert.equal(layoutSkin("list", { connector: "nope" }).className.includes("border-l-2"), false);
+});

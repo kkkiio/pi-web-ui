@@ -25,6 +25,18 @@ Feature: DIL rendering
     And the DIL diagram is rendered
     And the transcript does not show raw DIL tags
 
+  @p0
+  Scenario: Math and code are typeset, not shown as source
+    Why: #49 promises KaTeX and Shiki; raw "$$" / backticks with no highlight would both look
+    like a rendering bug to a reader.
+
+    Given Pi replies with DIL math and code
+    When I open Pi Web UI
+    And I send "Show the derivation with code"
+    Then the transcript shows "推导"
+    And the math, the code block and the connected list are rendered
+    And the transcript does not show raw DIL tags
+
   @p1
   Scenario: A list that continues earlier steps keeps its numbering
     Why: renumbering a procedure's tail to 1 makes the reader redo steps they already did.
