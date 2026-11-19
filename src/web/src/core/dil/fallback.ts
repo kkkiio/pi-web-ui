@@ -125,7 +125,6 @@ function renderElement(node: DilElementNode, ctx: RenderContext): string {
     case "box":
     case "row":
     case "col":
-    case "column":
     case "grid":
     case "grid-item": {
       const body = node.children

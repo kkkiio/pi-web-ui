@@ -13,7 +13,6 @@ export const CONTAINER_TAGS: ReadonlySet<string> = new Set([
   "box",
   "row",
   "col",
-  "column",
   "grid",
   "grid-item",
   "list",

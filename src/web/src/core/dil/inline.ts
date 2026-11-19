@@ -1,7 +1,7 @@
 /**
  * InlineRun — the inline Markdown subset, per `dil.ebnf` §7.3.
  *
- * Used inside DIL elements (`ElementChild` → `InlineFlow`), where the grammar
+ * Used inside DIL elements (`ElementChild` → `InlineProse`), where the grammar
  * deliberately has **no** block Markdown: no headings, no lists, no tables, no quotes,
  * no indented code. Text there is one flow of inline atoms, and blank lines are the only
  * block separator.
@@ -22,21 +22,14 @@
  *
  * The document level uses the full GFM lexer for blocks and, inside paragraphs,
  * micromark's inline parser — a superset of this grammar. `markdown.test.ts` keeps the
- * two in sync for the shared subset.
+ * two in sync for the shared subset. Which tags count as inline lives in `vocabulary.ts`.
  */
 
 import { entityAt } from "./entities.ts";
 import { readInlineCodeSpan, readInlineMathSpan } from "./scanner.ts";
 import type { DilAttribute, DilElementNode, DilNode } from "./types.ts";
 
-/** Inline DIL tags: they belong to the surrounding InlineRun, not to a block of their own. */
-export const INLINE_TAGS: ReadonlySet<string> = new Set(["bold", "italic", "code", "math", "Link", "icon", "badge"]);
-
 const ESCAPABLE = "\\`*_{}[]()#+-.!|$<>~";
-
-export function isInlineTag(name: string): boolean {
-  return INLINE_TAGS.has(name);
-}
 
 export function parseInline(text: string, pos: number): DilNode[] {
   const nodes: DilNode[] = [];

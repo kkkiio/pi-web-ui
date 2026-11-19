@@ -106,7 +106,7 @@ export function parse(source: string): DilParseResult {
   const diag = new Diagnostics(src);
   const ctx: ParseContext = { src, i: 0, diag, tagStack: [] };
   const { nodes } = parseNodes(ctx, null, false);
-  return { nodes: mergeText(nodes), diagnostics: diag.items, diagnosticSummary: diag.summary() };
+  return { nodes, diagnostics: diag.items, diagnosticSummary: diag.summary() };
 }
 
 /**
@@ -121,11 +121,9 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
 
   const flush = (end: number): void => {
     if (textStart < 0) return;
-    if (end > textStart) {
-      // Entities are left as written: the Markdown lexer decodes prose, and raw
-      // elements decode in `readRawText`. Decoding here would decode twice.
-      nodes.push({ type: "text", value: src.slice(textStart, end), pos: textStart });
-    }
+    // Entities are left as written: the Markdown lexer decodes prose, and raw
+    // elements decode in `readRawText`. Decoding here would decode twice.
+    if (end > textStart) pushText(nodes, src.slice(textStart, end), textStart);
     textStart = -1;
   };
 
@@ -262,6 +260,23 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
 
   flush(src.length);
   return { nodes, stop: { kind: "eof" } };
+}
+
+/**
+ * Append one prose run. Text nodes are created in exactly one place (`flush`), so the two
+ * hygiene rules live there rather than in a pass over the finished list:
+ *
+ *   layout whitespace  a run that is only indentation/newlines is not content.
+ *   adjacency          two runs separated by a dropped construct are one run.
+ */
+function pushText(nodes: DilNode[], value: string, pos: number): void {
+  if (!value.trim() && value.includes("\n")) return;
+  const previous = nodes[nodes.length - 1];
+  if (previous && previous.type === "text") {
+    nodes[nodes.length - 1] = { ...previous, value: previous.value + value };
+    return;
+  }
+  nodes.push({ type: "text", value, pos });
 }
 
 function isTagStart(src: string, i: number): boolean {
@@ -431,7 +446,7 @@ function readIf(
 
   for (;;) {
     const body = parseNodes(ctx, closeTag, true);
-    branches.push({ cond, body: mergeText(body.nodes) });
+    branches.push({ cond, body: body.nodes });
     const stop = body.stop;
 
     if (stop.kind === "else") {
@@ -488,7 +503,7 @@ function readEach(
       pattern: clause ? clause.pattern : "item",
       item: clause ? clause.item : "item",
       index: clause ? clause.index : null,
-      body: mergeText(body.nodes),
+      body: body.nodes,
     },
     stop,
   };
@@ -531,7 +546,7 @@ function readElement(ctx: ParseContext): { node: DilElementNode | null; stop: St
     ctx.diag.add("unclosed_tag", pos, { tag: name, action: "recovered_parse" });
   }
 
-  return { node: element(name, open.attrs, mergeText(body.nodes), pos, ctx.i, closed), stop };
+  return { node: element(name, open.attrs, body.nodes, pos, ctx.i, closed), stop };
 }
 
 /** Everything up to `</name>` is one raw text node (entities decoded). */
@@ -819,24 +834,6 @@ function decodeString(raw: string): string {
         i += 2;
       } else out += "x";
     } else out += escaped;
-  }
-  return out;
-}
-
-/**
- * Merge adjacent text runs and drop layout whitespace between elements — a
- * whitespace-only run that spans a newline is indentation, not content.
- */
-export function mergeText(nodes: DilNode[]): DilNode[] {
-  const out: DilNode[] = [];
-  for (const node of nodes) {
-    if (node.type === "text" && !node.value.trim() && node.value.includes("\n")) continue;
-    const previous = out[out.length - 1];
-    if (node.type === "text" && previous && previous.type === "text") {
-      out[out.length - 1] = { ...previous, value: previous.value + node.value };
-      continue;
-    }
-    out.push(node);
   }
   return out;
 }
