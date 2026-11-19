@@ -108,6 +108,12 @@ Then("the math, the code block and the connected list are rendered", async ({ pa
   await expect(code).toBeVisible();
   await expect(code).toContainText("const energy");
 
+  // A Markdown column alignment (`| ---: |`) reaches the cell as a computed text-align.
+  const cells = log.locator(".dil-root table tr").nth(1).locator("td");
+  await expect(cells.nth(0)).toHaveCSS("text-align", "left");
+  await expect(cells.nth(1)).toHaveCSS("text-align", "right");
+  await expect(cells.nth(2)).toHaveCSS("text-align", "center");
+
   // `connector="solid" gap={2}` reaches the list element.
   const list = log.locator(".dil-root ol").first();
   await expect(list).toBeVisible();
