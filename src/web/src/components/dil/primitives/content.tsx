@@ -56,10 +56,11 @@ export function FallbackTableRow({ children }: FallbackProps) {
 }
 
 export function FallbackTableCell({ props, children }: FallbackProps) {
+  const align = layoutSkin("table-cell", props ?? {}).className;
   if (props?.header === true) {
-    return <th className="px-2 py-1.5 text-left font-medium text-foreground">{children}</th>;
+    return <th className={cn("px-2 py-1.5 font-medium text-foreground", align || "text-left")}>{children}</th>;
   }
-  return <td className="px-2 py-1.5 align-top text-foreground/90">{children}</td>;
+  return <td className={cn("px-2 py-1.5 align-top text-foreground/90", align)}>{children}</td>;
 }
 
 export function FallbackBlockquote({ children }: FallbackProps) {

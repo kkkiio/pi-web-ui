@@ -191,8 +191,24 @@ function renderTable(node: DilElementNode, ctx: RenderContext): string {
     return `| ${cells.join(" | ")} |`;
   });
 
+  // The delimiter row carries the column alignment back out: `:---`, `:---:`, `---:`.
+  const marker = (align: unknown): string =>
+    align === "center"
+      ? ":---:"
+      : align === "right" || align === "end"
+        ? "---:"
+        : align === "left" || align === "start"
+          ? ":---"
+          : "---";
+  const headerCells = rows[0].children.filter(
+    (child): child is DilElementNode => child.type === "element" && child.name === "table-cell",
+  );
   const columns = Math.max(1, rendered[0].split("|").length - 2);
-  rendered.splice(1, 0, `| ${Array.from({ length: columns }, () => "---").join(" | ")} |`);
+  rendered.splice(
+    1,
+    0,
+    `| ${Array.from({ length: columns }, (_, column) => marker(headerCells[column] && attributeValue(headerCells[column] as DilElementNode, "textAlign"))).join(" | ")} |`,
+  );
   return `\n\n${rendered.join("\n")}\n\n`;
 }
 

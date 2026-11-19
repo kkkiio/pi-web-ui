@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { lowerInline, parseDocument } from "./index.ts";
+import { lowerInline, parseDocument, toFallbackMarkdown } from "./index.ts";
 import { lowerMarkdown } from "./markdown.ts";
 import { parse } from "./parser.ts";
 import type { DilElementNode, DilNode } from "./types.ts";
@@ -473,4 +473,20 @@ test("emphasis never wraps a container", () => {
 
   // An unknown tag is not a member of the vocabulary either, so it is not guessed to be inline.
   assert.equal(findAll(tree('**<my-widget text="b"/>**'), "bold").length, 0);
+});
+
+test("a Markdown column alignment reaches the cell and survives the copy back", () => {
+  const source = "| left | middle | right |\n| :--- | :---: | ---: |\n| 1 | 2 | 3 |";
+  const table = only(tree(source), "table");
+  const header = table.children[0];
+  assert.equal(header?.type, "element");
+  const aligns = (header as DilElementNode).children.map(
+    (cell) => (cell as DilElementNode).attrs.find((attribute) => attribute.name === "textAlign")?.value,
+  );
+  assert.deepEqual(aligns, ["left", "center", "right"]);
+
+  assert.ok(
+    toFallbackMarkdown(table ? [table] : []).includes("| :--- | :---: | ---: |"),
+    "the delimiter row keeps the alignment",
+  );
 });

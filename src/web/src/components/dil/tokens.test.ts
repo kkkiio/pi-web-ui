@@ -108,3 +108,10 @@ test("a list takes the spacing scale and a solid connector", () => {
   assert.equal(layoutSkin("list", { connector: "solid" }).className.includes("border-l-2"), true);
   assert.equal(layoutSkin("list", { connector: "nope" }).className.includes("border-l-2"), false);
 });
+
+test("a table cell honours a column alignment", () => {
+  assert.equal(layoutSkin("table-cell", { textAlign: "center" }).className, "text-center");
+  assert.equal(layoutSkin("table-cell", { textAlign: "end" }).className, "text-right");
+  assert.equal(layoutSkin("table-cell", { textAlign: "nope" }).className, "");
+  assert.equal(layoutSkin("table-cell", {}).className, "");
+});

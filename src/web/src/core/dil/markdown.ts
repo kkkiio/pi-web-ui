@@ -486,15 +486,25 @@ function listItemElement(node: ListItem, prose: CompositeProse): DilElementNode 
 
 function tableElement(node: Table, prose: CompositeProse): DilElementNode {
   const { pos, end } = spanOf(node, prose);
-  const rows = node.children.map((row, index) => tableRowElement(row, index === 0, prose));
+  // `| :--- | :---: | ---: |` — mdast keeps the column alignment, the cells carry it on so
+  // the renderer and the copy-back projection can both honour it.
+  const align = node.align ?? [];
+  const rows = node.children.map((row, index) => tableRowElement(row, index === 0, align, prose));
   return el("table", rows, pos, end);
 }
 
-function tableRowElement(node: TableRow, header: boolean, prose: CompositeProse): DilElementNode {
+function tableRowElement(
+  node: TableRow,
+  header: boolean,
+  align: readonly (string | null)[],
+  prose: CompositeProse,
+): DilElementNode {
   const { pos, end } = spanOf(node, prose);
-  const cells = node.children.map((cell) => {
+  const cells = node.children.map((cell, column) => {
     const cellSpan = spanOf(cell, prose);
     const attrs = header ? [booleanAttr("header", cellSpan.pos)] : [];
+    const textAlign = align[column];
+    if (textAlign) attrs.push(stringAttr("textAlign", textAlign, cellSpan.pos));
     return el("table-cell", phrasingNodes(cell.children, prose), cellSpan.pos, cellSpan.end, attrs);
   });
   return el("table-row", cells, pos, end);

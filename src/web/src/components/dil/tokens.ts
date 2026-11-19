@@ -294,6 +294,12 @@ export function layoutSkin(name: string, props: SkinProps): Skin {
     }
     case "grid-item":
       return { className: "min-w-0", style: sizeStyle(props) };
+    case "table-cell": {
+      // A Markdown column alignment (`:---:`) arrives as `textAlign`, the same attribute
+      // `text` already uses.
+      const align = typeof props.textAlign === "string" ? (TEXT_ALIGN[props.textAlign] ?? "") : "";
+      return { className: align, style: {} };
+    }
     case "divider": {
       const spacing = readNumber(props.spacing);
       const literal = readColor(props.color);
