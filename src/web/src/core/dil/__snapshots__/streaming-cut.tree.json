@@ -14,7 +14,7 @@
     {"code": "unclosed_tag", "line": 3, "column": 1, "action": "recovered_parse", "tag": "box"}
   ],
   "tree": [
-    {"tag": "title", "attrs": {"size": "lg"}, "children": ["半截的回答"]},
+    {"tag": "title", "attrs": {"size": "lg", "level": "2"}, "children": ["半截的回答"]},
     {
       "tag": "box",
       "attrs": {"border": true, "radius": "lg"},

@@ -20,12 +20,15 @@ import { pruneEmptyIncomplete } from "./prune.ts";
 import { findStateDeclarations, splitStatements } from "./statements.ts";
 import type { DilDocument, DilNode } from "./types.ts";
 
-export function parseDocument(source: string): DilDocument {
+export function parseDocument(source: string, { isStreaming = true } = {}): DilDocument {
   const result = parse(source);
   // `sourceLength` marks the fragment that still owns the end of the source: the only
   // one `stream-repair.ts` may close constructs in.
   const tree = pruneEmptyIncomplete(
-    lowerMarkdown(result.nodes, { document: true, sourceLength: normalizeSource(source).length }),
+    lowerMarkdown(result.nodes, {
+      document: true,
+      sourceLength: isStreaming ? normalizeSource(source).length : undefined,
+    }),
   );
   return {
     raw: result.nodes,
@@ -63,7 +66,7 @@ export { hasDilElements } from "./detect.ts";
 export type { DilScope } from "./evaluator.ts";
 export { evaluateCondition, evaluateList, evaluateStatements, formatValue, safeEvaluate } from "./evaluator.ts";
 export { tidyFallback, toFallbackMarkdown } from "./fallback.ts";
-export { fenceToElement, lowerInline, lowerMarkdown, resolveSpanningEmphasis } from "./markdown.ts";
+export { fenceToElement, lowerInline, lowerMarkdown } from "./markdown.ts";
 export { normalizeSource, parse, RAW_TEXT_TAGS } from "./parser.ts";
 export { CONTAINER_TAGS, pruneEmptyIncomplete } from "./prune.ts";
 export { findTopLevel, LineIndex, readBalanced, splitEachClause, topLevelIndex } from "./scanner.ts";

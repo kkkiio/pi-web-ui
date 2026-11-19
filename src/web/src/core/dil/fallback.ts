@@ -58,10 +58,10 @@ function renderElement(node: DilElementNode, ctx: RenderContext): string {
 
   switch (node.name) {
     case "title": {
-      // size roughly remembers the heading level the Markdown lowering saw.
       const size = attributeValue(node, "size");
-      const level = size === "xl" || size === "2xl" ? "#" : size === "lg" ? "##" : "###";
-      return `\n\n${level} ${inner()}\n\n`;
+      const depth = Number(attributeValue(node, "level"));
+      const level = depth >= 1 && depth <= 6 ? depth : size === "xl" || size === "2xl" ? 1 : size === "lg" ? 2 : 3;
+      return `\n\n${"#".repeat(level)} ${inner()}\n\n`;
     }
     case "text":
       return hasAttribute(node, "lineThrough") ? `~~${inner()}~~` : inner();
@@ -71,6 +71,16 @@ function renderElement(node: DilElementNode, ctx: RenderContext): string {
       return `**${inner()}**`;
     case "italic":
       return `*${inner()}*`;
+    case "hard-break":
+      return "  \n";
+    case "markdown-literal":
+      return rawText(node);
+    case "markdown-image": {
+      const src = attributeValue(node, "src") ?? "";
+      const alt = attributeValue(node, "alt") ?? "";
+      const title = attributeValue(node, "title");
+      return `![${alt}](${src}${title ? ` "${title}"` : ""})`;
+    }
     case "code": {
       const text = rawText(node);
       return text ? `\`${text}\`` : "";
@@ -161,13 +171,15 @@ function renderList(node: DilElementNode, ctx: RenderContext): string {
   const start = Number.parseInt(attributeValue(node, "start") ?? "1", 10);
   const lines = items.map((item, index) => {
     const bullet = marker === "number" ? `${Number.isFinite(start) ? start + index : index + 1}.` : "-";
+    const checked = attributeValue(item, "checked");
+    const task = checked === "true" ? "[x] " : checked === "false" ? "[ ] " : "";
     const body = renderNodes(item.children, { listDepth: ctx.listDepth + 1 })
       .trim()
       .split("\n")
       .filter((line, lineIndex, all) => line.length > 0 || lineIndex < all.length - 1);
     const [first = "", ...rest] = body;
     const continuation = rest.map((line) => `\n${indent}  ${line}`).join("");
-    return `${indent}${bullet} ${first}${continuation}`;
+    return `${indent}${bullet} ${task}${first}${continuation}`;
   });
 
   return `\n\n${lines.join("\n")}\n\n`;

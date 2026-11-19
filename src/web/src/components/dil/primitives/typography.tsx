@@ -22,19 +22,28 @@ export interface PrimitiveProps {
   readonly children?: ReactNode;
 }
 
-export function Title({ className, style, children }: PrimitiveProps) {
+export function Title({ className, style, children, level }: PrimitiveProps & { readonly level?: unknown }) {
+  const Heading =
+    typeof level === "string" && /^[1-6]$/.test(level)
+      ? (`h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6")
+      : "div";
   return (
-    <div className={cn("font-semibold tracking-tight text-foreground", className)} style={style}>
+    <Heading className={cn("font-semibold tracking-tight text-foreground", className)} style={style}>
       {children}
-    </div>
+    </Heading>
   );
 }
 
-export function Text({ className, style, children }: PrimitiveProps) {
+export function Text({
+  className,
+  style,
+  children,
+  as: Element = "div",
+}: PrimitiveProps & { readonly as?: "p" | "div" }) {
   return (
-    <div className={cn("min-w-0 text-foreground", className)} style={style}>
+    <Element className={cn("min-w-0 text-foreground", className)} style={style}>
       {children}
-    </div>
+    </Element>
   );
 }
 

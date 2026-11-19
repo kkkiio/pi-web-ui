@@ -10,8 +10,8 @@
  *   source   may the model write it?       corpus + the prompt
  *   lowered  does our lowering emit it?    Markdown → `title`/`list`/`table`/`bold`/…
  *
- * Every tag is at least tolerated (the parser keeps unknown tags, the renderer falls back),
- * so the flags describe where a tag *comes from*, not whether it is legal:
+ * Known DIL tags keep their original meaning in source. Unknown tags stay literal and
+ * synthetic-only nodes can only be produced by Markdown lowering:
  *
  *   source only    e.g. `box` `row` `icon` `badge` `Cite` `CodeBlock`
  *   lowered only   e.g. `bold` `italic` `code` `math` `table*` `blockquote` `code-block`
@@ -36,6 +36,8 @@ export interface TagEntry {
   readonly source?: true;
   /** Our lowering emits it: a Markdown construct or a fence becomes this tag. */
   readonly lowered?: true;
+  /** Internal Markdown node with no DIL source spelling. */
+  readonly syntheticOnly?: true;
   /** Also a primitive when it appears inside `<svg>` (see `svg-map.ts`). */
   readonly svg?: true;
   readonly note?: string;
@@ -74,6 +76,9 @@ export const DIL_VOCABULARY = {
   badge: { kind: "inline", support: "rendered", source: true },
   icon: { kind: "inline", support: "rendered", source: true },
   Link: { kind: "inline", support: "rendered", source: true, lowered: true },
+  "hard-break": { kind: "inline", support: "rendered", lowered: true, syntheticOnly: true },
+  "markdown-image": { kind: "inline", support: "rendered", lowered: true, syntheticOnly: true },
+  "markdown-literal": { kind: "inline", support: "rendered", lowered: true, syntheticOnly: true },
 
   // Code leaves. A fence is Markdown in the source; our lowering represents it as
   // `code-block`, which no model writes. ChatGPT compiles a fence to its client widget.
@@ -133,14 +138,14 @@ export const INLINE_TAGS: ReadonlySet<string> = new Set(
 export const KNOWN_TAGS: readonly string[] = Object.keys(DIL_VOCABULARY);
 
 export function tagEntry(name: string): TagEntry | undefined {
-  return (DIL_VOCABULARY as Record<string, TagEntry>)[name];
+  return Object.hasOwn(DIL_VOCABULARY, name) ? (DIL_VOCABULARY as Record<string, TagEntry>)[name] : undefined;
 }
 
-/** Unknown tags are treated as containers: they keep their position and render a fallback. */
+/** Unknown tags are not DIL elements. */
 export function isInlineTag(name: string): boolean {
   return INLINE_TAGS.has(name);
 }
 
 export function isKnownTag(name: string): boolean {
-  return name in DIL_VOCABULARY;
+  return Object.hasOwn(DIL_VOCABULARY, name);
 }

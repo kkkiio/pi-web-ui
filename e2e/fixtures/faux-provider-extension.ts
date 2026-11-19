@@ -4,6 +4,7 @@ import askUserQuestionResponses from "./responses/ask-user-question.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
 import dilHeavyResponses from "./responses/dil-heavy.ts";
 import dilListResponses from "./responses/dil-list.ts";
+import dilMarkdownResponses from "./responses/dil-markdown.ts";
 import dilRenderResponses from "./responses/dil-render.ts";
 import dilSvgResponses from "./responses/dil-svg.ts";
 import duplicateArtifactResponses from "./responses/duplicate-artifact.ts";
@@ -29,6 +30,7 @@ const responsesByName = {
   "dil-render": dilRenderResponses,
   "dil-svg": dilSvgResponses,
   "dil-list": dilListResponses,
+  "dil-markdown": dilMarkdownResponses,
   "dil-heavy": dilHeavyResponses,
   "duplicate-artifact": duplicateArtifactResponses,
   "external-artifact": externalArtifactResponses,

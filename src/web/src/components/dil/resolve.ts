@@ -29,6 +29,7 @@ export type ResolvedNode =
   | {
       readonly kind: "element";
       readonly name: string;
+      readonly synthetic?: boolean;
       readonly props: ResolvedProps;
       readonly children: readonly ResolvedNode[];
     };
@@ -107,6 +108,7 @@ function resolveNode(node: DilNode, scope: DilScope, budget: Budget): ResolvedNo
         {
           kind: "element",
           name: node.name,
+          ...(node.synthetic && { synthetic: true }),
           // `closed` is structural, not an attribute: lowering puts it on the node (an
           // unterminated fence, an unclosed tag), and the heavy leaves render their source
           // instead of typesetting/highlighting until it is true.

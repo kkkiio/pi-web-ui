@@ -10,8 +10,6 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { DIL_SYSTEM_PROMPT } from "../../extensions/dil-system-prompt.ts";
 import { DilRenderer } from "../../src/web/src/components/dil/dil-renderer";
 import { DIL_CASES } from "./cases.ts";
@@ -123,12 +121,7 @@ const sections = entries
       .map((result) => {
         const anchor = `case-${reportIndex}-${result.id}`;
         items.push({ anchor, label: result.id, score: result.score });
-        const rendered = renderToStaticMarkup(
-          <DilRenderer
-            source={result.text}
-            markdown={(text) => <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>}
-          />,
-        );
+        const rendered = renderToStaticMarkup(<DilRenderer source={result.text} />);
         const checks = result.checks
           .map(
             (check) =>

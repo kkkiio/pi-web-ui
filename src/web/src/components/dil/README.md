@@ -107,14 +107,9 @@ over and *what a failure looks like*:
 
 ## Where it is mounted
 
-`chat-item-view.tsx` renders every assistant message through `<DilRenderer>`. The
-renderer parses (throttled while streaming) and branches on `hasDilElements`
-(`src/core/dil/detect.ts`):
-
-- **no DIL** — it calls the `markdown` prop, so the transcript keeps its existing Streamdown
-  rendering; plain answers are byte-for-byte what they were before;
-- **DIL present** — it renders the primitives below. Fenced code never counts, so a code
-  sample that contains `<box>` still renders as a code block.
+The assistant answer in `chat-item-view.tsx` always mounts `<DilRenderer>`. Plain Markdown
+and mixed Markdown/DIL use the same parser and React tree throughout streaming. Reasoning
+continues to use Streamdown.
 
 The prompt side is `extensions/dil-prompt.ts`: after `/webui`, a `before_agent_start`
 handler adds the `<dil>` system section (copy in `extensions/dil-system-prompt.ts`), and
@@ -131,27 +126,18 @@ The labels below are deliberately not rendered yet, because each is a slice of i
 | `svg`, `defs`, `marker`, `rect`, `path`, … | **rendered** (`#47`): allowlisted attributes, namespaced ids, `<text>` is SVG text inside `<svg>` | done |
 | `button`, `radio-group`, `radio`, `textarea`, `label` | children only; no handlers | #48 |
 
-## Markdown constructs this renderer degrades
+## Markdown in answers
 
-Parsing is not the issue: `unified`/`remark-parse`/`remark-gfm` produce a complete mdast, and
-the lowering in `core/dil/markdown.ts` decides what a *renderer* wants to show. Only answers
-that contain DIL go through it; a plain Markdown answer never does (`hasDilElements`), so
-these degradations appear exactly when an answer mixes both.
+Both prose tiers share CommonMark and GFM inline syntax with the CJK plugins. Hard line
+breaks become line breaks in the transcript. Closed code fences have a copy button.
+A `mermaid` fence renders a diagram and keeps its source visible if rendering fails.
 
-Reference-style links are the clearest example of a deliberate cut: they are rare in an agent
-answer, and resolving them would need a document-wide definition table because a definition
-can sit in a different prose run than its use.
-
-| construct | behaviour in a mixed answer | why |
-| --- | --- | --- |
-| `[label](url)` | `<Link url title>` | — |
-| `[label][id]` + `[id]: url` | label and the definition line stay **literal text** | resolution needs a document-wide definition map; rare in answers |
-| `![alt](src)` / `![alt][id]` | literal `![alt](src)` | no image primitive yet |
-| `footnote[^1]` / `[^1]: …` | literal `[^1]`; the definition renders as a paragraph | no footnote UI |
-| hard break (`␠␠␠␠\n`) | one space | `<Text>` is a plain block; no `<br>` node yet |
-| inline HTML (`<kbd>`) | literal text | a `<tag>` in DIL is an element, so HTML is not reinterpreted |
-
-Anything not listed behaves as its Markdown counterpart does.
+| Syntax | Behavior |
+| --- | --- |
+| Inline links and autolinks | Render as links when the destination is allowed |
+| HTTPS images | Load lazily without a Referer and show their alt text on failure |
+| Reference links, link definitions, and footnotes | Display as source text ([#60](https://github.com/kkkiio/pi-web-ui/issues/60), [#61](https://github.com/kkkiio/pi-web-ui/issues/61)) |
+| Raw HTML and images with other destinations | Display as source text |
 
 ## Roadmap
 

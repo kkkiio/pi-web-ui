@@ -10,9 +10,7 @@
  *                                 DIL indentation is layout and code is always fenced.
  *
  *   element level   `InlineProse` **no** block Markdown at all: blank lines are the only
- *                                 paragraph separator, everything else is the InlineRun
- *                                 subset from `inline.ts` (`**bold**`, `*italic*`,
- *                                 `~~strike~~`, `` `code` ``, `$math$`, `[label](url)`).
+ *                                 paragraph separator. Inline syntax uses the same lexer.
  *
  * Block → DIL mapping (document level only):
  *
@@ -24,7 +22,7 @@
  *   ---                     → <divider>
  *   ~~删~~                  → <text lineThrough>   (inline, both tiers)
  *   [label](url)            → <Link url="…" title="…">
- *   ![alt](src)             → literal `![alt](src)` (no image primitive in Phase 1)
+ *   ![alt](https://…)       → a lazily loaded image
  *
  * Inline DIL nodes (`math`, `Link`, `icon`, `badge`, `bold`, `italic`, `code`) and
  * `{expr}` interpolations stay inside the surrounding flow in both tiers, so
@@ -32,31 +30,13 @@
  */
 
 import type { Code, List, ListItem, PhrasingContent, RootContent, Table, TableRow } from "mdast";
-import remarkGfm from "remark-gfm";
-import remarkParse from "remark-parse";
-import { unified } from "unified";
 import { parseInline } from "./inline.ts";
+import { parseMarkdown } from "./markdown-syntax.ts";
 import { repairStreamTail } from "./stream-repair.ts";
 import type { DilAttribute, DilElementNode, DilFenceNode, DilNode } from "./types.ts";
 import { isInlineTag } from "./vocabulary.ts";
 
 const HEADING_SIZE: Record<number, string> = { 1: "xl", 2: "lg", 3: "md", 4: "md", 5: "md", 6: "md" };
-
-/**
- * One processor for the whole session: building it per prose run is the expensive part.
- *
- * Two constructs are off:
- *
- *   `codeIndented`  in DIL a four-space line is indentation, never a code block.
- *   `setextUnderline`
- *                   (`remark`'s setext heading) a streamed paragraph becomes a heading
- *                   the moment a lone `-` or `=` lands on the next line — the author was
- *                   starting a list item or an underline, not an H2. Headings stay ATX.
- */
-const markdown = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .data("micromarkExtensions", [{ disable: { null: ["codeIndented", "setextUnderline"] } }]);
 
 /** Which grammar tier the prose being lowered belongs to (`dil.ebnf` §1). */
 export type ProseTier = "document" | "element";
@@ -134,9 +114,8 @@ function lowerDocumentProse(nodes: DilNode[], sourceLength?: number): DilNode[] 
     // recognize `- <Link/>` as a list item; the nodes are substituted back afterwards.
     const prose = composeProse(run, isTail(run, sourceLength));
     // A run that is only layout whitespace carries no paragraph.
-    if (!prose.nodes.length && !/\S/.test(prose.text)) return;
-    out.push(...blockProse(prose));
     run = [];
+    if (prose.nodes.length || /\S/.test(prose.text)) out.push(...blockProse(prose, sourceLength !== undefined));
   };
 
   for (const node of nodes) {
@@ -182,8 +161,8 @@ function isTail(run: readonly DilNode[], sourceLength?: number): boolean {
   return last !== undefined && nodeEnd(last) === sourceLength;
 }
 
-function blockProse(prose: CompositeProse): DilNode[] {
-  return contentNodes(markdown.parse(prose.text).children, prose);
+function blockProse(prose: CompositeProse, isStreaming: boolean): DilNode[] {
+  return contentNodes(parseMarkdown(prose.text, isStreaming ? "streaming" : "document").children, prose);
 }
 
 // ---------------------------------------------------------------------------
@@ -283,13 +262,10 @@ function stripPlaceholders(value: string): string {
  * A single run is emitted unwrapped, so `<row>数量：{n} 与 **两种**</row>` stays a flex
  * row of inline nodes; several runs (blank-line separated) each become one `<text>`.
  *
- * This tier is the one that needs `resolveSpanningEmphasis`: there is no Markdown string
- * here, so `**<Link/>**` has no lexer to pair its delimiters. The document tier hands that
- * job to micromark with placeholders instead.
+ * The same placeholders as the document tier let emphasis span inline DIL elements.
  */
 function lowerInlineProse(input: DilNode[], sourceLength?: number): DilNode[] {
   const pieces: Array<{ readonly nodes: DilNode[]; readonly tail: boolean } | { readonly block: DilNode }> = [];
-  const nodes = resolveSpanningEmphasis(input);
   let prose: DilNode[] = [];
 
   const flushProse = (): void => {
@@ -299,17 +275,20 @@ function lowerInlineProse(input: DilNode[], sourceLength?: number): DilNode[] {
     prose = [];
   };
 
-  for (const node of nodes) {
+  for (const node of input) {
     if (node.type === "text") {
       if (node.raw) {
         prose.push(node);
         continue;
       }
-      const runs = node.value.split(/\n[ \t]*\n/);
-      runs.forEach((run, index) => {
-        if (index > 0) flushProse(); // BlankLine ends the paragraph
-        if (run) prose.push({ ...node, value: run });
-      });
+      let start = 0;
+      for (const blank of node.value.matchAll(/\n[ \t]*\n/g)) {
+        if (blank.index > start)
+          prose.push({ ...node, value: node.value.slice(start, blank.index), pos: node.pos + start });
+        flushProse();
+        start = blank.index + blank[0].length;
+      }
+      if (start < node.value.length) prose.push({ ...node, value: node.value.slice(start), pos: node.pos + start });
       continue;
     }
     if (node.type === "expr" || (node.type === "element" && isInlineTag(node.name))) {
@@ -328,22 +307,10 @@ function lowerInlineProse(input: DilNode[], sourceLength?: number): DilNode[] {
       out.push(piece.block);
       continue;
     }
-    const children: DilNode[] = [];
-    const lastIndex = piece.nodes.length - 1;
-    piece.nodes.forEach((node, index) => {
-      if (node.type === "text") {
-        if (node.raw) {
-          // `<code>`, `<code-block>` and `<CodeBlock>` hold literal text: `**x**` stays four
-          // characters, and the tail is not repaired because nothing here is Markdown.
-          children.push(node);
-          return;
-        }
-        const value = piece.tail && index === lastIndex ? repairStreamTail(node.value) : node.value;
-        children.push(...parseInline(value, node.pos));
-      } else {
-        children.push(lowerNode(node, "element", sourceLength));
-      }
-    });
+    const children =
+      piece.nodes.length === 1 && piece.nodes[0].type === "text" && piece.nodes[0].raw
+        ? piece.nodes
+        : inlineProse(composeProse(piece.nodes, piece.tail));
     if (!children.length) continue;
     if (proseCount > 1) {
       const pos = piece.nodes[0].pos;
@@ -369,7 +336,7 @@ function trimStart(nodes: DilNode[]): void {
     if (first.type !== "text" || first.raw) return;
     const trimmed = first.value.replace(/^[ \t\r\n]+/, "");
     if (trimmed) {
-      nodes[0] = { ...first, value: trimmed };
+      nodes[0] = { ...first, value: trimmed, pos: first.pos + first.value.length - trimmed.length };
       return;
     }
     nodes.shift();
@@ -409,6 +376,7 @@ function contentNode(node: RootContent, prose: CompositeProse): DilNode[] {
       return [
         el("title", phrasingNodes(node.children, prose), pos, end, [
           stringAttr("size", HEADING_SIZE[node.depth] ?? "md", pos),
+          stringAttr("level", String(node.depth), pos),
         ]),
       ];
     case "list":
@@ -418,29 +386,16 @@ function contentNode(node: RootContent, prose: CompositeProse): DilNode[] {
     case "thematicBreak":
       return [el("divider", [], pos, end)];
     case "code":
-      return [codeBlockElement(node, pos, end)];
+      return [codeBlockElement(node, sourceOf(node, prose), pos, end)];
     case "table":
       return [tableElement(node, prose)];
     case "math":
       return [el("math", [], pos, end, [stringAttr("value", node.value, pos), booleanAttr("block", pos)])];
     case "html":
     case "yaml":
-      // Markdown HTML blocks never come out of the DIL parser (a `<tag>` is an element);
-      // front matter and stray markup stay literal.
-      return node.value ? [{ type: "text", value: node.value, pos }] : [];
     case "definition":
-      // Reference links are not resolved (a definition may live in another prose run),
-      // but the destination must not vanish: keep the source line as text so the URL is
-      // still readable. See the renderer README for the supported Markdown subset.
-      return [
-        {
-          type: "text",
-          value: `[${node.label ?? node.identifier}]: ${node.url}${node.title ? ` "${node.title}"` : ""}`,
-          pos,
-        },
-      ];
     case "footnoteDefinition":
-      return contentNodes(node.children, prose);
+      return [el("text", [markdownLiteral(sourceOf(node, prose), pos, end)], pos, end)];
     default:
       return [el("text", phrasingNodes(phrasingOf(node), prose), pos, end)];
   }
@@ -451,10 +406,15 @@ function phrasingOf(node: RootContent): PhrasingContent[] {
   return Array.isArray(children) ? children : [];
 }
 
-function codeBlockElement(node: Code, pos: number, end: number): DilElementNode {
+function codeBlockElement(node: Code, source: string, pos: number, end: number): DilElementNode {
   const attrs = node.lang ? [stringAttr("language", firstWord(node.lang), pos)] : [];
   const children: DilNode[] = node.value ? [{ type: "text", value: node.value, pos, raw: true }] : [];
-  return el("code-block", children, pos, end, attrs);
+  const lines = source.trimEnd().split("\n");
+  const marker = /^(?:`{3,}|~{3,})/.exec(lines[0])?.[0];
+  const last = lines.at(-1)?.replace(/^[\s>]+/, "") ?? "";
+  const closed =
+    !marker || (lines.length > 1 && last.startsWith(marker) && [...last].every((char) => char === marker[0]));
+  return { ...el("code-block", children, pos, end, attrs), closed };
 }
 
 function listElement(node: List, prose: CompositeProse): DilElementNode {
@@ -469,19 +429,8 @@ function listElement(node: List, prose: CompositeProse): DilElementNode {
 
 function listItemElement(node: ListItem, prose: CompositeProse): DilElementNode {
   const { pos, end } = spanOf(node, prose);
-  const children = contentNodes(node.children, prose);
-
-  // GFM task list: micromark strips `[x]`, so put the state back where a reader sees it.
-  if (typeof node.checked === "boolean") {
-    const marker = node.checked ? "☑ " : "☐ ";
-    const first = children[0];
-    if (first && first.type === "element" && first.name === "text") {
-      children[0] = { ...first, children: [{ type: "text", value: marker, pos }, ...first.children] };
-    } else {
-      children.unshift({ type: "text", value: marker, pos });
-    }
-  }
-  return el("list-item", children, pos, end);
+  const attrs = typeof node.checked === "boolean" ? [stringAttr("checked", String(node.checked), pos)] : [];
+  return el("list-item", contentNodes(node.children, prose), pos, end, attrs);
 }
 
 function tableElement(node: Table, prose: CompositeProse): DilElementNode {
@@ -537,34 +486,19 @@ function phrasingNodes(children: readonly PhrasingContent[], prose: CompositePro
         break;
       }
       case "image":
-        // No image primitive in Phase 1: keep the source so copy/quote stay faithful.
-        out.push({ type: "text", value: imageSource(stripPlaceholders(child.alt ?? ""), child.url, child.title), pos });
+      case "html":
+      case "footnoteReference":
+      case "linkReference":
+      case "imageReference": {
+        const atom = markdownAtom(child, sourceOf(child, prose), pos, end);
+        if (atom) out.push(atom);
         break;
+      }
       case "inlineMath":
         out.push(el("math", [], pos, end, [stringAttr("value", child.value, pos)]));
         break;
       case "break":
-        out.push({ type: "text", value: "\n", pos });
-        break;
-      case "html":
-        out.push({ type: "text", value: child.value, pos });
-        break;
-      case "footnoteReference":
-        out.push({ type: "text", value: `[^${child.label ?? child.identifier}]`, pos });
-        break;
-      case "linkReference":
-        out.push({
-          type: "text",
-          value: `[${stripPlaceholders(plainText(child.children))}][${child.label ?? child.identifier}]`,
-          pos,
-        });
-        break;
-      case "imageReference":
-        out.push({
-          type: "text",
-          value: `![${stripPlaceholders(child.alt ?? "")}][${child.label ?? child.identifier}]`,
-          pos,
-        });
+        out.push(el("hard-break", [], pos, end));
         break;
       default:
         out.push({ type: "text", value: stripPlaceholders(plainText(phrasingOf(child as RootContent))), pos });
@@ -574,8 +508,44 @@ function phrasingNodes(children: readonly PhrasingContent[], prose: CompositePro
   return out;
 }
 
-function imageSource(alt: string | null | undefined, url: string, title: string | null | undefined): string {
-  return `![${alt ?? ""}](${url}${title ? ` "${title}"` : ""})`;
+function inlineProse(prose: CompositeProse): DilNode[] {
+  return parseMarkdown(prose.text, "inline").children.flatMap((node) =>
+    node.type === "paragraph" ? phrasingNodes(node.children, prose) : contentNode(node, prose),
+  );
+}
+
+function sourceOf(node: RootContent, prose: CompositeProse): string {
+  return prose.text.slice(node.position?.start.offset, node.position?.end.offset);
+}
+
+/** Intercept these as whole source spans before their contents can be read as DIL. */
+export function markdownAtom(node: RootContent, source: string, pos: number, end: number): DilElementNode | null {
+  switch (node.type) {
+    case "image":
+      if (isHttpsImageUrl(node.url)) {
+        const attrs = [stringAttr("src", node.url, pos), stringAttr("alt", node.alt ?? "", pos)];
+        if (node.title) attrs.push(stringAttr("title", node.title, pos));
+        return el("markdown-image", [], pos, end, attrs);
+      }
+      return markdownLiteral(source, pos, end);
+    case "definition":
+    case "footnoteDefinition":
+    case "footnoteReference":
+    case "linkReference":
+    case "imageReference":
+    case "html":
+      return markdownLiteral(source, pos, end);
+    default:
+      return null;
+  }
+}
+
+export function markdownLiteral(value: string, pos: number, end: number): DilElementNode {
+  return el("markdown-literal", [{ type: "text", value, pos, raw: true }], pos, end);
+}
+
+export function isHttpsImageUrl(value: string): boolean {
+  return /^https:\/\//i.test(value) && URL.canParse(value);
 }
 
 function plainText(children: readonly RootContent[] | undefined): string {
@@ -598,108 +568,6 @@ function spanOf(
   const pos = prose.toOriginal(start ?? 0);
   return { pos, end: prose.toOriginal(end ?? start ?? 0) };
 }
-
-// ---------------------------------------------------------------------------
-// Emphasis that spans an inline element
-// ---------------------------------------------------------------------------
-
-/**
- * `**<Link …/>**` cannot be resolved inside one text node: the structural parser
- * splits the run at `<`. Authors (and ChatGPT) still write it, so pair an unmatched
- * delimiter at the end of one text node with the opposite one at the start of a later
- * sibling — only across inline nodes, and only when no nested delimiter makes the
- * wrap ambiguous.
- *
- * The element tier is the only caller: the document tier hands the same job to micromark
- * through placeholders.
- */
-export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
-  const out: DilNode[] = [];
-
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
-    if (node.type !== "text" || node.raw) {
-      out.push(resolveChildEmphasis(node));
-      continue;
-    }
-
-    const opener = /(\*\*|__|\*|_|~~)$/.exec(node.value);
-    if (!opener) {
-      out.push(node);
-      continue;
-    }
-    const delimiter = opener[1];
-    const contentEnd = node.value.length - delimiter.length;
-    if (node.value[contentEnd - 1] === delimiter[0]) {
-      out.push(node);
-      continue;
-    }
-
-    let close = -1;
-    for (let j = i + 1; j < nodes.length; j++) {
-      const candidate = nodes[j];
-      if (candidate.type !== "text" || candidate.raw) continue;
-      if (candidate.value.startsWith(delimiter)) close = j;
-      break;
-    }
-    const inner = close < 0 ? [] : nodes.slice(i + 1, close);
-    if (
-      close < 0 ||
-      !inner.length ||
-      !inner.every(canSpanEmphasis) ||
-      inner.some((child) => child.type === "text" && child.value.includes(delimiter[0]))
-    ) {
-      out.push(node);
-      continue;
-    }
-
-    const prefix = node.value.slice(0, contentEnd);
-    if (prefix) out.push({ ...node, value: prefix });
-    out.push(emphasisElement(delimiter, inner, node.pos));
-    const closingNode = nodes[close] as { value: string; pos: number };
-    const rest = closingNode.value.slice(delimiter.length);
-    if (!rest) {
-      i = close;
-      continue;
-    }
-    nodes[close] = { ...closingNode, value: rest } as DilNode;
-    i = close - 1; // the loop's `i++` re-processes the remainder as prose
-  }
-
-  return out;
-}
-
-/** `**x**` → `<bold>`, `*x*`/`_x_` → `<italic>`, `~~x~~` → `<text lineThrough>`. */
-function emphasisElement(delimiter: string, children: DilNode[], pos: number): DilElementNode {
-  if (delimiter === "~~") return el("text", children, pos, pos, [booleanAttr("lineThrough", pos)]);
-  return el(delimiter.length === 2 ? "bold" : "italic", children, pos, pos);
-}
-
-function resolveChildEmphasis(node: DilNode): DilNode {
-  if (node.type === "element") return { ...node, children: resolveSpanningEmphasis(node.children) };
-  if (node.type === "if") {
-    return {
-      ...node,
-      branches: node.branches.map((branch) => ({ ...branch, body: resolveSpanningEmphasis(branch.body) })),
-    };
-  }
-  if (node.type === "each") return { ...node, body: resolveSpanningEmphasis(node.body) };
-  return node;
-}
-
-/**
- * Can an emphasis pair span this node? Prose and inline atoms only — a container ends the
- * sentence it would have to wrap, so pairing across it has no meaning.
- */
-function canSpanEmphasis(node: DilNode): boolean {
-  if (node.type === "text" || node.type === "expr") return true;
-  if (node.type === "element") return isInlineTag(node.name);
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// Synthetic node helpers
-// ---------------------------------------------------------------------------
 
 function el(name: string, children: DilNode[], pos: number, end: number, attrs: DilAttribute[] = []): DilElementNode {
   return { type: "element", name, attrs, children, pos, end, closed: true, synthetic: true };

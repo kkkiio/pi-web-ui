@@ -50,7 +50,7 @@ this module defines — it collides with three unrelated things, so say the spec
 
 - CommonMark *block* (paragraph, heading, list, table, quote, rule) → **Markdown block**.
 - `{#if}` / `{#each}` → **control flow**.
-- `FallbackBlock` (`primitives/content.tsx`) — the `div` an unknown tag falls back to.
+- `FallbackBlock` (`primitives/content.tsx`) — the `div` for known DIL containers without dedicated renderers.
 
 ### Where the boundary is (language injection)
 
@@ -80,7 +80,7 @@ The same characters mean different things at the document level and inside an el
 | | document level — `BlockProse` | element interior — `InlineProse` |
 | --- | --- | --- |
 | grammar | headings, lists, tables, quotes, rules, paragraphs | blank lines split paragraphs; **no** block Markdown |
-| lexer | `unified` + `remark-parse` + `remark-gfm` (CommonMark + GFM) | `inline.ts` — the `InlineRun` subset |
+| lexer | CommonMark + GFM + CJK via `unified` | Same lexer with block constructs disabled |
 | `# / - / 1. / \| / >` | block constructs | literal text |
 | wrapper | each block becomes its own element | a lone run stays inline; several runs each get one `<text>` |
 
@@ -88,20 +88,16 @@ Two rules make the tiers work:
 
 - **no indented code blocks, anywhere.** DIL indentation is layout and code is always
   fenced, so the document processor disables micromark's `codeIndented`
-  (`.data("micromarkExtensions", [{ disable: { null: ["codeIndented"] } }])`) and element
-  interiors never see a block lexer at all.
+  (`.data("micromarkExtensions", [{ disable: { null: ["codeIndented"] } }])`) in both prose tiers.
 - **inline nodes join the flow.** `{expr}` and the tags `vocabulary.ts` marks `kind:
   "inline"` (the grammar's `bold`/`italic`/`code`/`math`/`Link`/`icon`/`badge` plus the
   host-resolved `Cite`/`Entity`/`AsyncImage`/`AsyncImageGroup`) are atoms of the same
-  `InlineRun`. At document level they are
-  swapped for placeholders before block lexing (MDX-style) and substituted back into the
+  `InlineRun`. They are swapped for placeholders before Markdown lexing and substituted back into the
   parsed tree — that is what keeps `- <Link …/>` a list item, `## {title}` a heading and
   `公式 $E = mc^2$ 与…` one text flow with its spaces. Positions are mapped back to
   source offsets through the same placeholder table.
 
-The trade-off is deliberate: `InlineRun` accepts `**bold**`, `*italic*`, `~~strike~~`,
-`` `code` ``, `$math$`, `[label](url)` and `<url>`, but not `_italic_` (the grammar's
-ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays literal text.
+A Markdown list written inside a `<box>` stays literal text.
 
 ### Modules
 
@@ -114,7 +110,8 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 | `stream-repair.ts` | Streaming tail repair: closes an unclosed `**`/`*`/`~~`/`` ` `` and drops a half-received link target before the prose is lexed |
 | `evaluator.ts` | Safe expression evaluation for `{expr}`, `{#if}`, `{#each}`, `{@body}` — `acorn` parses ESTree, an allowlisted tree walker evaluates it, no `eval`/`new Function` |
 | `evaluator-allowlist.ts` | What an expression may touch: `Math`/`Number`/`String`/`Array`, pure array/string/number methods, own-property access, work bounds |
-| `inline.ts` | `InlineRun` — the element-interior inline subset (`**bold**`, `*italic*`, `~~strike~~`, code, math, links, autolinks) |
+| `markdown-syntax.ts` | Shared Markdown processors and syntax spans that are opaque to the DIL scanner |
+| `inline.ts` | Standalone `InlineRun` helper |
 | `vocabulary.ts` | The tag table: `kind` (`container` / `inline`) and `support` (`rendered` / `fallback` / `internal`) per tag, transcribed from ChatGPT's component catalogue. `INLINE_TAGS` is derived from it, so run membership, emphasis spanning and the prompt's tag list cannot drift apart |
 | `entities.ts` | Shared character-reference decoding (prose once, raw text at parse time) |
 | `prune.ts` | Streaming pass: unclosed empty containers are not rendered (anti-flash) |
@@ -128,8 +125,8 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 1. **Prose + DIL mixed at the top level.** Fenced blocks (` ``` `, `~~~`, `$$`, `\[`),
    inline code (`` ` ``) and raw-text elements (`<code>`, `<code-block>`, `<CodeBlock>`) are
    opaque: `<box>` or `{#each}` inside them stays literal text.
-2. **Layout, typography, lists, tables, SVG nodes.** Tags are taken as written — the
-   parser has no component vocabulary; `src/components/dil` owns the rendering catalog.
+2. **Layout, typography, lists, tables, SVG nodes.** The parser accepts the known DIL
+   vocabulary. Other tags are literal Markdown text.
    Indentation is layout, not code: there is no indented code block in the grammar, so a
    four-space line inside a `<box>` is prose and code is always fenced.
 3. **Attribute forms.** `border` (= true), `radius="xl"`, `padding={3}`,
@@ -138,12 +135,11 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
    the transcript renders with: headings → `title`, paragraphs → `text`, `-`/`1.`
    (nested, `start`) → `list`/`list-item`, GFM tables → `table`/`table-row`/`table-cell`
    (`header` on row 0), `>` → `blockquote`, `---` → `divider`, `~~x~~` → `text
-   lineThrough`, task lists → `☑`/`☐`. Element-interior `InlineProse` uses `inline.ts`
-   only. Fences reach the same vocabulary as `code-block`/`math`. Inline math is the
+   lineThrough`, task items retain their checked state. Element-interior `InlineProse` uses
+   the same inline syntax. Fences lower to `code-block` or `math`. Inline math is the
    exception: `$…$` and `\(…\)` become `<math>` in `parser.ts`, because micromark would
-   read `\(` as an escape and `$20 … $` as LaTeX. Two micromark constructs are off:
-   `codeIndented` (indentation is layout) and `setextUnderline` (a lone `-` or `=` under a
-   streamed paragraph is a list item or an underline starting, not an H2).
+   read `\(` as an escape and `$20 … $` as LaTeX. The lexer disables `codeIndented`
+   for layout indentation and only enables Setext headings when the answer is complete.
 5. **Control flow and state declarations.** `{#if}` / `{:else if}` / `{:else}`,
    `{#each xs as x, i}`, `{@body …}` — parsed, but not evaluated here.
 

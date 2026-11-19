@@ -18,19 +18,21 @@
  * is only JSX glue.
  */
 
-import { Fragment, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { collectStatements, evaluateStatements, hasDilElements, parseDocument } from "../../core/dil/index";
+import { collectStatements, evaluateStatements, isInlineTag, parseDocument } from "../../core/dil/index";
 import {
   CodeBlockLeaf,
   FallbackBlock,
   FallbackBlockquote,
+  FallbackInline,
   FallbackLink,
   FallbackList,
   FallbackListItem,
   FallbackTable,
   FallbackTableCell,
   FallbackTableRow,
+  MarkdownImage,
   MathLeaf,
 } from "./primitives/content";
 import { Box, Col, Divider, Grid, GridItem, Row } from "./primitives/layout";
@@ -45,11 +47,6 @@ export interface DilRendererProps {
   readonly source: string;
   /** True while tokens are still arriving; enables the throttle and tail repair. */
   readonly isStreaming?: boolean;
-  /**
-   * Renderer for answers that contain no DIL (plain Markdown). Called with the throttled
-   * text so the message view keeps one transcript component for both shapes.
-   */
-  readonly markdown?: (text: string) => ReactNode;
   /** Throttle window in ms while streaming. Default 60 (see README). */
   readonly throttleMs?: number;
   readonly className?: string;
@@ -62,22 +59,17 @@ export function DilRenderer({
   isStreaming = false,
   throttleMs = DEFAULT_THROTTLE_MS,
   className,
-  markdown,
 }: DilRendererProps) {
   // Render keys are only unique inside this instance; SVGs in two messages would
   // otherwise share `dil-n-0-arrow` and the second marker reference would resolve to the
   // first diagram. `useId` gives every message its own namespace.
   const instance = useId();
   const text = useThrottledText(source, isStreaming, throttleMs);
-  const document = useMemo(() => parseDocument(text), [text]);
-  const dil = useMemo(() => hasDilElements(document.tree), [document]);
-
-  // Plain Markdown never pays for statement evaluation or tree resolution.
-  const statements = useMemo(() => (dil ? collectStatements(document.raw) : []), [dil, document]);
-  const scope = useMemo(() => (dil ? evaluateStatements(statements) : {}), [dil, statements]);
-  const resolved = useMemo(() => (dil ? resolveNodes(document.tree, scope) : []), [dil, document, scope]);
-
-  if (!dil && markdown) return <>{markdown(text)}</>;
+  const document = useMemo(() => parseDocument(text, { isStreaming }), [text, isStreaming]);
+  const resolved = useMemo(() => {
+    const statements = collectStatements(document.raw);
+    return resolveNodes(document.tree, statements.length ? evaluateStatements(statements) : {});
+  }, [document]);
 
   return (
     <div className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
@@ -139,7 +131,7 @@ export function useThrottledText(source: string, isStreaming: boolean, throttleM
     [],
   );
 
-  return published;
+  return isStreaming ? published : source;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,16 +217,36 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
 
     case "title":
       return (
-        <Title key={key} {...skin}>
+        <Title key={key} {...skin} level={node.synthetic ? props.level : undefined}>
           {rendered}
         </Title>
       );
     case "text":
+      if (node.synthetic && props.lineThrough === true) return <del key={key}>{rendered}</del>;
       return (
-        <Text key={key} {...skin}>
+        <Text key={key} {...skin} as={node.synthetic ? "p" : undefined}>
           {rendered}
         </Text>
       );
+    case "hard-break":
+      return <br key={key} />;
+    case "markdown-literal":
+      return (
+        <span className="whitespace-pre-wrap wrap-anywhere" key={key}>
+          {rendered}
+        </span>
+      );
+    case "markdown-image": {
+      const src = textValue(props.src);
+      return (
+        <MarkdownImage
+          key={`${key}.${src}`}
+          src={src}
+          alt={textValue(props.alt)}
+          title={textValue(props.title) || undefined}
+        />
+      );
+    }
     case "caption":
       return (
         <Caption key={key} {...skin}>
@@ -275,7 +287,11 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
         </FallbackList>
       );
     case "list-item":
-      return <FallbackListItem key={key}>{rendered}</FallbackListItem>;
+      return (
+        <FallbackListItem key={key} props={props}>
+          {rendered}
+        </FallbackListItem>
+      );
     case "table":
       return <FallbackTable key={key}>{rendered}</FallbackTable>;
     case "table-row":
@@ -290,7 +306,7 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
       return <FallbackBlockquote key={key}>{rendered}</FallbackBlockquote>;
     case "Link":
       return (
-        <FallbackLink key={key} props={props}>
+        <FallbackLink key={key} props={props} markdown={node.synthetic}>
           {rendered}
         </FallbackLink>
       );
@@ -332,7 +348,8 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
     );
   }
 
-  return <FallbackBlock key={key}>{rendered}</FallbackBlock>;
+  const Fallback = isInlineTag(name) ? FallbackInline : FallbackBlock;
+  return <Fallback key={key}>{rendered}</Fallback>;
 }
 
 function skinFor(name: string, props: ResolvedProps) {

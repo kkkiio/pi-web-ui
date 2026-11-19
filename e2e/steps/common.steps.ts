@@ -39,6 +39,26 @@ Given("Pi replies with a continued ordered list", () => {
   world.fixture = "dil-list";
 });
 
+Given("Pi replies with the same Markdown with and without a layout", async ({ context, page }) => {
+  world.fixture = "dil-markdown";
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.route(
+    (url) => url.hostname === "dil-images.example.test",
+    async (route) => {
+      expect(route.request().headers().referer).toBeUndefined();
+      if (new URL(route.request().url()).pathname === "/ok.svg") {
+        await route.fulfill({
+          contentType: "image/svg+xml",
+          body: '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="48"><rect width="180" height="48" rx="8" fill="#156b72"/><text x="20" y="30" fill="white">Architecture</text></svg>',
+        });
+      } else {
+        expect(new URL(route.request().url()).pathname).toBe("/missing.png");
+        await route.fulfill({ status: 404 });
+      }
+    },
+  );
+});
+
 Given("Pi updates the workspace status document", () => {
   world.fixture = "workspace-artifact";
 });
@@ -148,6 +168,40 @@ Then("the ordered list continues at 5", async ({ page }) => {
   const list = page.getByRole("log").locator(".dil-root ol").first();
   await expect(list).toHaveAttribute("start", "5");
   await expect(list.locator("li")).toHaveCount(2);
+});
+
+Then("the latest assistant answer renders the Markdown features", async ({ page }) => {
+  const answer = page.getByRole("log").locator('[data-quote-source="Assistant"] .dil-root').last();
+  await expect(answer.getByRole("heading", { name: "Markdown rendering", level: 2 })).toBeVisible();
+  await expect(answer.locator("strong")).toHaveText("「重要」");
+  await expect(answer.locator("del")).toHaveText("「旧」");
+  await expect(answer.getByRole("link", { name: "https://example.test", exact: true })).toHaveAttribute(
+    "href",
+    "https://example.test",
+  );
+  await expect(answer.locator("p br")).toHaveCount(1);
+  await expect(answer.getByRole("checkbox", { checked: true })).toBeDisabled();
+  await expect(answer.getByRole("checkbox", { checked: false })).toBeDisabled();
+  await expect(answer).toContainText("Press <kbd>Enter</kbd><br> to continue.");
+  await expect(answer).toContainText("[id]: https://example.test/reference");
+  await expect(answer).toContainText("[^1]: A footnote");
+  await expect(answer).toContainText("![Insecure](http://dil-images.example.test/insecure.png)");
+
+  const image = answer.getByRole("img", { name: "Architecture thumbnail" });
+  await expect(image).toBeAttached();
+  await image.scrollIntoViewIfNeeded();
+  await expect(image).toHaveAttribute("loading", "lazy");
+  await expect(image).toHaveAttribute("referrerpolicy", "no-referrer");
+  await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await expect(answer.getByText("Image unavailable", { exact: true })).toBeVisible();
+  await expect(answer.getByRole("img", { name: "Image unavailable" })).toHaveCount(0);
+
+  const code = answer.locator('[data-language="js"]');
+  await expect(code).toContainText("const value = 42;");
+  await code.getByRole("button", { name: "Copy code" }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("const value = 42;");
+  await expect(answer.getByRole("img", { name: "Mermaid diagram" }).locator("svg")).toBeVisible();
+  await expect(answer.getByText("invalid diagram source", { exact: true })).toBeVisible();
 });
 
 Then("the transcript does not show raw DIL tags", async ({ page }) => {

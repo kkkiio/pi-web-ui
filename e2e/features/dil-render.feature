@@ -46,3 +46,15 @@ Feature: DIL rendering
     And I send "What are the remaining steps?"
     Then the transcript shows "Deploy"
     And the ordered list continues at 5
+
+  @p0
+  Scenario: Markdown renders the same with and without a DIL layout
+    Why: an assistant answer can add a layout without changing how a reader sees its Markdown.
+
+    Given Pi replies with the same Markdown with and without a layout
+    When I open Pi Web UI
+    And I send "Show Markdown"
+    Then the latest assistant answer renders the Markdown features
+    When I send "Add a layout"
+    Then the latest assistant answer renders the Markdown features
+    And the transcript shows "Layout card"
