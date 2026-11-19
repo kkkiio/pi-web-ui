@@ -102,8 +102,9 @@ over and *what a failure looks like*:
   one broken expression never removes its siblings (the `__dilSafe` contract).
 - Links render as anchors only for `http(s):` and `mailto:` (`safeLinkUrl`); anything else
   shows its label as text.
-- `on*` attributes are not wired up in #46: `onClick={() => …}` evaluates to an inert
-  closure value that the primitives ignore. Interaction is #48.
+- `on*` attributes are wired up by `#48`: `onClick={() => …}` evaluates to a `SafeObject`
+  closure, which a control invokes through `DilRuntime.invoke` (`runtime.ts`) — never
+  through a JavaScript call, so the evaluator's allowlist stays in force.
 
 ## Where it is mounted
 
@@ -124,7 +125,7 @@ The labels below are deliberately not rendered yet, because each is a slice of i
 | --- | --- | --- |
 | `table`, `list`, `blockquote`, `Link`, `math`, `code-block` | plain HTML fallbacks; `math`/`code-block` are memoized leaves | #49 |
 | `svg`, `defs`, `marker`, `rect`, `path`, … | **rendered** (`#47`): allowlisted attributes, namespaced ids, `<text>` is SVG text inside `<svg>` | done |
-| `button`, `radio-group`, `radio`, `textarea`, `label` | children only; no handlers | #48 |
+| `button`, `radio-group`, `radio`, `textarea`, `label` | **rendered** (`#48`): see *Interaction* below | done |
 
 ## Markdown in answers
 
@@ -152,5 +153,31 @@ A `mermaid` fence renders a diagram and keeps its source visible if rendering fa
   JSX lives in `primitives/svg.tsx`, and the renderer switches to SVG mode inside `<svg>`
   so `<text>` means SVG text there. `href`/`xlink:href` are not in any allowlist.
 - **[#48 State & interaction](https://github.com/kkkiio/pi-web-ui/issues/48)** —
-  `DIL.useState` setters (the evaluator already binds initials and an inert setter),
-  form controls, `GenUI.issueNewTurn`.
+  `DIL.useState` setters, the five corpus controls, and `GenUI.issueNewTurn`. **Done in
+  this package**: `runtime.ts` owns the state slots and the host bridge,
+  `primitives/controls.tsx` is the only control DOM, and `GenUI` is injected per document
+  (`runtime-context.ts`). `GenUI.openUrl` is
+  [#63](https://github.com/kkkiio/pi-web-ui/issues/63).
+
+## Interaction
+
+`DIL.useState(init, { key })` is hoisted by the parser (`core/dil/statements.ts`) and bound
+by `runtime.ts`:
+
+- the value lives in a slot keyed by `{ key }`, or by the variable name when the model
+  names none, so it survives every re-resolve of the same message;
+- the variable is bound as a **getter** on the scope, so a handler created by an earlier
+  render still reads the current value (`onChange={v => { setChoice(v); setRevealed(false) }}`);
+- the setter writes the slot and asks the renderer to re-resolve — that counter is the
+  only thing a state change touches;
+- `setX(prev => next)` is supported, because DIL has no other way to derive from the
+  current value.
+
+A button's intent is decided by **running its handler**, not by reading its source text:
+`DilRuntime.probe` executes `onClick` with a `probing` flag that turns setters into no-ops
+and `GenUI` into a recorder. `{#if}` branches, lookups and template literals therefore
+decide correctly, and the probe yields the exact prompt the click would send.
+
+`GenUI.issueNewTurn(text)` sends `text` as the next user message. It does not draft,
+prefill or read the composer: the click is the send, and the host (`app.tsx`) owns the
+busy state that disables every card action while Pi is working.

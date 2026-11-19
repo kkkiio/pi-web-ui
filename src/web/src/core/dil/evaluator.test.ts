@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  callSafe,
   DilEvaluationError,
   evaluateCondition,
   evaluateExpression,
@@ -322,4 +323,32 @@ test("parsing is cached and stable across calls", () => {
   const second = value("items.map(x => x * 2)", scope);
   assert.deepEqual(first, [2, 4, 6]);
   assert.deepEqual(second, [2, 4, 6]);
+});
+
+test("a nested call shares the running budget instead of restarting it", () => {
+  // A functional setter's updater runs inside the handler that triggered it. If it started
+  // a fresh budget, a handler could recurse through `setX(prev => …)` without ever hitting
+  // the step limit; sharing it keeps the whole click inside one budget.
+  const exhaust = "Array.from({ length: 10000 }).map((_, i) => [i, i + 1, i + 2].map((v) => v * 2).length).length";
+  const nested = evaluateExpression("() => 42", {});
+  assert.throws(() => evaluateExpression(exhaust), DilEvaluationError);
+  assert.throws(() => callSafe(nested, [], { freshBudget: false }), /budget exceeded/);
+  // The entry point itself still gets a fresh one.
+  assert.equal(callSafe(nested), 42);
+});
+
+test("a handler invoked from outside gets its own evaluation budget", () => {
+  // One document can burn the whole shared budget while rendering; the click that follows
+  // must not inherit the exhausted counter, or a valid handler fails for a reason nothing
+  // in the document explains. The entry point resets it, as `evaluateExpression` does.
+  const handler = evaluateExpression("() => 42", {});
+  assert.throws(
+    () =>
+      evaluateExpression(
+        "Array.from({ length: 10000 }).map((_, i) => [i, i + 1, i + 2].map((v) => v * 2).length).length",
+      ),
+    DilEvaluationError,
+    "the fixture must actually exhaust the budget",
+  );
+  assert.equal(callSafe(handler), 42);
 });

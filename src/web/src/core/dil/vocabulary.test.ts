@@ -45,7 +45,9 @@ test("support says what the renderer does with a tag", () => {
   assert.equal(tagEntry("box")?.support, "rendered");
   assert.equal(tagEntry("Cite")?.support, "fallback", "aligned with ChatGPT, renderer pending");
   assert.equal(tagEntry("Entity")?.support, "fallback");
-  assert.equal(tagEntry("radio")?.support, "fallback", "#48 controls");
+  assert.equal(tagEntry("radio")?.support, "rendered", "#48 controls");
+  assert.equal(tagEntry("textarea")?.support, "rendered", "#48 controls");
+  assert.equal(tagEntry("input"), undefined, "never invented: `input` is not in the corpus");
   assert.equal(tagEntry("__chatgptClientDefinedWidget")?.support, "internal");
   assert.equal(tagEntry("CodeBlock")?.support, "rendered", "the model's code block renders");
 });

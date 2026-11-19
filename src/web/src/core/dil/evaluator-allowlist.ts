@@ -287,6 +287,17 @@ function namespace(members: Record<string, unknown>, invoke?: (args: readonly un
   return invoke ? { ...base, invoke } : base;
 }
 
+/**
+ * A namespace the renderer injects (`GenUI`), built the same way as the builtins so an
+ * expression cannot tell a host namespace from `Math`.
+ */
+export function namespaceValue(
+  members: Record<string, unknown>,
+  invoke?: (args: readonly unknown[]) => unknown,
+): NamespaceValue {
+  return namespace(members, invoke);
+}
+
 const MATH_NAMES = [
   "abs",
   "ceil",

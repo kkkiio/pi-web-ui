@@ -4,7 +4,8 @@
  * One directive may hold several statements (`const a = …; const b = …`), and the
  * state declarations inside it are the only thing the renderer needs before the
  * expression evaluator exists: they define the per-message state slots and their
- * semantic keys.
+ * semantic keys — `DIL.useState(init, { key })` when the model names one, the variable
+ * name otherwise.
  *
  * Nothing here parses JavaScript beyond balanced scanning — validation and evaluation
  * belong to the evaluator (issue #47) so this module stays usable in the browser.
@@ -30,6 +31,9 @@ const USE_STATE =
 
 export type StateDeclaration = DilStateDeclaration;
 
+/** `DIL.useState(init, { key: "tab" })` → the slot name, when the model names one. */
+const STATE_KEY = /(?:^|[,{])\s*key\s*:\s*(["'])([^"']*)\1/;
+
 /** Every `DIL.useState` declared by a list of `{@body}` statements, in order. */
 export function findStateDeclarations(statements: readonly string[]): DilStateDeclaration[] {
   const out: DilStateDeclaration[] = [];
@@ -40,7 +44,14 @@ export function findStateDeclarations(statements: readonly string[]): DilStateDe
     const args = readBalanced(statement, open, "(", ")");
     const firstComma = topLevelIndex(args.inner, ",");
     const initial = (firstComma < 0 ? args.inner : args.inner.slice(0, firstComma)).trim();
-    out.push({ name: match[1], setter: match[2] ?? null, initial: initial || "undefined" });
+    const options = firstComma < 0 ? "" : args.inner.slice(firstComma + 1);
+    const key = STATE_KEY.exec(options)?.[2];
+    out.push({
+      name: match[1],
+      setter: match[2] ?? null,
+      initial: initial || "undefined",
+      ...(key ? { key } : {}),
+    });
   }
   return out;
 }

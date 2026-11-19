@@ -8,7 +8,8 @@ export type FixtureName =
   | "tool-failure"
   | "edit-history"
   | "dil-markdown"
-  | "dil-render";
+  | "dil-render"
+  | "dil-interaction";
 
 /** Shared state for one scenario. Step files read and write this instead of keeping
  * their own copies, because every step file is registered globally. */
