@@ -411,6 +411,22 @@ test("the document tier pairs emphasis with placeholders, not with an AST pass",
   }
 });
 
+test("strikethrough spans nodes the same way emphasis does", () => {
+  // `~~` is a delimiter like `**`: inside an element there is no lexer to pair it, so it
+  // goes through the same AST pass, and the wrapper is `<text lineThrough>`, not `<italic>`.
+  const box = only(tree('<box>~~<badge text="b"/>~~</box>'), "box");
+  const strike = only(box.children, "text");
+  assert.equal(only(strike.children, "badge").name, "badge");
+  assert.equal(
+    strike.attrs.find((attribute) => attribute.name === "lineThrough")?.value,
+    true,
+    "the wrapper carries lineThrough",
+  );
+
+  // The document tier keeps working through GFM's delete rule.
+  assert.equal(findAll(tree("~~<badge/>~~"), "badge").length, 1);
+});
+
 test("the element tier pairs emphasis on the AST, because it has no lexer", () => {
   const box = only(tree('<box>\n  **<icon name="star"/>**\n</box>'), "box");
   assert.equal(elements(box.children, "bold").length, 1);

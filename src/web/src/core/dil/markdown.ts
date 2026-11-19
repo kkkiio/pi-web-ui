@@ -600,7 +600,8 @@ function spanOf(
  * sibling — only across inline nodes, and only when no nested delimiter makes the
  * wrap ambiguous.
  *
- * Runs on the raw AST, before lowering, so document-level runs still are text nodes.
+ * The element tier is the only caller: the document tier hands the same job to micromark
+ * through placeholders.
  */
 export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
   const out: DilNode[] = [];
@@ -612,7 +613,7 @@ export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
       continue;
     }
 
-    const opener = /(\*\*|__|\*|_)$/.exec(node.value);
+    const opener = /(\*\*|__|\*|_|~~)$/.exec(node.value);
     if (!opener) {
       out.push(node);
       continue;
@@ -644,15 +645,7 @@ export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
 
     const prefix = node.value.slice(0, contentEnd);
     if (prefix) out.push({ ...node, value: prefix });
-    out.push({
-      type: "element",
-      name: delimiter.length === 2 ? "bold" : "italic",
-      attrs: [],
-      children: inner,
-      pos: node.pos,
-      end: node.pos,
-      closed: true,
-    });
+    out.push(emphasisElement(delimiter, inner, node.pos));
     const closingNode = nodes[close] as { value: string; pos: number };
     const rest = closingNode.value.slice(delimiter.length);
     if (!rest) {
@@ -664,6 +657,12 @@ export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
   }
 
   return out;
+}
+
+/** `**x**` → `<bold>`, `*x*`/`_x_` → `<italic>`, `~~x~~` → `<text lineThrough>`. */
+function emphasisElement(delimiter: string, children: DilNode[], pos: number): DilElementNode {
+  if (delimiter === "~~") return el("text", children, pos, pos, [booleanAttr("lineThrough", pos)]);
+  return el(delimiter.length === 2 ? "bold" : "italic", children, pos, pos);
 }
 
 function resolveChildEmphasis(node: DilNode): DilNode {
