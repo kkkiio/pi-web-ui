@@ -1,11 +1,12 @@
 import {
   addUsageToTotals,
   createUsageTotals,
+  extractImages,
   extractText,
   extractThinking,
   extractToolCalls,
   findLastUsage,
-  formatToolOutput,
+  parseToolOutput,
   sumUsageTotals,
   syncToItems,
 } from "../chat-conversion";
@@ -245,9 +246,11 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
 
     if (event.message?.role === "user") {
       const text = extractText(event.message.content);
-      if (!text) return;
+      const images = extractImages(event.message.content);
+      const { id = nextId("user"), timestamp } = event.message;
+      if (!text && images.length === 0) return;
       set((state) => ({
-        items: [...state.items, { kind: "message", id: event.message?.id || nextId("user"), role: "user", text }],
+        items: [...state.items, { kind: "message", id, role: "user", text, images, timestamp }],
       }));
     }
   },
@@ -334,10 +337,11 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
 
   applyToolExecutionUpdate: (event) => {
     if (!event.toolCallId) return;
+    const { text, images } = parseToolOutput(event.partialResult);
     set((state) => ({
       items: state.items.map((item) =>
         item.kind === "tool" && item.id === event.toolCallId
-          ? { ...item, output: formatToolOutput(event.partialResult), state: "input-available" }
+          ? { ...item, output: text, outputImages: images, state: "input-available" }
           : item,
       ),
     }));
@@ -346,13 +350,15 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   applyToolExecutionEnd: (event) => {
     get().requestGitStatusRefresh({ debounce: true });
     if (!event.toolCallId) return;
+    const { text, images } = parseToolOutput(event.result);
     set((state) => ({
       items: state.items.map((item) =>
         item.kind === "tool" && item.id === event.toolCallId
           ? {
               ...item,
-              errorText: event.isError ? String(formatToolOutput(event.result)) : undefined,
-              output: event.isError ? undefined : formatToolOutput(event.result),
+              errorText: event.isError ? text : undefined,
+              output: event.isError ? undefined : text,
+              outputImages: images,
               outputDetails: (event.result as { details?: unknown } | undefined)?.details,
               state: event.isError ? "output-error" : "output-available",
             }
