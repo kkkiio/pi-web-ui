@@ -169,3 +169,13 @@ test("the parser agrees with the vocabulary about inline atoms", () => {
   const paragraph = parseDocument("前 <text>x</text> 后").tree;
   assert.equal(paragraph.length, 3, "<text> is a container and does split it");
 });
+
+test("the prompt teaches Markdown for inline formatting, not tags", () => {
+  // The captured model output writes `**bold**`, `` `code` `` and `$math$` — never
+  // `<bold>`, `<italic>` or `<code>` (0 occurrences over 76 samples). Teaching both spellings
+  // only makes the transcript harder to copy back as Markdown.
+  for (const tag of ["<bold", "<italic", "<code"]) {
+    assert.ok(!DIL_SYSTEM_PROMPT.includes(tag), `${tag}…> is not taught`);
+  }
+  assert.match(DIL_SYSTEM_PROMPT, /inline formatting/, "Markdown formatting is the pointer taught");
+});
