@@ -3,6 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import askUserQuestionResponses from "./responses/ask-user-question.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
 import dilHeavyResponses from "./responses/dil-heavy.ts";
+import dilInteractionResponses from "./responses/dil-interaction.ts";
 import dilListResponses from "./responses/dil-list.ts";
 import dilMarkdownResponses from "./responses/dil-markdown.ts";
 import dilRenderResponses from "./responses/dil-render.ts";
@@ -30,6 +31,7 @@ const responsesByName = {
   "edit-history": editHistoryResponses,
   "chat-lifecycle": chatLifecycleResponses,
   "dil-render": dilRenderResponses,
+  "dil-interaction": dilInteractionResponses,
   "dil-svg": dilSvgResponses,
   "dil-list": dilListResponses,
   "dil-markdown": dilMarkdownResponses,

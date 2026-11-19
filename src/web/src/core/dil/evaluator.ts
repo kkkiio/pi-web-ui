@@ -38,6 +38,7 @@ import {
   type Expression,
   parse,
   parseExpressionAt,
+  type SpreadElement,
   type Statement,
   type VariableDeclarator,
 } from "acorn";
@@ -116,18 +117,41 @@ export function evaluateList(source: string, scope: DilScope): readonly unknown[
  * A statement that does not parse or evaluate is skipped: it may still be streaming, and
  * the rest of the document has to keep rendering.
  */
-export function evaluateStatements(statements: readonly string[], seed: DilScope = {}): DilScope {
+export function evaluateStatements(
+  statements: readonly string[],
+  seed: DilScope = {},
+  options: StatementOptions = {},
+): DilScope {
   steps = 0;
   const scope: Record<string, unknown> = { ...seed };
   const context: Context = [BUILTIN_SCOPE, scope];
   for (const source of statements) {
     const statement = parseStatement(source);
     if (statement?.type !== "VariableDeclaration") continue;
-    declare(statement.declarations, context, (name, value) => {
-      scope[name] = value;
-    });
+    declare(
+      statement.declarations,
+      context,
+      (name, value) => {
+        scope[name] = value;
+      },
+      options.useState,
+    );
   }
   return scope;
+}
+
+/**
+ * What a renderer may add to statement evaluation.
+ *
+ * `useState` is the only statement form whose result is not a pure function of its
+ * argument: `const price = seats * 29` in the *next* statement must see the value the
+ * user chose, not the one the declaration started with. The renderer therefore supplies
+ * the pair for each `DIL.useState` declaration, and this module keeps the default
+ * (initial value, inert setter) for callers that only project a document.
+ */
+export interface StatementOptions {
+  /** `(name, initial, key)` → `[value, setter]` for one `DIL.useState` declaration. */
+  readonly useState?: (name: string, initial: unknown, key?: string) => readonly [unknown, unknown];
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +363,30 @@ const callback: CallbackFactory =
   (...args) =>
     callValue(value, args);
 
+/**
+ * Invoke an evaluated value from outside the walker: an arrow, a callable, or an
+ * invokable namespace.
+ *
+ * Event props (`onClick`, `onChange`) arrive as `SafeObject`s, never as JavaScript
+ * functions, so a control cannot call them directly. It goes through here — the same
+ * policy check `fn(...)` in an expression goes through, and the same allowlist.
+ */
+export function callSafe(
+  callee: unknown,
+  args: readonly unknown[] = [],
+  { freshBudget = true }: { readonly freshBudget?: boolean } = {},
+): unknown {
+  // A handler runs outside whichever evaluation produced it, possibly long after a heavy
+  // render spent most of the shared budget, so the entry point starts a new one — exactly
+  // as `evaluateExpression` and `evaluateStatements` do.
+  //
+  // A call that happens *inside* a running evaluation (a functional setter's updater) must
+  // pass `freshBudget: false`: resetting there would let a recursive handler escape the
+  // step limit by re-entering the runtime once per level.
+  if (freshBudget) steps = 0;
+  return callValue(callee, args);
+}
+
 function callValue(callee: unknown, args: readonly unknown[]): unknown {
   if (!isSafeObject(callee)) throw new DilEvaluationError("not a function");
   if (callee[SAFE] === "arrow") return runArrow(callee as Arrow, args);
@@ -387,6 +435,9 @@ function declare(
   declarations: readonly VariableDeclarator[],
   context: Context,
   bind: (name: string, value: unknown) => void,
+  // Not named `useState`: the lint rule for React hooks reads a call of such an identifier
+  // as a hook, and this is an injected factory.
+  stateSlots?: StatementOptions["useState"],
 ): void {
   for (const declarator of declarations) {
     if (declarator.id.type === "Identifier") {
@@ -395,19 +446,29 @@ function declare(
     }
     if (declarator.id.type !== "ArrayPattern") continue;
 
-    // `const [open, setOpen] = DIL.useState(init)`: #46 needs the initial value; the
-    // setter is bound to an inert callable so expressions that mention it still resolve.
+    // `const [open, setOpen] = DIL.useState(init, { key })`: the renderer supplies the
+    // live pair when it owns state; otherwise the initial value and an inert setter keep
+    // expressions that mention them resolvable.
     const state = stateInitArgument(declarator.init);
     if (state === undefined) continue;
-    const initial = state === null ? undefined : safeNode(state, context);
+    const initial = state.initial === null ? undefined : safeNode(state.initial, context);
     const [first, second] = declarator.id.elements;
-    if (first?.type === "Identifier") bind(first.name, initial);
-    if (second?.type === "Identifier") bind(second.name, noopSetter);
+    const name = first?.type === "Identifier" ? first.name : "";
+    const [value, setter] = stateSlots && name ? stateSlots(name, initial, state.key) : [initial, noopSetter];
+    if (first?.type === "Identifier") bind(first.name, value);
+    if (second?.type === "Identifier") bind(second.name, setter);
   }
 }
 
-/** `x = useState(init)` → `init`, `x = useState()` → `null`, anything else → `undefined`. */
-function stateInitArgument(node: Expression | null | undefined): Expression | null | undefined {
+interface StateInit {
+  /** `useState()` has no argument: `null` distinguishes it from "not a useState call". */
+  readonly initial: Expression | null;
+  /** The literal `{ key }` option, when the model names its slot. */
+  readonly key?: string;
+}
+
+/** `x = useState(init, { key })` → both parts; anything else → `undefined`. */
+function stateInitArgument(node: Expression | null | undefined): StateInit | undefined {
   if (!node || node.type !== "CallExpression") return undefined;
   const callee = node.callee;
   const name =
@@ -418,7 +479,24 @@ function stateInitArgument(node: Expression | null | undefined): Expression | nu
         : "";
   if (name !== "useState") return undefined;
   const first = node.arguments[0];
-  return first && first.type !== "SpreadElement" ? first : null;
+  return {
+    initial: first && first.type !== "SpreadElement" ? first : null,
+    ...stateKeyArgument(node.arguments[1]),
+  };
+}
+
+/** `{ key: "tab" }` in the second argument; any other shape is simply ignored. */
+function stateKeyArgument(node: Expression | SpreadElement | undefined): { key?: string } {
+  if (!node || node.type !== "ObjectExpression") return {};
+  for (const property of node.properties) {
+    if (property.type !== "Property" || property.computed) continue;
+    const key = property.key;
+    if (key.type !== "Identifier" || key.name !== "key") continue;
+    if (property.value.type === "Literal" && typeof property.value.value === "string") {
+      return { key: property.value.value };
+    }
+  }
+  return {};
 }
 
 /** A declaration initialiser never fails the whole scope: it is undefined instead. */

@@ -198,7 +198,10 @@ PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
 
 | Layer | What it proves | Command |
 | --- | --- | --- |
-| Check | types, lint, unit tests, build | `just check`, `npm run build:web` |
+| Check | types and lint (fast, no tests) | `just check` |
+| Test | all unit tests, including `conformance/` | `just test` |
+| Build | production bundle | `just build` |
+| Verify | check + test + build, what CI proves minus the browser | `just verify` |
 | Unit | DIL grammar, streaming recovery, Markdown lowering | `npm run test:dil` |
 | Snapshots | what the parser produced for each `*.dil.md` fixture | `npm run test:dil:update`, then review the diff |
 | E2E | the real Pi Web UI path works | `npm run e2e` |
@@ -240,7 +243,9 @@ when they should not have, treat it as a regression and check the Playwright ima
 the Dockerfile before assuming a UI change.
 
 ```bash
-just check   # npx tsc --noEmit + biome check .
+just check   # npx tsc --noEmit + biome check .       (fast, no tests)
+just test    # npm run test:dil, includes conformance/
+just verify  # check + test + build
 just fmt     # biome check --write
 npm run lint # biome lint
 ```

@@ -7,18 +7,20 @@
  *                 stream ends, publish the final text immediately (no trailing wait).
  *   2. parse      `parseDocument(text)` — a pure function of the string, ~1 ms, so there
  *                 is no incremental parse and no cached block to invalidate.
- *   3. resolve    `evaluateStatements` for the `{@body}` scope, then `resolveNodes` to
- *                 expand `{#each}` / `{#if}` / `{expr}` before React sees anything.
+ *   3. resolve    `evaluateStatements` for the `{@body}` scope, with `DilRuntime.useState`
+ *                 supplying each slot's current value, then `resolveNodes` to expand
+ *                 `{#each}` / `{#if}` / `{expr}` before React sees anything.
  *
  * Then React renders plain elements: layout and typography primitives for the #46
- * vocabulary, readable fallbacks for the slices that follow (`#47` SVG, `#48` controls,
- * `#49` document/data primitives).
+ * vocabulary, the `#47` SVG primitives, the `#48` controls (the only components that own
+ * a `DilRuntime`), and readable fallbacks for everything else (`#49` document/data
+ * primitives).
  *
  * Pure logic lives in `resolve.ts` and `tokens.ts` and is unit-tested in Node; this file
  * is only JSX glue.
  */
 
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { collectStatements, evaluateStatements, isInlineTag, parseDocument } from "../../core/dil/index";
 import {
@@ -35,10 +37,13 @@ import {
   MarkdownImage,
   MathLeaf,
 } from "./primitives/content";
+import { ControlButton, ControlLabel, ControlRadio, ControlRadioGroup, ControlTextarea } from "./primitives/controls";
 import { Box, Col, Divider, Grid, GridItem, Row } from "./primitives/layout";
 import { SvgElement } from "./primitives/svg";
 import { Badge, Bold, Caption, Icon, InlineCode, Italic, Text, Title } from "./primitives/typography";
 import { type ResolvedNode, type ResolvedProps, resolveNodes } from "./resolve";
+import { DilRuntime } from "./runtime";
+import { DilHostContext, DilRuntimeContext } from "./runtime-context";
 import { isSvgTag, svgIdPrefix } from "./svg-map";
 import { layoutSkin, textSkin } from "./tokens";
 
@@ -64,17 +69,47 @@ export function DilRenderer({
   // otherwise share `dil-n-0-arrow` and the second marker reference would resolve to the
   // first diagram. `useId` gives every message its own namespace.
   const instance = useId();
+  const host = useContext(DilHostContext);
   const text = useThrottledText(source, isStreaming, throttleMs);
   const document = useMemo(() => parseDocument(text, { isStreaming }), [text, isStreaming]);
+
+  // The runtime outlives a re-resolve: it owns the state slots and the host bridge. A
+  // state write bumps `version`, which is the only thing that re-runs the resolver.
+  //
+  // It must also outlive the *host*, which is rebuilt whenever Pi's status changes: the
+  // host is read through a ref, so a turn starting or ending does not throw away what the
+  // user typed into a card.
+  const [version, setVersion] = useState(0);
+  const hostRef = useRef(host);
+  hostRef.current = host;
+  const runtime = useMemo(
+    () =>
+      new DilRuntime(
+        () => setVersion((current) => current + 1),
+        () => hostRef.current,
+      ),
+    [],
+  );
+
+  // `version` is not read by the callback on purpose: a setter writes a slot, not the
+  // document, so the counter is the only reason to re-run the resolver.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a state write must re-resolve
   const resolved = useMemo(() => {
     const statements = collectStatements(document.raw);
-    return resolveNodes(document.tree, statements.length ? evaluateStatements(statements) : {});
-  }, [document]);
+    const scope = statements.length
+      ? evaluateStatements(statements, runtime.seed(), { useState: runtime.stateSlot })
+      : runtime.seed();
+    return resolveNodes(document.tree, scope);
+  }, [document, runtime, version]);
+
+  const value = useMemo(() => ({ runtime, host }), [runtime, host]);
 
   return (
-    <div className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
-      {renderNodes(resolved, instance, null)}
-    </div>
+    <DilRuntimeContext.Provider value={value}>
+      <div className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
+        {renderNodes(resolved, instance, null)}
+      </div>
+    </DilRuntimeContext.Provider>
   );
 }
 
@@ -310,6 +345,35 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
           {rendered}
         </FallbackLink>
       );
+
+    // Interactive controls (`#48`). Their behaviour comes from the document runtime, so
+    // the props they receive are exactly the resolved ones — no skin, no adaptation.
+    case "button":
+      return (
+        <ControlButton key={key} props={props}>
+          {rendered}
+        </ControlButton>
+      );
+    case "radio-group":
+      return (
+        <ControlRadioGroup key={key} props={props}>
+          {rendered}
+        </ControlRadioGroup>
+      );
+    case "radio":
+      return (
+        <ControlRadio key={key} props={props}>
+          {rendered}
+        </ControlRadio>
+      );
+    case "label":
+      return (
+        <ControlLabel key={key} props={props}>
+          {rendered}
+        </ControlLabel>
+      );
+    case "textarea":
+      return <ControlTextarea key={key} props={props} />;
 
     default:
       break;

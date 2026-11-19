@@ -1,0 +1,306 @@
+{
+  "constants": {
+    "0": "三、现在就能做的 MIDI 连通性测试",
+    "1": "我找到一个无需安装 App、无需写代码的在线测试工具。",
+    "2": "Web MIDI Input Monitor",
+    "3": "显示 MIDI 输入设备、按键、力度和原始消息。网页声明只接收输入，不发送 MIDI 控制命令。",
+    "4": "在 Chrome 中打开 MIDI 测试网页 ",
+    "5": "网址：webdevicetest.com/en/tools/midi-input-test",
+    "6": "按以下步骤操作",
+    "7": "先给 MIDI 钢琴充好电并开机。如果琴身上有多个 Type-C 接口，请优先使用标有 ",
+    "8": "USB",
+    "9": " 或 ",
+    "10": "MIDI",
+    "11": " 的接口，而不是仅用于充电的接口。",
+    "12": "用 USB-C 数据线将 MIDI 钢琴与平板连接起来。",
+    "13": "在 Pad 上打开 ",
+    "14": "Google Chrome",
+    "15": "，访问上面的测试网页。不要使用微信或其他 App 内置浏览器。",
+    "16": "点击页面上的 ",
+    "17": "Start MIDI monitor",
+    "18": "，并允许 Chrome 请求 MIDI 访问权限。不需要启用 SysEx。",
+    "19": "如果出现输入设备列表，选择检测到的 MIDI 设备。设备名称可能是 ",
+    "20": "USB MIDI Device",
+    "21": "、",
+    "22": "TERENCE",
+    "23": " 或其他名称。",
+    "24": "按下电钢琴中间的中央 C，然后松开，观察页面上的消息记录。",
+    "25": "Google 的官方帮助文档也明确说明，Android Chrome 可以由用户授权网页访问 MIDI 设备。",
+    "26": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "27": "成功时你会看到什么？",
+    "28": "例如你按下中央 C：",
+    "29": "MIDI Input",
+    "30": " 已收到消息",
+    "31": "NOTE ON",
+    "32": "Note 60 · C4",
+    "33": "Velocity: 85（示例值，实际取决于按键力度）",
+    "34": "NOTE OFF",
+    "35": "Note 60 · C4",
+    "36": "示意输出，不是你的设备实测结果。某些钢琴会使用速度为 0 的 Note On 消息表示松键。",
+    "37": "只要看到了类似消息，就证明当前 ",
+    "38": "电钢琴 → USB → Android → Chrome → Web MIDI",
+    "39": " 这条输入链路已经打通。",
+    "40": "接下来可以再测试同时按三个琴键，看浏览器能不能接收到多个音符。",
+    "41": "四、如果测试不成功，怎么排查？",
+    "42": "测试结果",
+    "43": "下一步",
+    "44": "网页提示 Web MIDI 不受支持",
+    "45": "确认使用最新版 Chrome 和 HTTPS 网页",
+    "46": "网页支持 MIDI，但找不到设备",
+    "47": "检查数据线、琴的 MIDI 接口；尝试 OTG 转接方案",
+    "48": "识别到设备，但按键没反应",
+    "49": "检查是否选中了正确的 MIDI 输入端口，重新连接",
+    "50": "设备偶尔消失或断开",
+    "51": "检查琴的电量、USB 供电、线材和接头",
+    "52": "Chrome 始终不识别",
+    "53": "尝试原生 Android MIDI 测试 App，区分浏览器问题与系统问题",
+    "54": "有一个值得留意的系统细节：Chromium 的 Android MIDI 后端依赖 Android 原生 MIDI 服务，而某些厂商设备可能没有完整启用该能力。",
+    "55": "支持 OTG 不等于一定能在浏览器里识别 USB MIDI。",
+    "56": " ",
+    "57": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "58": "另外，不需要特意去开发者选项把 USB 模式改成「MIDI」。那个选项主要涉及 Android 自己作为 USB 外设时的模式，不是这项主机端读取测试的必要设置。",
+    "59": "五、现在最值得做的一件事",
+    "60": "你已经具备了两个关键硬件条件，而且 ",
+    "61": "MIDI 钢琴",
+    "62": "3ffebd24-1b61-5e95-8b90-4667c80853e6",
+    "63": " 官方确实明确标注了 Type-C MIDI 传输。",
+    "64": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "65": "我建议你先不要购买其他设备或开始开发 Android App，直接试一次 USB-C 连接和网页测试。",
+    "66": "测试后告诉我出现了哪种结果：",
+    "67": "成功了，能看到 Note On / Note Off",
+    "68": "浏览器支持 MIDI，但找不到钢琴设备",
+    "69": "看到了设备，但弹琴没有 MIDI 消息",
+    "70": "Chrome 提示不支持 Web MIDI 或权限错误",
+    "71": "其他情况",
+    "72": "补充信息（可选）",
+    "73": "例如：设备列表显示 USB MIDI，但按键无反应……",
+    "74": "提交测试结果 ",
+    "75": "如果测试成功，我们下一步就能开始制作你自己的第一版网页版钢琴教学器：",
+    "76": "弹下真实琴键，Pad 上的虚拟琴键实时点亮。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "3ffebd24-1b61-5e95-8b90-4667c80853e6": {
+          "status": "resolved",
+          "state": {
+            "value": "MIDI 钢琴",
+            "action_payload": {
+              "query": "MIDI 钢琴",
+              "category": "product",
+              "extraParams": {
+                "disambiguation": "88 键折叠 MIDI 钢琴"
+              },
+              "event_name": "chatgpt_entity_action",
+              "event_data": {
+                "action_type": "clicked",
+                "surface_location": "response",
+                "entity_affordance": "inline",
+                "content_reference_type": "product_entity",
+                "entity_category": "product"
+              }
+            },
+            "click_action": {
+              "handler": "client",
+              "type": "open_entity_detail",
+              "payload": {
+                "query": "MIDI 钢琴",
+                "category": "product",
+                "extraParams": {
+                  "disambiguation": "88 键折叠 MIDI 钢琴"
+                },
+                "event_name": "chatgpt_entity_action",
+                "event_data": {
+                  "action_type": "clicked",
+                  "surface_location": "response",
+                  "entity_affordance": "inline",
+                  "content_reference_type": "product_entity",
+                  "entity_category": "product"
+                }
+              }
+            },
+            "entity_data": null,
+            "image_url": null,
+            "directions_url": null
+          },
+          "componentName": "Entity"
+        },
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://support.google.com/chrome/answer/14871962?co=GENIE.Platform%3DAndroid&hl=en-uk",
+                "ref_id": "turn190489search9",
+                "refs": [
+                  {
+                    "turn_index": 190489,
+                    "ref_type": "search",
+                    "ref_index": 9
+                  }
+                ],
+                "source_label": "Google Chrome Help",
+                "title": "Give sites permission to MIDI devices in Chrome - Android",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://support.google.com/chrome/answer/14871962?co=GENIE.Platform%3DAndroid&hl=en-uk"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://chromium.googlesource.com/chromium/src/media/midi/%2B/5114977c9ab36a8d71ad22368ebc5bc843872a1f",
+                "ref_id": "turn190489search6",
+                "refs": [
+                  {
+                    "turn_index": 190489,
+                    "ref_type": "search",
+                    "ref_index": 6
+                  }
+                ],
+                "source_label": "Git at Google",
+                "title": "5114977c9ab36a8d71ad22368ebc5bc843872a1f - chromium/src/media/midi",
+                "snippet": null,
+                "pub_timestamp": 1742256000,
+                "metadata_label": "三月 18, 2025"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://chromium.googlesource.com/chromium/src/media/midi/%2B/5114977c9ab36a8d71ad22368ebc5bc843872a1f"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://terenceintelligence.com/243.html",
+                "ref_id": "turn279072search1",
+                "refs": [
+                  {
+                    "turn_index": 279072,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "terenceintelligence.com",
+                "title": "MIDI 钢琴",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://terenceintelligence.com/243.html"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 三、现在就能做的 MIDI 连通性测试\n\n我找到一个无需安装 App、无需写代码的在线测试工具。\n\n**Web MIDI Input Monitor**\n\n显示 MIDI 输入设备、按键、力度和原始消息。网页声明只接收输入，不发送 MIDI 控制命令。\n\n[在 Chrome 中打开 MIDI 测试网页](https://webdevicetest.com/en/tools/midi-input-test)\n\n网址：webdevicetest.com/en/tools/midi-input-test\n\n### 按以下步骤操作\n\n1. 先给 MIDI 钢琴充好电并开机。如果琴身上有多个 Type-C 接口，请优先使用标有 `USB` 或 `MIDI` 的接口，而不是仅用于充电的接口。\n2. 用 USB-C 数据线将 MIDI 钢琴与平板连接起来。\n3. 在 Pad 上打开 **Google Chrome**，访问上面的测试网页。不要使用微信或其他 App 内置浏览器。\n4. 点击页面上的 **Start MIDI monitor**，并允许 Chrome 请求 MIDI 访问权限。不需要启用 SysEx。\n5. 如果出现输入设备列表，选择检测到的 MIDI 设备。设备名称可能是 `USB MIDI Device`、`TERENCE` 或其他名称。\n6. 按下电钢琴中间的中央 C，然后松开，观察页面上的消息记录。\n\nGoogle 的官方帮助文档也明确说明，Android Chrome 可以由用户授权网页访问 MIDI 设备。citeturn190489search9\n\n### 成功时你会看到什么？\n\n例如你按下中央 C：\n\nMIDI Input (已收到消息)\n\nNOTE ON Note 60 · C4\n\nVelocity: 85（示例值，实际取决于按键力度）\n\n---\n\nNOTE OFF Note 60 · C4\n\n示意输出，不是你的设备实测结果。某些钢琴会使用速度为 0 的 Note On 消息表示松键。\n\n只要看到了类似消息，就证明当前 **电钢琴 → USB → Android → Chrome → Web MIDI** 这条输入链路已经打通。\n\n接下来可以再测试同时按三个琴键，看浏览器能不能接收到多个音符。\n\n## 四、如果测试不成功，怎么排查？\n\n| 测试结果 | 下一步 |\n|--------|--------|\n| 网页提示 Web MIDI 不受支持 | 确认使用最新版 Chrome 和 HTTPS 网页 |\n| 网页支持 MIDI，但找不到设备 | 检查数据线、琴的 MIDI 接口；尝试 OTG 转接方案 |\n| 识别到设备，但按键没反应 | 检查是否选中了正确的 MIDI 输入端口，重新连接 |\n| 设备偶尔消失或断开 | 检查琴的电量、USB 供电、线材和接头 |\n| Chrome 始终不识别 | 尝试原生 Android MIDI 测试 App，区分浏览器问题与系统问题 |\n\n有一个值得留意的系统细节：Chromium 的 Android MIDI 后端依赖 Android 原生 MIDI 服务，而某些厂商设备可能没有完整启用该能力。**支持 OTG 不等于一定能在浏览器里识别 USB MIDI。** citeturn190489search6\n\n另外，不需要特意去开发者选项把 USB 模式改成「MIDI」。那个选项主要涉及 Android 自己作为 USB 外设时的模式，不是这项主机端读取测试的必要设置。\n\n## 五、现在最值得做的一件事\n\n你已经具备了两个关键硬件条件，而且 entity[\"product\",\"MIDI 钢琴\",\"88 键折叠 MIDI 钢琴\"] 官方确实明确标注了 Type-C MIDI 传输。citeturn279072search1\n\n我建议你先不要购买其他设备或开始开发 Android App，直接试一次 USB-C 连接和网页测试。\n\n**测试后告诉我出现了哪种结果：**\n\n成功了，能看到 Note On / Note Off\n\n浏览器支持 MIDI，但找不到钢琴设备\n\n看到了设备，但弹琴没有 MIDI 消息\n\nChrome 提示不支持 Web MIDI 或权限错误\n\n其他情况\n\n补充信息（可选）\n\n[多行文本框占位文本：例如：设备列表显示 USB MIDI，但按键无反应……]（当前值不可用。）\n\n[提交测试结果]\n\n如果测试成功，我们下一步就能开始制作你自己的第一版网页版钢琴教学器：**弹下真实琴键，Pad 上的虚拟琴键实时点亮。**",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite",
+    "Entity"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        30,
+        31
+      ],
+      "start_index": 1177,
+      "end_index": 1208,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://support.google.com/chrome/answer/14871962?co=GENIE.Platform%3DAndroid&hl=en-uk"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn190489search9"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        83,
+        84
+      ],
+      "start_index": 2563,
+      "end_index": 2594,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/media/midi/%2B/5114977c9ab36a8d71ad22368ebc5bc843872a1f"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn190489search6"
+        }
+      ]
+    },
+    {
+      "type": "entity",
+      "tree_range": [
+        86,
+        87
+      ],
+      "start_index": 2714,
+      "end_index": 2786,
+      "component_resolution_id": "3ffebd24-1b61-5e95-8b90-4667c80853e6",
+      "entities": [
+        {
+          "entity_type": "product"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        87,
+        88
+      ],
+      "start_index": 2812,
+      "end_index": 2843,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://terenceintelligence.com/243.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn279072search1"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}
