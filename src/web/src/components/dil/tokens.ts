@@ -438,9 +438,11 @@ export function iconComponentName(value: unknown): string | null {
   return /^[A-Z][A-Za-z0-9]*$/.test(pascal) ? pascal : null;
 }
 
-/** Links may only navigate somewhere a reader can inspect: http(s) and mailto. */
-export function safeLinkUrl(value: unknown): string | undefined {
+/** Markdown also supports relative destinations within the current site. */
+export function safeLinkUrl(value: unknown, allowRelative = false): string | undefined {
   if (typeof value !== "string") return undefined;
   const url = value.trim();
-  return /^(?:https?:\/\/|mailto:)[^\s]+$/i.test(url) ? url : undefined;
+  if (/^(?:https?:\/\/|mailto:)[^\s]+$/i.test(url)) return url;
+  if (!allowRelative || !url || url.startsWith("//") || /[\s\\]/.test(url)) return undefined;
+  return /^[^:/?#]*:/.test(url) ? undefined : url;
 }

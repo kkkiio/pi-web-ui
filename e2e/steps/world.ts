@@ -7,6 +7,7 @@ export type FixtureName =
   | "workspace-artifact"
   | "tool-failure"
   | "edit-history"
+  | "dil-markdown"
   | "dil-render";
 
 /** Shared state for one scenario. Step files read and write this instead of keeping

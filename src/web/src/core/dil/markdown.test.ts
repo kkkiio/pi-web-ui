@@ -283,8 +283,9 @@ test("GFM extensions map onto the text vocabulary", () => {
 
   const task = only(tree("- [x] 已完成\n- [ ] 待办"), "list");
   const items = elements(task.children, "list-item");
-  assert.match(deepText(items[0].children), /☑/);
-  assert.match(deepText(items[1].children), /☐/);
+  assert.equal(stringAttribute(items[0], "checked"), "true");
+  assert.equal(stringAttribute(items[1], "checked"), "false");
+  assert.equal(toFallbackMarkdown([task]), "- [x] 已完成\n- [ ] 待办");
 
   assert.equal(stringAttribute(only(tree("3. 第三\n4. 第四"), "list"), "start"), "3");
 });
@@ -427,7 +428,7 @@ test("strikethrough spans nodes the same way emphasis does", () => {
   assert.equal(findAll(tree("~~<badge/>~~"), "badge").length, 1);
 });
 
-test("the element tier pairs emphasis on the AST, because it has no lexer", () => {
+test("the element tier pairs emphasis across inline DIL atoms", () => {
   const box = only(tree('<box>\n  **<icon name="star"/>**\n</box>'), "box");
   assert.equal(elements(box.children, "bold").length, 1);
 
@@ -471,8 +472,67 @@ test("emphasis never wraps a container", () => {
   const wrapped = tree("**<text>x</text>**");
   assert.equal(findAll(wrapped, "bold").length, 0, "no <bold> around a container");
 
-  // An unknown tag is not a member of the vocabulary either, so it is not guessed to be inline.
-  assert.equal(findAll(tree('**<my-widget text="b"/>**'), "bold").length, 0);
+  const literal = findAll(tree('**<my-widget text="b"/>**'), "markdown-literal");
+  assert.equal(deepText(literal), '<my-widget text="b"/>');
+});
+
+test("CJK punctuation and hard breaks work at document and element level", () => {
+  const source = "这是**「重点」**然后、~~「删除」~~然后。https://example.test，続き。  \n次の行";
+  for (const answer of [source, `<box>${source}</box>`]) {
+    const nodes = tree(answer);
+    assert.equal(deepText(findAll(nodes, "bold")), "「重点」");
+    assert.ok(findAll(nodes, "text").some((node) => node.attrs.some((attr) => attr.name === "lineThrough")));
+    assert.equal(stringAttribute(findAll(nodes, "Link")[0], "url"), "https://example.test");
+    assert.equal(findAll(nodes, "hard-break").length, 1);
+  }
+  assert.equal(findAll(tree("First\\\nSecond"), "hard-break").length, 1);
+  assert.equal(findAll(tree("First\nSecond"), "hard-break").length, 0);
+});
+
+test("unsupported syntax survives as literal source", () => {
+  const reference = "[**label**][key]";
+  const definition = "[key]: <https://example.test> 'Title'";
+  const footnote = "[^id]: A **literal** note";
+  const html = "<kbd data-key='{}'>Enter</kbd><br>";
+  const image = "![**alt**](<http://example.test/a> 'Title')";
+  const nodes = tree([reference, "<box>Layout</box>", definition, "[^id]", footnote, html, image].join("\n\n"));
+  const output = deepText(nodes);
+  for (const source of [reference, definition, "[^id]", footnote, html, image]) {
+    assert.ok(output.includes(source), source);
+  }
+  assert.equal(findAll(nodes, "Link").length, 0);
+  assert.equal(findAll(nodes, "markdown-image").length, 0);
+  assert.equal(findAll(nodes, "hard-break").length, 0);
+});
+
+test("only HTTPS Markdown images lower to image nodes", () => {
+  const source = '![alt](https://image.example.test/picture.png "Title")';
+  const nodes = tree(`<box>${source}</box>`);
+  const image = findAll(nodes, "markdown-image")[0];
+  assert.equal(stringAttribute(image, "src"), "https://image.example.test/picture.png");
+  assert.equal(stringAttribute(image, "alt"), "alt");
+  assert.equal(stringAttribute(image, "title"), "Title");
+  assert.equal(elements(tree(`${source}\n\n${source}`), "text").length, 2);
+  for (const src of ["./picture.png", "//image.example.test/picture.png", "data:image/png;base64,AAAA"]) {
+    assert.equal(findAll(tree(`![alt](${src})`), "markdown-image").length, 0, src);
+  }
+});
+
+test("finished answers support Setext headings without changing the streamed paragraph", () => {
+  const source = "Heading\n---";
+  const finished = parseDocument(source, { isStreaming: false });
+  assert.equal(stringAttribute(only(finished.tree, "title"), "level"), "2");
+  assert.equal(findAll(parseDocument(source).tree, "title").length, 0);
+});
+
+test("fenced code nested in lists stays opaque to DIL", () => {
+  const nodes = tree("- Before\n\n  ~~~ts\n  const sample = '{x}<box />';\n  ~~~\n\n- After");
+  const list = only(nodes, "list");
+  const block = findAll(list.children, "code-block")[0];
+  assert.equal(deepText(block.children), "const sample = '{x}<box />';");
+  assert.equal(block.closed, true);
+  assert.equal(findAll(nodes, "box").length, 0);
+  assert.equal(findAll(list.children, "list-item").length, 2);
 });
 
 test("a Markdown column alignment reaches the cell and survives the copy back", () => {

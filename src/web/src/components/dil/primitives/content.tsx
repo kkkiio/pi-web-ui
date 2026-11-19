@@ -12,10 +12,12 @@
  * primitives, so they are `memo`ised on their content rather than re-rendered per token.
  */
 
-import { memo, type ReactNode, useMemo } from "react";
+import { mermaid } from "@streamdown/mermaid";
+import { memo, type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import type { BundledLanguage } from "shiki";
-import { CodeBlock } from "@/components/ai-elements/code-block";
+import { CodeBlock, CodeBlockCopyButton, CodeBlockHeader } from "@/components/ai-elements/code-block";
 import { cn } from "@/lib/utils";
+import { isHttpsImageUrl } from "../../../core/dil/markdown";
 import { mathHtml } from "../math";
 import { layoutSkin, safeLinkUrl } from "../tokens";
 
@@ -31,7 +33,10 @@ export function FallbackList({ props, children }: FallbackProps) {
     // `5. Deploy` continues the list it belongs to; dropping `start` renumbers it to 1.
     const start = typeof props.start === "number" ? props.start : Number.parseInt(String(props.start ?? ""), 10);
     return (
-      <ol start={Number.isFinite(start) && start > 1 ? start : undefined} className={cn(className, "list-decimal")}>
+      <ol
+        start={Number.isInteger(start) && start >= 0 && start !== 1 ? start : undefined}
+        className={cn(className, "list-decimal")}
+      >
         {children}
       </ol>
     );
@@ -39,14 +44,33 @@ export function FallbackList({ props, children }: FallbackProps) {
   return <ul className={cn(className, "list-disc")}>{children}</ul>;
 }
 
-export function FallbackListItem({ children }: FallbackProps) {
+export function FallbackListItem({ children, props }: FallbackProps) {
+  const checked = props?.checked;
+  if (checked === "true" || checked === "false") {
+    return (
+      <li className="min-w-0 list-none">
+        <div className="flex items-start gap-2">
+          <input
+            className="mt-1.5 shrink-0"
+            type="checkbox"
+            checked={checked === "true"}
+            disabled
+            aria-label="Task status"
+          />
+          <div className="min-w-0">{children}</div>
+        </div>
+      </li>
+    );
+  }
   return <li className="min-w-0">{children}</li>;
 }
 
 export function FallbackTable({ children }: FallbackProps) {
   return (
     <div className="my-2 w-full overflow-x-auto">
-      <table className="w-full border-collapse text-sm">{children}</table>
+      <table className="w-full border-collapse text-sm">
+        <tbody>{children}</tbody>
+      </table>
     </div>
   );
 }
@@ -119,11 +143,80 @@ export const CodeBlockLeaf = memo(function CodeBlockLeaf({
       </pre>
     );
   }
-  return <CodeBlock className="my-2" code={code} language={(language ?? "text") as BundledLanguage} />;
+  if (language?.toLowerCase() === "mermaid") return <MermaidDiagram code={code} />;
+  return <CopyableCode code={code} language={language} />;
 });
 
-export function FallbackLink({ props, children }: FallbackProps) {
-  const url = safeLinkUrl(props?.url);
+function CopyableCode({ code, language }: { readonly code: string; readonly language?: string }) {
+  return (
+    <CodeBlock className="my-2" code={code} language={(language ?? "text") as BundledLanguage}>
+      <CodeBlockHeader className="justify-end py-0.5">
+        <CodeBlockCopyButton aria-label="Copy code" />
+      </CodeBlockHeader>
+    </CodeBlock>
+  );
+}
+
+function MermaidDiagram({ code }: { readonly code: string }) {
+  const id = `dil-mermaid-${useId().replace(/[^\w-]/g, "")}`;
+  const [rendered, setRendered] = useState<{ code: string; svg: string }>();
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const { svg } = await mermaid
+          .getMermaid({ securityLevel: "strict", suppressErrorRendering: true })
+          .render(id, code);
+        if (active) setRendered({ code, svg });
+      } catch {
+        // The source stays visible if the diagram cannot be rendered.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [code, id]);
+
+  if (rendered?.code !== code) return <CopyableCode code={code} />;
+  return (
+    <div
+      aria-label="Mermaid diagram"
+      className="my-2 overflow-x-auto [&>svg]:h-auto [&>svg]:max-w-full"
+      role="img"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: Mermaid sanitizes its generated SVG in strict mode.
+      dangerouslySetInnerHTML={{ __html: rendered.svg }}
+    />
+  );
+}
+
+export function MarkdownImage({
+  src,
+  alt,
+  title,
+}: {
+  readonly src: string;
+  readonly alt: string;
+  readonly title?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !isHttpsImageUrl(src)) return alt;
+  return (
+    <img
+      alt={alt}
+      className="inline-block h-auto max-w-full"
+      decoding="async"
+      loading="lazy"
+      onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
+      src={src}
+      title={title}
+    />
+  );
+}
+
+export function FallbackLink({ props, children, markdown = false }: FallbackProps & { readonly markdown?: boolean }) {
+  const url = safeLinkUrl(props?.url, markdown);
   const title = typeof props?.title === "string" ? props.title : undefined;
   if (!url) return <span className="underline decoration-dotted">{children}</span>;
   return (

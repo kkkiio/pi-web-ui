@@ -1,9 +1,8 @@
 /**
  * "Is this answer actually DIL?"
  *
- * The transcript renders plain Markdown and DIL through different components, so the
- * message view needs one cheap, structural answer before it picks a renderer. Lowering
- * marks every element it synthesizes from Markdown with `synthetic: true`, and control
+ * Tests and evals distinguish authored DIL from Markdown lowering. Lowering marks
+ * every element it synthesizes from Markdown with `synthetic: true`, and control
  * flow / interpolations only ever come from source DIL — so "any non-synthetic element,
  * or any `{#each}` / `{#if}` / `{expr}`" is exactly "the model wrote DIL".
  *

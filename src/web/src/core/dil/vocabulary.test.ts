@@ -24,8 +24,11 @@ test("inline atoms are exactly the tags an emphasis pair may wrap", () => {
     "badge",
     "bold",
     "code",
+    "hard-break",
     "icon",
     "italic",
+    "markdown-image",
+    "markdown-literal",
     "math",
   ]);
 });
@@ -55,7 +58,7 @@ test("SVG primitives are marked, because their tag names collide with typography
   assert.equal(tagEntry("box")?.svg, undefined);
 });
 
-test("an unknown tag is neither inline nor known, so it keeps its place and falls back", () => {
+test("an unknown tag is neither inline nor known", () => {
   assert.equal(isInlineTag("my-widget"), false);
   assert.equal(tagEntry("my-widget"), undefined);
   assert.ok(KNOWN_TAGS.includes("box"));

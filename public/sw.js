@@ -34,8 +34,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Don't cache API/WebSocket requests
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws")) {
+  // Leave remote resources and live Pi requests to the browser.
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws")) {
     return;
   }
 

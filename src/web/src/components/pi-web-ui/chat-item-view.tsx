@@ -1,7 +1,7 @@
 import { CopyIcon, EllipsisIcon, QuoteIcon } from "lucide-react";
 import { nanoid } from "nanoid";
 
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
@@ -171,11 +171,7 @@ export function ChatItemView({
       )}
       <MessageContent className={cn("w-full", item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]')}>
         <div data-quote-source="Assistant">
-          <DilRenderer
-            isStreaming={Boolean(item.streaming)}
-            markdown={(text) => <MessageResponse>{text}</MessageResponse>}
-            source={item.text}
-          />
+          <DilRenderer isStreaming={Boolean(item.streaming)} source={item.text} />
         </div>
       </MessageContent>
     </Message>

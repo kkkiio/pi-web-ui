@@ -3,7 +3,7 @@
   "state": [],
   "diagnostics": [],
   "tree": [
-    {"tag": "title", "attrs": {"size": "lg"}, "children": ["怎么读这组数据"]},
+    {"tag": "title", "attrs": {"size": "lg", "level": "2"}, "children": ["怎么读这组数据"]},
     {"tag": "text", "children": ["三层的口径不同，", {"tag": "bold", "children": ["不要混用"]}, "："]},
     {
       "tag": "table",

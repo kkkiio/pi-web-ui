@@ -16,6 +16,8 @@
  */
 
 import { decodeEntities } from "./entities.ts";
+import { markdownAtom, markdownLiteral } from "./markdown.ts";
+import { type MarkdownSpan, markdownSpans } from "./markdown-syntax.ts";
 import { LineIndex, readBalanced, readInlineCodeSpan, readInlineMathSpan, splitEachClause } from "./scanner.ts";
 import type {
   DilAttribute,
@@ -31,18 +33,18 @@ import type {
   DilRecoveryAction,
   DilStmtNode,
 } from "./types.ts";
+import { tagEntry } from "./vocabulary.ts";
 
 /** Elements whose content is literal text, never DIL: code samples are full of braces. */
 export const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["code", "code-block", "CodeBlock"]);
 
 const TAG_NAME = /[A-Za-z_$][\w$]*(?:[-.][A-Za-z_$][\w$]*)*/y;
 const ATTR_NAME = /[A-Za-z_$][\w$:-]*/y;
-// `<https://…>` and `<dev@example.com>` are Markdown autolinks, not tags called `https`/`dev`.
-const AUTOLINK = /^<[A-Za-z][A-Za-z0-9+.-]*:|^<[^\s<>@]+@[^\s<>]+>/;
 const SIMPLE_CLOSE = /\{\/([A-Za-z_$][\w$]*)\s*\}/y;
 const SIMPLE_ELSE = /\{:else\s*\}/y;
 const ELSE_IF = /\{:else\s+if\s/y;
 const BLOCK_KEYWORDS: ReadonlySet<string> = new Set(["if", "each"]);
+const EXPLICIT_REFERENCE = /!?\[(?:\\.|[^[\]\\\n])+\]\[(?:\\.|[^[\]\\\n])*\]/y;
 
 type Stop =
   | { readonly kind: "eof" }
@@ -56,6 +58,7 @@ interface ParseContext {
   i: number;
   readonly diag: Diagnostics;
   readonly tagStack: string[];
+  readonly markdown: ReadonlyMap<number, MarkdownSpan>;
 }
 
 class Diagnostics {
@@ -104,7 +107,7 @@ export function normalizeSource(source: string): string {
 export function parse(source: string): DilParseResult {
   const src = normalizeSource(source);
   const diag = new Diagnostics(src);
-  const ctx: ParseContext = { src, i: 0, diag, tagStack: [] };
+  const ctx: ParseContext = { src, i: 0, diag, tagStack: [], markdown: markdownSpans(src) };
   const { nodes } = parseNodes(ctx, null, false);
   return { nodes, diagnostics: diag.items, diagnosticSummary: diag.summary() };
 }
@@ -130,6 +133,21 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
   while (ctx.i < src.length) {
     const c = src[ctx.i];
     const next = src[ctx.i + 1];
+    const markdown = ctx.markdown.get(ctx.i);
+    if (markdown && (markdown.node.type !== "html" || !tagAt(src, ctx.i, next === "/"))) {
+      const atom =
+        markdown.node.type === "html"
+          ? null
+          : markdownAtom(markdown.node, src.slice(ctx.i, markdown.end), ctx.i, markdown.end);
+      if (atom) {
+        flush(ctx.i);
+        nodes.push(atom);
+      } else if (textStart < 0) {
+        textStart = ctx.i;
+      }
+      ctx.i = markdown.end;
+      continue;
+    }
 
     // A blockquote line is prose: a fence inside it (`> ~~~js`) has its prefix between the
     // line start and the marker, so DIL scanning must not read its braces as expressions.
@@ -156,6 +174,18 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
       if (span) {
         if (textStart < 0) textStart = ctx.i;
         ctx.i = span.end;
+        continue;
+      }
+    }
+
+    // A reference without a matching definition is plain text to remark. Keep its label
+    // literal too, including any formatting markers or braces it contains.
+    if ((c === "[" || (c === "!" && next === "[")) && !isEscaped(src, ctx.i)) {
+      const value = matchAt(EXPLICIT_REFERENCE, src, ctx.i);
+      if (value) {
+        flush(ctx.i);
+        nodes.push(markdownLiteral(value, ctx.i, ctx.i + value.length));
+        ctx.i += value.length;
         continue;
       }
     }
@@ -234,9 +264,10 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     }
 
     // 8. DIL elements. A `<` that cannot start a tag (`a < b`, `<https://…>`) is prose.
-    if (!quoted && c === "<" && !isEscaped(src, ctx.i) && isTagStart(src, ctx.i)) {
+    const tag = !quoted && c === "<" && !isEscaped(src, ctx.i) ? tagAt(src, ctx.i) : null;
+    if (tag) {
       flush(ctx.i);
-      const element = readElement(ctx);
+      const element = readElement(ctx, tag);
       if (element.node) nodes.push(element.node);
       if (element.stop.kind !== "done") return { nodes, stop: element.stop };
       continue;
@@ -262,15 +293,8 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
   return { nodes, stop: { kind: "eof" } };
 }
 
-/**
- * Append one prose run. Text nodes are created in exactly one place (`flush`), so the two
- * hygiene rules live there rather than in a pass over the finished list:
- *
- *   layout whitespace  a run that is only indentation/newlines is not content.
- *   adjacency          two runs separated by a dropped construct are one run.
- */
+/** Keep whitespace between inline atoms. Markdown decides whether it separates paragraphs. */
 function pushText(nodes: DilNode[], value: string, pos: number): void {
-  if (!value.trim() && value.includes("\n")) return;
   const previous = nodes[nodes.length - 1];
   if (previous && previous.type === "text") {
     nodes[nodes.length - 1] = { ...previous, value: previous.value + value };
@@ -279,11 +303,12 @@ function pushText(nodes: DilNode[], value: string, pos: number): void {
   nodes.push({ type: "text", value, pos });
 }
 
-function isTagStart(src: string, i: number): boolean {
-  const next = src[i + 1];
-  if (!next || !/[A-Za-z_$]/.test(next)) return false;
-  // `<https://…>` is a Markdown autolink, not a tag called `https`.
-  return !AUTOLINK.test(src.slice(i, i + 32));
+function tagAt(src: string, index: number, closing = false): string | null {
+  const name = matchAt(TAG_NAME, src, index + (closing ? 2 : 1));
+  const entry = name ? tagEntry(name) : undefined;
+  if (!name || !entry || entry.syntheticOnly || entry.support === "internal") return null;
+  const after = src[index + (closing ? 2 : 1) + name.length];
+  return after === undefined || /[\s/>]/.test(after) ? name : null;
 }
 
 function execAt(pattern: RegExp, src: string, index: number): RegExpExecArray | null {
@@ -342,7 +367,7 @@ function readClosingTag(
   src: string,
   index: number,
 ): { readonly name: string; readonly end: number; readonly index: number } | null {
-  const name = matchAt(TAG_NAME, src, index + 2);
+  const name = tagAt(src, index, true);
   if (!name) return null;
   const gt = src.indexOf(">", index + 2 + name.length);
   if (gt < 0) return null;
@@ -509,15 +534,9 @@ function readEach(
   };
 }
 
-function readElement(ctx: ParseContext): { node: DilElementNode | null; stop: Stop } {
+function readElement(ctx: ParseContext, name: string): { node: DilElementNode | null; stop: Stop } {
   const { src } = ctx;
   const pos = ctx.i;
-  const name = matchAt(TAG_NAME, src, pos + 1);
-  if (!name) {
-    ctx.i++;
-    return { node: null, stop: { kind: "done" } };
-  }
-
   const open = readAttributes(ctx, name, pos + 1 + name.length);
   if (!open.complete) {
     // Rule: unterminated opening tag at EOF → DropErrorNode (no half-tag flash).
