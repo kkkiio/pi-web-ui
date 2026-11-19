@@ -107,7 +107,10 @@ function resolveNode(node: DilNode, scope: DilScope, budget: Budget): ResolvedNo
         {
           kind: "element",
           name: node.name,
-          props: resolveAttributes(node, scope),
+          // `closed` is structural, not an attribute: lowering puts it on the node (an
+          // unterminated fence, an unclosed tag), and the heavy leaves render their source
+          // instead of typesetting/highlighting until it is true.
+          props: { ...resolveAttributes(node, scope), closed: node.closed },
           children: resolveNodes(node.children, scope, budget),
         },
       ];

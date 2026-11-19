@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { DilScope } from "../../core/dil/evaluator.ts";
 import { collectStatements, evaluateStatements, parseDocument } from "../../core/dil/index.ts";
-import { type ResolvedNode, resolveNodes } from "./resolve.ts";
+import { type ResolvedNode, type ResolvedProps, resolveNodes } from "./resolve.ts";
 
 function count(nodes: readonly ResolvedNode[]): number {
   let total = 0;
@@ -147,4 +147,17 @@ test("a real DIL sample renders its each over inline data", () => {
   const [box] = find(nodes, "box");
   assert.ok(box && box.kind === "element");
   assert.equal(box.props.gap, 3);
+});
+
+test("a streaming fence reaches the renderer with closed: false", () => {
+  // The heavy leaves skip KaTeX/Shiki until the construct closes. `closed` is structural —
+  // lowering keeps it on the node — so the element path has to forward it into props.
+  const resolveFirst = (source: string) =>
+    (resolveNodes(parseDocument(source).tree, {})[0] as { props: ResolvedProps }).props;
+
+  assert.equal(resolveFirst("```js\nconst a = 1").closed, false);
+  assert.equal(resolveFirst("```js\nconst a = 1;\n```").closed, true);
+  assert.equal(resolveFirst("$$\n\\int_0^1").closed, false);
+  assert.equal(resolveFirst("$$\n\\int_0^1\n$$").closed, true);
+  assert.equal(resolveFirst("**<text>x</text>**").closed, true, "a non-fence element is closed");
 });
