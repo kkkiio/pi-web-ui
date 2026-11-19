@@ -1,1 +1,0 @@
-DIL.render(__dil.jsx(()=>{const __dilConstants=DIL.useConstants();const __dilModelDataBindings=DIL.useAppData((appData)=>appData.opGenui?.modelDataBindings??{});return __dil.jsx("text",null,__dilConstants["0"],__dil.jsx("code",null,__dilConstants["1"]),__dilConstants["2"]);},{"key":"body:0"}));

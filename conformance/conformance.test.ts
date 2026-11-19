@@ -29,28 +29,46 @@ import { createOurProgram, type OurProgram } from "./ours.ts";
 import { createReferenceProgram, type ReferenceProgram, type SampleData } from "./reference.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const sampleDir = join(here, "samples");
 const knownFile = join(here, "known-differences.json");
 const update = process.env.UPDATE_CONFORMANCE === "1";
 
+/**
+ * Two tiers, one walk:
+ *
+ *   `scenarios/<name>/`  curated, one per feature set — what a developer reads first
+ *   `corpus/<id>/`       every other captured DIL message — breadth for the same check
+ *
+ * A sample is one directory holding `<name>.dil.md` (what the model wrote), `<name>.raw.js`
+ * (what the reference compiled it into) and `<name>.data.json` (what the client supplied).
+ */
+const SAMPLE_ROOTS = ["scenarios", "corpus"] as const;
+
 interface Sample {
   readonly name: string;
+  readonly root: (typeof SAMPLE_ROOTS)[number];
   readonly source: string;
   readonly code: string;
   readonly data: SampleData;
 }
 
 function samples(): Sample[] {
-  const names = readdirSync(sampleDir)
-    .filter((name) => name.endsWith(".source.md"))
-    .map((name) => name.replace(/\.source\.md$/, ""))
-    .sort();
-  return names.map((name) => ({
-    name,
-    source: readFileSync(join(sampleDir, `${name}.source.md`), "utf8"),
-    code: readFileSync(join(sampleDir, `${name}.raw.js`), "utf8"),
-    data: JSON.parse(readFileSync(join(sampleDir, `${name}.data.json`), "utf8")) as SampleData,
-  }));
+  const found: Sample[] = [];
+  for (const root of SAMPLE_ROOTS) {
+    for (const name of readdirSync(join(here, root), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()) {
+      const dir = join(here, root, name);
+      found.push({
+        name,
+        root,
+        source: readFileSync(join(dir, `${name}.dil.md`), "utf8"),
+        code: readFileSync(join(dir, `${name}.raw.js`), "utf8"),
+        data: JSON.parse(readFileSync(join(dir, `${name}.data.json`), "utf8")) as SampleData,
+      });
+    }
+  }
+  return found;
 }
 
 /** The first place the two renderings of one sample disagree, or `null` when they agree. */
@@ -108,14 +126,14 @@ test("the corpus renders the same as its captured program", () => {
 
 /** The event script each interactive sample was recorded with, in user order. */
 const SCRIPTS: Record<string, readonly ScriptedEvent[]> = {
-  // `L08-M5`: a quiz. The captured `view_state` is `{choice: "B", revealed: true}`, i.e. the
-  // user answered and pressed "检查答案".
-  "L08-M5": [
+  // `quiz-radio-reveal`: a quiz. The captured `view_state` is `{choice: "B", revealed: true}`,
+  // i.e. the user answered and pressed "检查答案".
+  "quiz-radio-reveal": [
     { kind: "change", tag: "radio-group", value: "C" },
     { kind: "click", tag: "button" },
   ],
-  // `L12-M24`: the MIDI self-check. Pick a result, add a note, submit.
-  "L12-M24": [
+  // `self-check-form`: the MIDI self-check. Pick a result, add a note, submit.
+  "self-check-form": [
     { kind: "change", tag: "radio-group", value: "nodevice" },
     { kind: "change", tag: "textarea", value: "USB MIDI 列表为空" },
     { kind: "click", tag: "button" },
@@ -177,10 +195,10 @@ for (const [name, events] of Object.entries(SCRIPTS)) {
 }
 
 test("the captured view_state is a restore the renderer does not do yet", () => {
-  // `L08-M5` was captured *after* the user answered: the reference reopens it answered.
+  // The quiz sample was captured *after* the user answered: the reference reopens it answered.
   // Our renderer starts from the declared initial values, so this asserts the gap exists
   // rather than pretending it does not. Delete this test when restore lands.
-  const sample = samples().find((candidate) => candidate.name === "L08-M5");
+  const sample = samples().find((candidate) => candidate.name === "quiz-radio-reveal");
   assert.ok(sample);
   const restored = createReferenceProgram(sample.code, sample.data, { seedViewState: true });
   assert.deepEqual(restored.state(), { choice: "B", revealed: true });

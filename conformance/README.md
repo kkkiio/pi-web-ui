@@ -4,14 +4,20 @@ DIL is not ours to design. It is a dialect OpenAI's client already implements, a
 repository would otherwise have no way to tell "our dialect behaviour" from "the dialect's
 behaviour": our unit tests can only prove that the renderer matches what we decided.
 
-This directory removes that freedom. Every sample carries three files captured from the
-reference client:
+This directory removes that freedom. Every sample is one directory with three captured
+files, named after the scenario it demonstrates (`scenarios/`) or after the capture
+(`corpus/`):
 
 | file | what it is |
 | --- | --- |
-| `<id>.source.md` | the DIL source the model wrote |
-| `<id>.raw.js` | the JavaScript ChatGPT's server compiled that source into |
-| `<id>.data.json` | the data the client supplied: `constants`, `appData`, `view_state` |
+| `<name>.dil.md` | the DIL source the model wrote — Markdown and DIL mixed, as always |
+| `<name>.raw.js` | the JavaScript ChatGPT's server compiled that source into |
+| `<name>.data.json` | the data the client supplied: `constants`, `appData`, `view_state` |
+
+Start with `scenarios/README.md`: twelve of these are chosen to be read, one per feature
+set (layout, table, code, SVG, control flow, the two interactive cards). The rest live in
+`corpus/` for breadth — same check, not meant to be read. Prose-only answers (no DIL) are
+not kept: this suite compares DIL rendering, not Markdown lowering.
 
 `raw.js` is a **closed program** — its only free variables are `DIL`, `__dil`,
 `__dilSafe`, `GenUI`, and five host components — so it runs in Node against a shim
@@ -38,8 +44,8 @@ claiming agreement there would be dishonest. `canonical.ts` keeps that list expl
 
 ## What is *not* compared, and cannot be
 
-The corpus is thin where interaction lives: **2 of 76 samples** carry `DIL.useState`, and
-neither writes a slot and then reads it in the same handler. Behaviour the samples never
+The corpus is thin where interaction lives: **2 of the 49 DIL samples** carry `DIL.useState`,
+and neither writes a slot and then reads it in the same handler. Behaviour the samples never
 exercise has no oracle here. Two things exist for that gap:
 
 - `known-differences.json` — every sample that does not conform yet, with the first
@@ -52,10 +58,13 @@ exercise has no oracle here. Two things exist for that gap:
 
 ## Adding a sample
 
-Copy the three files into `samples/`, run `UPDATE_CONFORMANCE=1 npm run test:conformance`,
-and review every line of the new `known-differences.json` entry. A sample that only conforms
-because everything was dropped is a bug in the comparison, not a result.
+Create `<root>/<name>/` with the three files (`scenarios/` when it demonstrates a feature
+worth reading, `corpus/` when it is breadth), then run
+`UPDATE_CONFORMANCE=1 npm run test:conformance` and review every line of the new
+`known-differences.json` entry. A sample that only conforms because everything was dropped
+is a bug in the comparison, not a result.
 
 ## Provenance
 
-`samples/` is third-party captured output, kept only as test fixtures; see `NOTICE.md`.
+`scenarios/` and `corpus/` are third-party captured output, kept only as test fixtures; see
+`NOTICE.md`.
