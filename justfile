@@ -9,6 +9,10 @@ check:
     npm run check
     npm run test:dil
 
+# The corpus is the oracle: reference artifacts vs our renderer.
+conformance:
+    npm run test:conformance
+
 build:
     npm run build:web
 

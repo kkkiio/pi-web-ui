@@ -22,5 +22,5 @@
       "@/*": ["src/web/*"]
     }
   },
-  "include": ["src/web", "evals", "vite.config.ts", "vitest.evals.config.ts"]
+  "include": ["src/web", "evals", "vite.config.ts", "vitest.evals.config.ts", "conformance"]
 }

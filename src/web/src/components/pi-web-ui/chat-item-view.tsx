@@ -1,5 +1,6 @@
 import { CopyIcon, EllipsisIcon, QuoteIcon } from "lucide-react";
 import { nanoid } from "nanoid";
+import { useMemo } from "react";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
@@ -16,7 +17,7 @@ import { historicalQuestion } from "../../core/ask-user-question";
 import { usePiWebUiStore } from "../../core/store";
 import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
-import { DilRenderer } from "../dil";
+import { type DilHost, DilHostContext, DilRenderer } from "../dil";
 
 import { ImagePreviewStrip } from "./image-preview-strip";
 import type { TranscriptQuote } from "./transcript-quote";
@@ -42,6 +43,31 @@ export function ChatItemView({
       : transcriptItem,
   );
   const questionnaire = usePiWebUiStore((state) => state.questionnaires[item.id]);
+
+  // The browser half of DIL's `GenUI` (`#48`): a card's button sends a turn directly. The
+  // composer is not involved — no draft, no prefill — and `busy` disables every card
+  // action while Pi is working.
+  const chatStatus = usePiWebUiStore((state) => state.chatStatus);
+  const connection = usePiWebUiStore((state) => state.connection);
+  const loadingTreeEntryId = usePiWebUiStore((state) => state.loadingTreeEntryId);
+  const sendPrompt = usePiWebUiStore((state) => state.sendPrompt);
+  const dilHost = useMemo<DilHost>(
+    () => ({
+      issueNewTurn: async (prompt) => {
+        await sendPrompt({ message: prompt });
+      },
+      // `error` is not busy: a rejection leaves `chatStatus` there, and `sendPrompt` allows a
+      // retry from it — so a failed card submission must stay clickable. Only the two
+      // in-flight states block, plus a Save & Send rewind (`loadingTreeEntryId`, the same
+      // condition that blocks the composer while the session tree moves).
+      busy:
+        chatStatus === "submitted" ||
+        chatStatus === "streaming" ||
+        connection !== "connected" ||
+        loadingTreeEntryId !== null,
+    }),
+    [sendPrompt, chatStatus, connection, loadingTreeEntryId],
+  );
   if (item.kind === "system") {
     return (
       <div
@@ -173,7 +199,9 @@ export function ChatItemView({
       )}
       <MessageContent className={cn("w-full", item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]')}>
         <div data-quote-source="Assistant">
-          <DilRenderer isStreaming={Boolean(item.streaming)} source={item.text} />
+          <DilHostContext.Provider value={dilHost}>
+            <DilRenderer isStreaming={Boolean(item.streaming)} source={item.text} />
+          </DilHostContext.Provider>
         </div>
       </MessageContent>
     </Message>

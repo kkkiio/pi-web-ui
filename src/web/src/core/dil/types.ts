@@ -150,9 +150,11 @@ export interface DilDocument {
 }
 
 export interface DilStateDeclaration {
-  /** State variable name — also its semantic key. */
+  /** State variable name — its semantic key when `DIL.useState` names no `key`. */
   readonly name: string;
   readonly setter: string | null;
   /** Source text of the initial value expression. */
   readonly initial: string;
+  /** `DIL.useState(init, { key: "tab" })` — the explicit, cross-render slot name. */
+  readonly key?: string;
 }

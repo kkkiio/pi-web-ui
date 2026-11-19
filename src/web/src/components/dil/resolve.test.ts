@@ -123,7 +123,7 @@ test("statements are hoisted, never rendered", () => {
   assert.equal(find(nodes, "stmt").length, 0);
 });
 
-test("DIL.useState initials join the scope and setters are inert until #48", () => {
+test("DIL.useState initials join the scope; the runtime supplies the real setters", () => {
   const scope = scopeOf("{@body const [open, setOpen] = DIL.useState(true)}");
   assert.equal(scope.open, true);
   const nodes = resolved("{#if open}<text>shown</text>{/if}", scope);

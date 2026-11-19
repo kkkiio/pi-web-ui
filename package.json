@@ -43,11 +43,12 @@
     "prepack": "npm run build:web",
     "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --types node extensions/mirror-server.ts",
     "e2e:preview": "node e2e/report/serve.mjs e2e/report-out",
-    "test:dil": "node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\"",
-    "test:dil:update": "UPDATE_SNAPSHOTS=1 node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\"",
+    "test:dil": "node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\" \"conformance/*.test.ts\"",
+    "test:dil:update": "UPDATE_SNAPSHOTS=1 node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\" \"conformance/*.test.ts\"",
     "eval:dil": "node evals/dil/run.ts",
     "eval:dil:vitest": "vitest run --config vitest.evals.config.ts",
-    "eval:dil:preview": "node evals/dil/preview.mjs"
+    "eval:dil:preview": "node evals/dil/preview.mjs",
+    "test:conformance": "node --test \"conformance/*.test.ts\""
   },
   "dependencies": {
     "@pierre/diffs": "^1.6.4",
