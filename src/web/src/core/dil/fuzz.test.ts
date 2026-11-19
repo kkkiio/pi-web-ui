@@ -241,6 +241,48 @@ test("property: the document tier splits into exactly the Markdown blocks", () =
   );
 });
 
+// Markdown cannot be the oracle once DIL tags are in the source: they lower to nodes remark
+// never sees. So each generated piece carries the node it must become.
+interface Piece {
+  readonly source: string;
+  readonly node: string;
+}
+
+const piece = fc.oneof(
+  ...(
+    [
+      { source: "<box>\n  <text>alpha</text>\n</box>", node: "box" },
+      { source: "<row>\n  <badge>beta</badge>\n</row>", node: "row" },
+      { source: "```js\nconst a = 1;\n```", node: "code-block" },
+      { source: "<divider/>", node: "divider" },
+      { source: "{#if true}<text>gamma</text>{/if}", node: "if" },
+      { source: "{#each [1, 2] as n}<text>{n}</text>{/each}", node: "each" },
+      { source: "{@body const a = 1}", node: "stmt" },
+    ] satisfies Piece[]
+  ).map((value) => fc.constant(value)),
+  paragraph.map((source) => ({ source, node: "text" })),
+  heading.map((source) => ({ source, node: "title" })),
+  list.map((source) => ({ source, node: "list" })),
+  table.map((source) => ({ source, node: "table" })),
+  fenced.map((source) => ({ source, node: "code-block" })),
+  quote.map((source) => ({ source, node: "blockquote" })),
+);
+
+test("property: DIL and Markdown blocks keep one document node each", () => {
+  fc.assert(
+    fc.property(fc.array(piece, { minLength: 1, maxLength: 5 }), (pieces) => {
+      const source = pieces.map((entry) => entry.source).join("\n\n");
+      const actual = parseDocument(source).tree.map((node) => (node.type === "element" ? node.name : node.type));
+      assert.deepEqual(
+        actual,
+        pieces.map((entry) => entry.node),
+        source,
+      );
+    }),
+    { numRuns: 60, seed: 20241118 },
+  );
+});
+
 // ---------------------------------------------------------------------------
 // O4 — evaluation and sanitizing stay inside the allowlist
 // ---------------------------------------------------------------------------
