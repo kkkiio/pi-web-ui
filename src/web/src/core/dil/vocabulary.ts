@@ -113,7 +113,8 @@ export const DIL_VOCABULARY = {
   AsyncImageGroup: { kind: "inline", support: "fallback", source: true },
 
   // Written by the model (18x in the corpus) with a raw code body; ChatGPT compiles it to
-  // its client widget, we render it as a code block.
+  // its client widget, we render it as a code block. `editable` (3 of 18) is ignored: it asks
+  // the client for an editor, which we do not have.
   CodeBlock: { kind: "container", support: "rendered", source: true },
 
   // ChatGPT's compiler output; never in our source, never lowered by us.
