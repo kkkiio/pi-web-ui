@@ -18,6 +18,7 @@ import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
 import { DilRenderer } from "../dil";
 
+import { ImagePreviewStrip } from "./image-preview-strip";
 import type { TranscriptQuote } from "./transcript-quote";
 
 export function ChatItemView({
@@ -119,6 +120,7 @@ export function ChatItemView({
                 errorText={item.errorText}
                 output={item.output as never}
               />
+              <ImagePreviewStrip images={item.outputImages} readonly />
             </ToolContent>
           )}
         </Tool>

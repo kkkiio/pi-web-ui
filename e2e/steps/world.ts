@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import { type PiWebUiHarness, startPiWebUi } from "../harness/pi-process";
 
 export type FixtureName =
+  | "image-previews"
   | "prompt-draft"
   | "chat-lifecycle"
   | "workspace-artifact"

@@ -7,14 +7,15 @@ export function syncToItems(
   previousItems: ChatItem[],
 ): ChatItem[] {
   const items: ChatItem[] = [];
-  const liveMessages = new Map<number, Array<Extract<ChatItem, { kind: "message" }>>>();
+  const liveMessages = new Map<string, Array<Extract<ChatItem, { kind: "message" }>>>();
   const previousTools = new Map<string, Extract<ChatItem, { kind: "tool" }>>();
   for (const item of previousItems) {
     if (item.kind === "tool") previousTools.set(item.id, item);
-    if (item.kind === "message" && item.role === "assistant" && item.timestamp !== undefined) {
-      const messages = liveMessages.get(item.timestamp) ?? [];
+    if (item.kind === "message" && item.timestamp !== undefined) {
+      const key = `${item.role}:${item.timestamp}`;
+      const messages = liveMessages.get(key) ?? [];
       messages.push(item);
-      liveMessages.set(item.timestamp, messages);
+      liveMessages.set(key, messages);
     }
   }
   const tools = new Map<string, ChatItem & { kind: "tool" }>();
@@ -22,6 +23,9 @@ export function syncToItems(
   for (const entry of entries) {
     if (entry.type !== "message" || !entry.message) continue;
     const message = entry.message;
+    const previous = liveMessages.get(`${message.role}:${message.timestamp}`);
+    const previousIndex = previous?.findIndex((item) => item.entryId === entry.id || !item.entryId) ?? -1;
+    const prior = previousIndex >= 0 ? previous?.splice(previousIndex, 1)[0] : undefined;
 
     if (message.role === "user") {
       const text = extractText(message.content);
@@ -29,10 +33,11 @@ export function syncToItems(
       if (text || images.length > 0) {
         items.push({
           kind: "message",
-          id: message.id || nextId("user"),
+          id: message.id || prior?.id || entry.id || nextId("user"),
           role: "user",
           text,
           images,
+          timestamp: message.timestamp,
           entryId: entry.id,
         });
       }
@@ -40,9 +45,6 @@ export function syncToItems(
       const text = extractText(message.content);
       const reasoning = extractThinking(message.content);
       const toolCalls = extractToolCalls(message.content);
-      const previous = liveMessages.get(message.timestamp ?? Number.NaN);
-      const previousIndex = previous?.findIndex((item) => item.entryId === entry.id || !item.entryId) ?? -1;
-      const prior = previousIndex >= 0 ? previous?.splice(previousIndex, 1)[0] : undefined;
       if (text || reasoning) {
         items.push({
           kind: "message",
@@ -74,16 +76,18 @@ export function syncToItems(
     } else if (message.role === "toolResult" && message.toolCallId) {
       const tool = tools.get(message.toolCallId);
       if (tool) {
+        const { text, images } = parseToolOutput(message.content);
         tool.outputDetails = message.details;
+        tool.outputImages = images;
         if (entry.id && !tool.relatedEntryIds?.includes(entry.id)) {
           tool.relatedEntryIds = [...(tool.relatedEntryIds ?? []), entry.id];
         }
         if (message.isError) {
           tool.state = "output-error";
-          tool.errorText = formatToolOutput(message.content);
+          tool.errorText = text;
         } else {
           tool.state = "output-available";
-          tool.output = formatToolOutput(message.content);
+          tool.output = text;
         }
       }
     }
@@ -113,7 +117,7 @@ export function extractThinking(content: PiMessage["content"]): string {
     .join("\n");
 }
 
-export function extractImages(content: PiMessage["content"]): PromptImage[] {
+export function extractImages(content: unknown): PromptImage[] {
   if (!Array.isArray(content)) return [];
   return content
     .filter(
@@ -124,13 +128,19 @@ export function extractImages(content: PiMessage["content"]): PromptImage[] {
         data?: string;
         mimeType?: string;
         source?: { data?: string; media_type?: string };
-      } => block.type === "image",
+      } => isContentBlock(block, "image"),
     )
     .map((block) => ({
       data: block.source?.data || block.data || "",
       mimeType: block.source?.media_type || block.mimeType || "image/png",
     }))
-    .filter((image) => image.data);
+    .filter(
+      (image) =>
+        typeof image.data === "string" &&
+        image.data.length > 0 &&
+        typeof image.mimeType === "string" &&
+        /^image\/[\w.+-]+$/i.test(image.mimeType),
+    );
 }
 
 export function extractToolCalls(content: PiMessage["content"]) {
@@ -272,27 +282,22 @@ function processImageFile(file: File): Promise<PromptImage> {
   });
 }
 
-export function formatToolOutput(result: unknown): string {
-  if (!result) return "";
+export function parseToolOutput(result: unknown): { text: string; images: PromptImage[] } {
+  if (typeof result === "object" && result !== null && "content" in result && Array.isArray(result.content)) {
+    return parseToolOutput(result.content);
+  }
 
   if (Array.isArray(result)) {
-    return result.map((block) => (isTextBlock(block) ? block.text || "" : JSON.stringify(block, null, 2))).join("\n");
+    const text = result
+      .filter((block) => !isContentBlock(block, "image"))
+      .map((block) => (isContentBlock(block, "text") ? String(block.text || "") : JSON.stringify(block, null, 2)))
+      .join("\n");
+    return { text, images: extractImages(result) };
   }
 
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "content" in result &&
-    Array.isArray((result as { content?: unknown }).content)
-  ) {
-    return formatToolOutput((result as { content: unknown[] }).content);
-  }
-
-  return typeof result === "string" ? result : JSON.stringify(result, null, 2);
+  return { text: result ? (typeof result === "string" ? result : JSON.stringify(result, null, 2)) : "", images: [] };
 }
 
-function isTextBlock(value: unknown): value is { type: "text"; text?: string } {
-  return (
-    typeof value === "object" && value !== null && "type" in value && (value as { type?: unknown }).type === "text"
-  );
+function isContentBlock<T extends string>(value: unknown, type: T): value is Record<string, unknown> & { type: T } {
+  return typeof value === "object" && value !== null && "type" in value && value.type === type;
 }

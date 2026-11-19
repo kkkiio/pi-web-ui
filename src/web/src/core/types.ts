@@ -42,6 +42,7 @@ export type ChatItem =
       input: unknown;
       output?: unknown;
       outputDetails?: unknown;
+      outputImages?: PromptImage[];
       errorText?: string;
       state: ToolState;
       open?: boolean;
