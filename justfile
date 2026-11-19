@@ -3,11 +3,21 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 fmt:
     npm run check:write
 
+# Types and lint only: the fast gate you run while editing.
 check:
     npx tsc --noEmit
     npm run check:extension
     npm run check
+
+# Every unit test, including the conformance suite.
+test:
     npm run test:dil
+
+# What CI proves, minus the browser: check + test + build.
+verify:
+    just check
+    just test
+    just build
 
 # The corpus is the oracle: reference artifacts vs our renderer.
 conformance:
