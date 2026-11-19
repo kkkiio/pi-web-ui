@@ -45,6 +45,7 @@ export const DIL_CASES: readonly DilCase[] = [
     category: "架构分层与因果流",
     prompt: "解释 pi-web-ui 中从浏览器点击发送按钮到 mirror-server.ts 再到 Pi 进程的事件流转与返回路径。",
     why: "纯文字列表看不出谁包着谁、哪一步跨了进程边界。",
+    requiresRepo: true,
     checks: [
       hasTag("box", { atLeast: 2, label: "进程边界用 <box> 分组" }),
       nested("box", "box", "嵌套 <box>（谁包着谁）"),
@@ -59,6 +60,7 @@ export const DIL_CASES: readonly DilCase[] = [
     category: "多维方案权衡",
     prompt: "对比我们做 DIL 渲染器的三种方案：iframe 沙箱、Web Worker 虚拟树、主线程 AST 求值，给出优劣与选型结论。",
     why: "窄屏 Markdown 表格会折行成麻花，大段文字对比需要上下翻屏记忆。",
+    requiresRepo: true,
     checks: [
       hasTag("grid", { label: "三种方案用 <grid> 并排" }),
       attributeContains("grid", "columns", "3", "grid columns={3}"),

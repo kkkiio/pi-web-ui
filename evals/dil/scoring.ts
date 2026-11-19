@@ -25,6 +25,8 @@ export interface DilCase {
   readonly prompt: string;
   /** Why Markdown alone is the wrong shape for this prompt. */
   readonly why: string;
+  /** True when the prompt asks about this repository specifically (skipped in isolated runs to avoid eval leakage). */
+  readonly requiresRepo?: boolean;
   readonly checks: readonly CaseCheck[];
 }
 

@@ -85,21 +85,23 @@ export interface DilAgent {
   run(prompt: string): Promise<AgentRun>;
 }
 
+export type EvalThinkingLevel = NonNullable<Parameters<typeof createAgentSessionFromServices>[0]["thinkingLevel"]>;
+
 export interface AgentOptions {
   readonly provider: string;
   readonly model: string;
   /**
-   * Working directory the agent may inspect. Default: this repository — the real product
-   * situation (pi-web-ui runs inside the project it is asked about).
+   * Optional working directory. By default each run gets a fresh empty directory inside
+   * `tmpdir()` so the agent cannot see this repository's `evals/` fixtures or DIL source.
    */
   readonly cwd?: string;
   /**
-   * Tools the agent may use. Default: read-only inspection (`read`, `grep`, `find`,
-   * `ls`) — the agent must be able to look at the project, but the eval never lets it
-   * write. `[]` disables tools, which measures raw model willingness but makes coding
-   * models emit pseudo tool calls instead of an answer.
+   * Tools the agent may use. Default: Pi's built-in coding tools (`read`, `bash`, `edit`,
+   * `write`) so the eval matches real Pi sessions.
    */
   readonly tools?: readonly string[];
+  /** Thinking level. Default: `DIL_EVAL_THINKING` env var or `"high"` (clamped by Pi). */
+  readonly thinkingLevel?: EvalThinkingLevel;
 }
 
 export async function createDilAgent(options: AgentOptions): Promise<DilAgent> {
@@ -117,11 +119,12 @@ export async function createDilAgent(options: AgentOptions): Promise<DilAgent> {
     throw new Error(`unknown model ${options.provider}/${options.model}. Available: ${available}`);
   }
 
-  const cwd = options.cwd ?? join(HERE, "..", "..");
-  const tools = options.tools ?? ["read", "grep", "find", "ls"];
+  const tools = options.tools ?? ["read", "bash", "edit", "write"];
+  const thinkingLevel =
+    options.thinkingLevel ?? (process.env.DIL_EVAL_THINKING as EvalThinkingLevel | undefined) ?? "high";
   return {
     label: `${model.provider}/${model.id}`,
-    run: (prompt) => runPiSession(modelRuntime, model, prompt, { cwd, tools }),
+    run: (prompt) => runPiSession(modelRuntime, model, prompt, { cwd: options.cwd, tools, thinkingLevel }),
   };
 }
 
@@ -131,13 +134,15 @@ async function runPiSession(
   modelRuntime: ModelRuntime,
   model: ResolvedModel,
   prompt: string,
-  layout: { readonly cwd: string; readonly tools: readonly string[] },
+  layout: { readonly cwd?: string; readonly tools: readonly string[]; readonly thinkingLevel: EvalThinkingLevel },
 ): Promise<AgentRun> {
-  // The workspace is the project itself; only Pi's global config is isolated per run so
-  // the user's extensions/skills cannot leak into the measurement.
+  // Isolate both Pi's global config and the working directory per run. By default the
+  // workspace is an empty temp directory so eval cases/ideal answers cannot leak to the agent.
   const root = await mkdtemp(join(tmpdir(), "dil-eval-"));
   const agentDir = join(root, "agent");
+  const workspace = layout.cwd ?? join(root, "workspace");
   await mkdir(agentDir, { recursive: true });
+  if (!layout.cwd) await mkdir(workspace, { recursive: true });
 
   // Exactly the production mechanism: a new `<dil>` section, diffed by Pi into one
   // mid-conversation system patch instead of rewriting the prompt head.
@@ -154,24 +159,23 @@ async function runPiSession(
   ];
 
   const services = await createAgentSessionServices({
-    cwd: layout.cwd,
+    cwd: workspace,
     agentDir,
     modelRuntime,
     resourceLoaderOptions: {
       extensionFactories,
       noSkills: true,
       noPromptTemplates: true,
-      noContextFiles: true,
       noThemes: true,
     },
   });
 
-  const sessionManager = SessionManager.create(layout.cwd, join(root, "sessions"));
+  const sessionManager = SessionManager.create(workspace, join(root, "sessions"));
   const { session } = await createAgentSessionFromServices({
     services,
     sessionManager,
     model,
-    thinkingLevel: "off",
+    thinkingLevel: layout.thinkingLevel,
     ...(layout.tools.length > 0 ? { tools: [...layout.tools] } : { noTools: "all" as const }),
   });
 

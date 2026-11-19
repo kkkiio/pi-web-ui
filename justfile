@@ -38,6 +38,20 @@ coverage:
       "src/web/src/core/dil/*.test.ts" "src/web/src/components/dil/*.test.ts" \
       "extensions/*.test.ts" "evals/dil/*.test.ts"
 
+# Run DIL evals via vitest-evals for one or more models (regenerates examples.gen.ts first).
+# Provider comes from `.env` (DIL_EVAL_PROVIDER) or a `provider/model` prefix.
+#   just eval                                            # all 3 default models
+#   just eval glm-5.3                                    # single model
+#   just eval deepseek-v4.1-flash glm-5.3                # multiple models
+#   just eval opencode-go/glm-5.3                        # explicit provider/model
+#   DIL_EVAL_THINKING=off just eval deepseek-v4.1-flash  # override thinking level
+eval +models="deepseek-v4.1-flash glm-5.3 glm-5.3-flash": gen
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -- {{models}}
+    IFS=,
+    DIL_EVAL_MODELS="$*" npx vitest run --config vitest.evals.config.ts --reporter=verbose
+
 # Render a DIL eval run through the product renderer and open the page.
 #   just preview-eval               # the last live report, else the recordings
 #   just preview-eval recordings    # the committed recordings only
