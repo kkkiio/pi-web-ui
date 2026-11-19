@@ -15,6 +15,7 @@
       "evals/**/*.ts",
       "evals/**/*.tsx",
       "extensions/**/*.ts",
+      "!extensions/*.gen.ts",
       "package.json",
       "public/**/*.js",
       "public/**/*.json",

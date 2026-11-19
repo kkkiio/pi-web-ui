@@ -3,6 +3,10 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 fmt:
     npm run check:write
 
+# Regenerate committed codegen artifacts (e.g. extensions/examples.gen.ts).
+gen:
+    node scripts/gen-dil-examples.mjs
+
 # Types and lint only: the fast gate you run while editing.
 check:
     npx tsc --noEmit

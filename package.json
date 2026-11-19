@@ -41,7 +41,7 @@
     "ci:biome": "biome ci .",
     "prepare": "npm run build:web",
     "prepack": "npm run build:web",
-    "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --types node extensions/mirror-server.ts",
+    "check:extension": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --moduleResolution bundler --module esnext --target es2022 --esModuleInterop --allowImportingTsExtensions --types node extensions/mirror-server.ts",
     "e2e:preview": "node e2e/report/serve.mjs e2e/report-out",
     "test:dil": "node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\" \"conformance/*.test.ts\"",
     "test:dil:update": "UPDATE_SNAPSHOTS=1 node --test \"src/web/src/core/dil/*.test.ts\" \"src/web/src/components/dil/*.test.ts\" \"extensions/*.test.ts\" \"evals/dil/*.test.ts\" \"conformance/*.test.ts\"",

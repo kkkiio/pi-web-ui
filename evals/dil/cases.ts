@@ -37,7 +37,7 @@ import {
   noDil,
 } from "./scoring.ts";
 
-export { DIL_SYSTEM_PROMPT } from "../../extensions/dil-system-prompt.ts";
+export { DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
 
 export const DIL_CASES: readonly DilCase[] = [
   {

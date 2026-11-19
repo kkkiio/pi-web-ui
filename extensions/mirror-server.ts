@@ -16,8 +16,8 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { WebSocket, WebSocketServer } from "ws";
 import { createQuestionTool, QUESTION_CHANNEL } from "./ask-user-question";
-import { createDilPrompt } from "./dil-prompt";
 import { readGitChanges } from "./git-changes";
+import { createDilPrompt } from "./system-prompt";
 
 type SettingsData = {
   port?: string | number;

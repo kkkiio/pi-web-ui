@@ -31,7 +31,7 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 
-import { DIL_SYSTEM_PROMPT } from "../../extensions/dil-system-prompt.ts";
+import { DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

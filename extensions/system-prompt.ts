@@ -22,65 +22,36 @@
  * `svg` — parametric geometry: nested `{#each}`, arithmetic coordinates, a marker.
  */
 
-export const DIL_EXAMPLE_PROPORTIONS = `<box gap={2} padding={3} background="surface-secondary" radius="lg">
-  <text weight="semibold">Request path</text>
-  {#each [{ label: "Browser", p: 62 }, { label: "mirror-server", p: 28 }] as hop}
-    <row justify="between" align="center" gap={2}>
-      <caption>{hop.label}</caption>
-      <text tabularNums>{hop.p}%</text>
-    </row>
-    <box height="8px" radius="full" background="surface-tertiary">
-      <box height="100%" radius="full" width={\`\${hop.p}%\`} background="surface"/>
-    </box>
-  {/each}
-</box>`;
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { DIL_EXAMPLE_FLOW, DIL_EXAMPLE_OBJECTS, DIL_EXAMPLE_PROGRESS, DIL_EXAMPLE_SVG } from "./examples.gen.ts";
 
-export const DIL_EXAMPLE_CONTAINMENT = `<box gap={2} padding={3} border radius="lg">
-  <title>Write path</title>
-  <row gap={2} align="center">
-    <badge color="success">browser</badge>
-    <icon name="arrow-right" size="xs"/>
-    <box padding={{ x: 2, y: 1 }} background="surface-secondary" radius="md">
-      <caption>mirror-server</caption>
-    </box>
-    <icon name="arrow-right" size="xs"/>
-    <badge color="warning">pi session</badge>
-  </row>
-  <caption>A caption can say what the shape means.</caption>
-</box>`;
-
-export const DIL_EXAMPLE_SVG = `<svg viewBox="0 0 300 130" width="100%">
-  <defs>
-    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-      <path d="M0 0 L6 3 L0 6 Z" fill="currentColor"/>
-    </marker>
-  </defs>
-  {#each Array.from({ length: 4 }) as r}
-    {#each Array.from({ length: 8 }) as c}
-      <rect x={30 + c * 32} y={10 + r * 24} width="28" height="20" rx="3" fill={c % 2 === 0 ? "#83b4e2" : "#abcbed"} fillOpacity=".85"/>
-    {/each}
-  {/each}
-  <line x1="20" y1="108" x2="280" y2="108" stroke="currentColor" markerEnd="url(#arrow)"/>
-  <text x="150" y="124" fontSize="9" textAnchor="middle" fill="currentColor">4 × 8 tiles</text>
-</svg>`;
+export { DIL_EXAMPLE_FLOW, DIL_EXAMPLE_OBJECTS, DIL_EXAMPLE_PROGRESS, DIL_EXAMPLE_SVG };
 
 export const DIL_PROMPT_EXAMPLES = {
-  proportions: DIL_EXAMPLE_PROPORTIONS,
-  containment: DIL_EXAMPLE_CONTAINMENT,
+  progress: DIL_EXAMPLE_PROGRESS,
+  flow: DIL_EXAMPLE_FLOW,
+  objects: DIL_EXAMPLE_OBJECTS,
   svg: DIL_EXAMPLE_SVG,
 } as const;
 
-export const DIL_SYSTEM_PROMPT = `Pi Web UI supports DIL (Dynamic Interface Language), a Markdown superset for what prose describes badly: containment, side-by-side comparison, flow, proportions.
+export const DIL_SYSTEM_PROMPT = `You are encouraged to answer user using DIL (Dynamic Interface Language), a Markdown superset for visual explanation.
+Less words, more vibe.
 
-Keep paragraphs, lists, tables, fenced code and inline formatting (bold, italic, inline code) in Markdown. Put spatial structure in DIL, output it directly (no code fence), and close every tag.
+For example, if you want to describe progress of works:
 
-${DIL_EXAMPLE_PROPORTIONS}
+${DIL_EXAMPLE_PROGRESS}
 
-${DIL_EXAMPLE_CONTAINMENT}
+If you want to describe flow diagram:
+
+${DIL_EXAMPLE_FLOW}
+
+If you want to mention objects with their graphics or icons:
+
+${DIL_EXAMPLE_OBJECTS}
+
+If you want to draw some custom graphics:
 
 ${DIL_EXAMPLE_SVG}
-
-That is the whole idea: a container for what groups, a repeated block for what varies, and an expression wherever a number depends on the data.
 
 Reference — every tag and value the Web UI renders:
 
@@ -97,3 +68,32 @@ Attributes:
 - Surface: background="surface|surface-secondary|surface-tertiary|card|muted|accent|success|warning|danger|info", radius="sm|md|lg|xl|full", border, border={{size: 1, color: "success"}}
 - Text: size="2xs|xs|sm|md|lg|xl|2xl", weight="medium|semibold|bold", color="secondary|success|warning|danger", textAlign, tabularNums
 - Sizing: width, height, flex. Alignment: align="center|start|baseline", justify="between|center"`;
+
+export interface DilPromptController {
+  activate(): void;
+  deactivate(): void;
+  readonly active: boolean;
+}
+
+export function createDilPrompt(pi: ExtensionAPI): DilPromptController {
+  let dispose: (() => void) | null = null;
+
+  return {
+    get active() {
+      return dispose !== null;
+    },
+
+    activate() {
+      if (dispose) return;
+      dispose = pi.on("before_agent_start", async (event) => {
+        // Section names must match /^[a-z][a-z0-9_-]*$/; `dil` is rendered as `<dil>…</dil>`.
+        event.systemPromptOptions.sections.dil = DIL_SYSTEM_PROMPT;
+      });
+    },
+
+    deactivate() {
+      dispose?.();
+      dispose = null;
+    },
+  };
+}

@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DIL_SYSTEM_PROMPT } from "../../extensions/dil-system-prompt.ts";
+import { DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
 import { DilRenderer } from "../../src/web/src/components/dil/dil-renderer";
 import { DIL_CASES } from "./cases.ts";
 import { scoreCase } from "./scoring.ts";
