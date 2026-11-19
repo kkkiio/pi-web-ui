@@ -112,6 +112,7 @@ Then("the math, the code block and the connected list are rendered", async ({ pa
   const list = log.locator(".dil-root ol").first();
   await expect(list).toBeVisible();
   await expect(list).toHaveClass(/space-y-2/);
+  await expect(list).toHaveClass(/border-l-2/);
 });
 
 Then("the DIL diagram is rendered", async ({ page }) => {
