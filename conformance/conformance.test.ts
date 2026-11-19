@@ -14,8 +14,8 @@
  *     components we do not render. Those subtrees are dropped from *both* sides and
  *     counted in `skipped`, so a sample can never look aligned by having everything
  *     dropped.
- *   - **The corpus bounds the questions we can ask.** Only two samples are interactive,
- *     so behaviour the samples never exercise has no oracle here; that is what
+ *   - **The samples bound the questions we can ask.** Only two of them are interactive, so
+ *     behaviour they never exercise has no oracle here; that is what
  *     `known-differences.json` and the derived probes exist for.
  */
 
@@ -33,15 +33,11 @@ const knownFile = join(here, "known-differences.json");
 const update = process.env.UPDATE_CONFORMANCE === "1";
 
 /**
- * Two tiers, one walk:
- *
- *   `scenarios/<name>/`  curated, one per feature set — what a developer reads first
- *   `corpus/<id>/`       every other captured DIL message — breadth for the same check
- *
- * A sample is one directory holding `<name>.dil.md` (what the model wrote), `<name>.raw.js`
- * (what the reference compiled it into) and `<name>.data.json` (what the client supplied).
+ * A sample is one directory under `scenarios/`, named after what it demonstrates, holding
+ * `<name>.dil.md` (what the model wrote), `<name>.raw.js` (what the reference compiled it
+ * into) and `<name>.data.json` (what the client supplied).
  */
-const SAMPLE_ROOTS = ["scenarios", "corpus"] as const;
+const SAMPLE_ROOTS = ["scenarios"] as const;
 
 interface Sample {
   readonly name: string;
@@ -94,7 +90,7 @@ function exists(): boolean {
   }
 }
 
-test("the corpus renders the same as its captured program", () => {
+test("every scenario renders the same as its captured program", () => {
   const actual: Record<string, string> = {};
   const all = samples();
   for (const sample of all) {
