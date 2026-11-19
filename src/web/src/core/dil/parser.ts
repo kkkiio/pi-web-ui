@@ -33,7 +33,7 @@ import type {
 } from "./types.ts";
 
 /** Elements whose content is literal text, never DIL: code samples are full of braces. */
-export const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["code", "pre", "code-block"]);
+export const RAW_TEXT_TAGS: ReadonlySet<string> = new Set(["code", "code-block", "CodeBlock"]);
 
 const TAG_NAME = /[A-Za-z_$][\w$]*(?:[-.][A-Za-z_$][\w$]*)*/y;
 const ATTR_NAME = /[A-Za-z_$][\w$:-]*/y;

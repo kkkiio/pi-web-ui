@@ -16,7 +16,7 @@
  *   source only    e.g. `box` `row` `icon` `badge` `Cite` `CodeBlock`
  *   lowered only   e.g. `bold` `italic` `code` `math` `table*` `blockquote` `code-block`
  *   both           e.g. `text` `title` `list` `list-item` `divider` `Link`
- *   neither        `pre` (grammar tolerance), `__chatgptClientDefinedWidget` (ChatGPT's)
+ *   neither        `__chatgptClientDefinedWidget` (ChatGPT's compiler output)
  */
 
 /** Whether a tag belongs to the prose flow or stands on its own. */
@@ -78,7 +78,6 @@ export const DIL_VOCABULARY = {
   // Code leaves. A fence is Markdown in the source; our lowering represents it as
   // `code-block`, which no model writes. ChatGPT compiles a fence to its client widget.
   "code-block": { kind: "container", support: "rendered", lowered: true, note: "our fence target" },
-  pre: { kind: "container", support: "fallback", note: "grammar tolerance; nothing produces it" },
 
   // Lists and tables: Markdown lowers here, and the model occasionally writes the tags.
   list: { kind: "container", support: "rendered", source: true, lowered: true },
@@ -113,8 +112,9 @@ export const DIL_VOCABULARY = {
   AsyncImage: { kind: "inline", support: "fallback", source: true },
   AsyncImageGroup: { kind: "inline", support: "fallback", source: true },
 
-  // Written by the model as the code-block tag; ChatGPT compiles it to a client widget.
-  CodeBlock: { kind: "container", support: "fallback", source: true },
+  // Written by the model (18x in the corpus) with a raw code body; ChatGPT compiles it to
+  // its client widget, we render it as a code block.
+  CodeBlock: { kind: "container", support: "rendered", source: true },
 
   // ChatGPT's compiler output; never in our source, never lowered by us.
   __chatgptClientDefinedWidget: { kind: "container", support: "internal" },

@@ -146,7 +146,7 @@ export function useThrottledText(source: string, isStreaming: boolean, throttleM
 // Resolved node → JSX
 // ---------------------------------------------------------------------------
 
-const CODE_FAMILY: ReadonlySet<string> = new Set(["code-block", "math"]);
+const CODE_FAMILY: ReadonlySet<string> = new Set(["code-block", "CodeBlock", "math"]);
 
 /**
  * Inside `<svg>`, every child is SVG: geometry is a child element, and a DIL container in
@@ -303,6 +303,16 @@ function renderNode(node: ResolvedNode, key: string, svg: SvgContext | null) {
     // Primitives, not nodes: `memo` skips a block that finished while the tail streamed.
     if (name === "math") {
       return <MathLeaf key={key} value={textValue(props.value)} block={props.block === true} />;
+    }
+    if (name === "CodeBlock") {
+      // The model's `<CodeBlock>` carries its own padding newlines; a fence does not.
+      return (
+        <CodeBlockLeaf
+          key={key}
+          code={plainText(children).replace(/^\n+|\n+$/g, "")}
+          language={textValue(props.language) || undefined}
+        />
+      );
     }
     return <CodeBlockLeaf key={key} code={plainText(children)} language={textValue(props.language) || undefined} />;
   }

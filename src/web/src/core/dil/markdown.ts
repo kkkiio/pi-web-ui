@@ -333,7 +333,7 @@ function lowerInlineProse(input: DilNode[], sourceLength?: number): DilNode[] {
     piece.nodes.forEach((node, index) => {
       if (node.type === "text") {
         if (node.raw) {
-          // `<code>`, `<code-block>` and `<pre>` hold literal text: `**x**` stays four
+          // `<code>`, `<code-block>` and `<CodeBlock>` hold literal text: `**x**` stays four
           // characters, and the tail is not repaired because nothing here is Markdown.
           children.push(node);
           return;

@@ -58,7 +58,7 @@ Following the grammar's lexical modes, the host parser owns **all** DIL syntax; 
 Markdown lexer only ever receives prose spans (`DilTextNode`):
 
 ```
-source ─┬─ ``` / ~~~ / $$ / \[  and  `code` / \(math\) and <code>/<pre>   raw text, never parsed
+source ─┬─ ``` / ~~~ / $$ / \[  and  `code` / \(math\) / <code-block> / <CodeBlock>   raw text, never parsed
         ├─ {@body …}  {#if …}  {#each …}  {:else}  {/…}                block nodes
         ├─ <tag attr={…}> … </tag>                                      element nodes
         └─ everything else                                              ProseSpan
@@ -126,7 +126,7 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 ### What it parses
 
 1. **Prose + DIL mixed at the top level.** Fenced blocks (` ``` `, `~~~`, `$$`, `\[`),
-   inline code (`` ` ``) and raw-text elements (`<code>`, `<pre>`, `<code-block>`) are
+   inline code (`` ` ``) and raw-text elements (`<code>`, `<code-block>`, `<CodeBlock>`) are
    opaque: `<box>` or `{#each}` inside them stays literal text.
 2. **Layout, typography, lists, tables, SVG nodes.** Tags are taken as written — the
    parser has no component vocabulary; `src/components/dil` owns the rendering catalog.

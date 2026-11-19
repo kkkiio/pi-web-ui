@@ -4,7 +4,7 @@
  * DIL source is JSX-like, so models sometimes escape text as HTML (`Usage &amp;
  * Billing`). The structural parser leaves prose entities as written and the Markdown
  * layer decodes them — decoding in both places would decode twice — so the decoder is
- * shared: `parser.ts` uses it for raw text (`<code>`, `<pre>`), `inline.ts` for
+ * shared: `parser.ts` uses it for raw text (`<code>`, `<code-block>`), `inline.ts` for
  * element-interior prose.
  */
 

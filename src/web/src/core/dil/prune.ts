@@ -25,7 +25,6 @@ export const CONTAINER_TAGS: ReadonlySet<string> = new Set([
   "svg",
   "defs",
   "code-block",
-  "pre",
 ]);
 
 const hasContent = (children: readonly DilNode[]): boolean =>

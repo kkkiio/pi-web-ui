@@ -44,6 +44,7 @@ test("support says what the renderer does with a tag", () => {
   assert.equal(tagEntry("Entity")?.support, "fallback");
   assert.equal(tagEntry("radio")?.support, "fallback", "#48 controls");
   assert.equal(tagEntry("__chatgptClientDefinedWidget")?.support, "internal");
+  assert.equal(tagEntry("CodeBlock")?.support, "rendered", "the model's code block renders");
 });
 
 test("SVG primitives are marked, because their tag names collide with typography", () => {
@@ -72,9 +73,7 @@ test("source and lowered say where a tag can come from", () => {
   // Source only: layout is written, never produced by Markdown.
   assert.equal(tagEntry("box")?.source, true);
   assert.equal(tagEntry("box")?.lowered, undefined);
-  // Neither: grammar tolerance, and ChatGPT's own compiler placeholder.
-  assert.equal(tagEntry("pre")?.source, undefined);
-  assert.equal(tagEntry("pre")?.lowered, undefined);
+  // Neither: ChatGPT's own compiler placeholder.
   assert.equal(tagEntry("__chatgptClientDefinedWidget")?.source, undefined);
   assert.equal(tagEntry("__chatgptClientDefinedWidget")?.lowered, undefined);
 });

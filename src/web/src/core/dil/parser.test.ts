@@ -116,7 +116,7 @@ test("keeps fenced code blocks literal, including DIL-looking content", () => {
   assert.equal(elements(result.nodes, "box").length, 0);
 });
 
-test("keeps <code>, <pre> and <code-block> content raw", () => {
+test("keeps <code>, <code-block> and <CodeBlock> content raw", () => {
   const result = parse("<code>for i := 0; i < n; i++ { wg.Add(1) }</code>");
   assert.equal(result.diagnosticSummary, "clean");
 
@@ -126,6 +126,14 @@ test("keeps <code>, <pre> and <code-block> content raw", () => {
   assert.ok(child.type === "text");
   assert.equal(child.raw, true);
   assert.equal(child.value, "for i := 0; i < n; i++ { wg.Add(1) }");
+
+  // `CodeBlock` is the tag the model actually writes for a code block (18x in the corpus).
+  // Its body is raw too: `**` in JSON or a script stays four characters.
+  const block = only(parse('<CodeBlock language="json">{"a": "**", "b": "`"}</CodeBlock>').nodes, "CodeBlock");
+  const body = block.children[0];
+  assert.ok(body.type === "text");
+  assert.equal(body.raw, true);
+  assert.equal(body.value, '{"a": "**", "b": "`"}');
 });
 
 test("an arrow function inside an attribute does not close the tag", () => {

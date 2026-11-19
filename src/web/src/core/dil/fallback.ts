@@ -80,9 +80,10 @@ function renderElement(node: DilElementNode, ctx: RenderContext): string {
       if (!value) return "";
       return hasAttribute(node, "block") ? `\n\n$$\n${value}\n$$\n\n` : `$${value}$`;
     }
-    case "code-block": {
+    case "code-block":
+    case "CodeBlock": {
       const language = attributeValue(node, "language") ?? "";
-      return `\n\n\`\`\`${language}\n${rawText(node)}\n\`\`\`\n\n`;
+      return `\n\n\`\`\`${language}\n${codeBody(node)}\n\`\`\`\n\n`;
     }
     case "divider":
       return "\n\n---\n\n";
@@ -193,6 +194,11 @@ function renderTable(node: DilElementNode, ctx: RenderContext): string {
   const columns = Math.max(1, rendered[0].split("|").length - 2);
   rendered.splice(1, 0, `| ${Array.from({ length: columns }, () => "---").join(" | ")} |`);
   return `\n\n${rendered.join("\n")}\n\n`;
+}
+
+/** A code body without the newlines that only pad it (`<CodeBlock>` carries them). */
+function codeBody(node: DilElementNode): string {
+  return rawText(node).replace(/^\n+|\n+$/g, "");
 }
 
 function rawText(node: DilElementNode): string {

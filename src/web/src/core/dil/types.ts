@@ -20,7 +20,7 @@ export interface DilAttribute {
 
 /**
  * ProseSpan — one stretch of text between DIL constructs, the only input the Markdown
- * lexer ever sees. `raw` text comes from `<code>`/`<pre>` and is never lowered.
+ * lexer ever sees. `raw` text comes from `<code>`/`<code-block>`/`<CodeBlock>` and is never lowered.
  */
 export interface DilTextNode {
   readonly type: "text";

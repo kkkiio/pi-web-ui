@@ -11,7 +11,7 @@
 (* Top-level document allows full block Markdown (headings, GFM tables,       *)
 (* lists, blockquotes, horizontal rules) alongside DIL constructs.            *)
 (* Indented code blocks (4 spaces) do NOT exist in DIL; code is always fenced *)
-(* (``` / ~~~) or inside <code> / <pre> / <code-block>.                       *)
+(* (``` / ~~~) or inside <code> / <code-block> / <CodeBlock>.                 *)
 Document        ::= DocumentNode* ;
 
 DocumentNode    ::= AppDirective
@@ -94,7 +94,7 @@ NormalElement   ::= "<" TagName ( Ws+ Attribute )* Ws*
                     ( "/>"
                     | ">" ElementChild* "</" TagName Ws* ">" ) ;
 
-RawTagName      ::= "code" | "pre" | "code-block" ;
+RawTagName      ::= "code" | "code-block" | "CodeBlock" ;
 
 TagName         ::= Identifier ( [-.] Identifier )* ;
 
