@@ -65,7 +65,16 @@ const table = fc.array(fc.tuple(word, word), { minLength: 1, maxLength: 2 }).map
 
 const fenced = fc.tuple(word, word).map(([language, body]) => `\`\`\`${language}\n${body}\n\`\`\``);
 
-const block = fc.oneof(paragraph, list, table, fenced);
+const heading = fc.tuple(fc.integer({ min: 1, max: 3 }), word).map(([depth, text]) => `${"#".repeat(depth)} ${text}`);
+
+const quote = fc
+  .array(word, { minLength: 1, maxLength: 2 })
+  .map((lines) => lines.map((line) => `> ${line}`).join("\n"));
+
+/** Alone between blank lines, so this stays a thematic break rather than a setext heading. */
+const rule = fc.constant("---");
+
+const block = fc.oneof(paragraph, heading, list, table, fenced, quote, rule);
 
 const markdownDocument = fc.array(block, { minLength: 1, maxLength: 3 }).map((blocks) => blocks.join("\n\n"));
 
@@ -198,6 +207,37 @@ test("property: a loose list stays one list", () => {
       assert.equal(items_.length, items.length, `lost list items for:\n${source}`);
     }),
     { numRuns: 40, seed: 20241118 },
+  );
+});
+
+/** What the document tier must emit for one Markdown block. */
+const DIL_NODE_FOR_MDAST: Record<string, string> = {
+  paragraph: "text",
+  heading: "title",
+  list: "list",
+  blockquote: "blockquote",
+  thematicBreak: "divider",
+  code: "code-block",
+  table: "table",
+};
+
+test("property: the document tier splits into exactly the Markdown blocks", () => {
+  // Markdown is the oracle for *where* the boundaries are: one block in, one DIL node out,
+  // in the same order. A prose run that merges two blocks (or a block that drifts out of
+  // its list) shows up as a count or order mismatch here.
+  fc.assert(
+    fc.property(fc.array(block, { minLength: 1, maxLength: 5 }), (blocks) => {
+      const source = blocks.join("\n\n");
+      const expected = mdastParser.parse(source).children.map((node) => DIL_NODE_FOR_MDAST[node.type]);
+      assert.ok(
+        expected.every((name) => name !== undefined),
+        `generator produced a block the mapping does not cover: ${source}`,
+      );
+
+      const actual = parseDocument(source).tree.map((node) => (node.type === "element" ? node.name : node.type));
+      assert.deepEqual(actual, expected, source);
+    }),
+    { numRuns: 60, seed: 20241118 },
   );
 });
 
