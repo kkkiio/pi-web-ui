@@ -2,20 +2,21 @@
  * The DIL tag vocabulary — one table for run membership, emphasis spanning, prompt copy and
  * renderer routing.
  *
- * `kind` is what ChatGPT's compiler knows about a component, not a guess from source layout:
- * in `dil/*.formatted.js`, `Cite` sits next to `code` inside a `<text>`, so it is an inline
- * atom wherever the model puts it.
+ * Two independent questions, two flags:
  *
- * Evidence:
- *   observed  in `dil/*.source.md` and `*.formatted.js` — 37 tags, including the inline
- *             `Cite`/`Entity`/`AsyncImage*` that `dil.ebnf` §7.3 (our own transcription)
- *             does not list.
- *   ours      no corpus evidence: `code-block`/`pre` (ChatGPT hands fenced code to
- *             `__chatgptClientDefinedWidget`), and the SVG names `svg-map.ts` renders beyond
- *             what the samples used (`g`/`circle`/`ellipse`/`polygon`/`polyline`).
+ *   kind     does it sit in a sentence?   (`kind: "inline"` joins a prose run; the compiler
+ *            output shows `Cite` next to `code` inside `<text>`, so that is a property of the
+ *            component, not of the line it was written on)
+ *   source   may the model write it?       corpus + the prompt
+ *   lowered  does our lowering emit it?    Markdown → `title`/`list`/`table`/`bold`/…
  *
- * Consumers: `INLINE_TAGS` (parser), `support` (the prompt lists only `rendered`), `svg` (also
- * a primitive inside `<svg>`; `text` is both).
+ * Every tag is at least tolerated (the parser keeps unknown tags, the renderer falls back),
+ * so the flags describe where a tag *comes from*, not whether it is legal:
+ *
+ *   source only    e.g. `box` `row` `icon` `badge` `Cite` `CodeBlock`
+ *   lowered only   e.g. `bold` `italic` `code` `math` `table*` `blockquote` `code-block`
+ *   both           e.g. `text` `title` `list` `list-item` `divider` `Link`
+ *   neither        `pre` (grammar tolerance), `__chatgptClientDefinedWidget` (ChatGPT's)
  */
 
 /** Whether a tag belongs to the prose flow or stands on its own. */
@@ -31,78 +32,91 @@ export type TagSupport = "rendered" | "fallback" | "internal";
 export interface TagEntry {
   readonly kind: TagKind;
   readonly support: TagSupport;
+  /** The model may write it: observed in the corpus, or taught by the prompt. */
+  readonly source?: true;
+  /** Our lowering emits it: a Markdown construct or a fence becomes this tag. */
+  readonly lowered?: true;
   /** Also a primitive when it appears inside `<svg>` (see `svg-map.ts`). */
   readonly svg?: true;
   readonly note?: string;
 }
 
 export const DIL_VOCABULARY = {
-  // Layout — the prompt's `<box>`/`<row>`/`<col>`/`<grid>` family.
-  box: { kind: "container", support: "rendered" },
-  row: { kind: "container", support: "rendered" },
-  col: { kind: "container", support: "rendered" },
-  grid: { kind: "container", support: "rendered" },
-  "grid-item": { kind: "container", support: "rendered" },
+  // Layout — written by the model, never produced by Markdown.
+  box: { kind: "container", support: "rendered", source: true },
+  row: { kind: "container", support: "rendered", source: true },
+  col: { kind: "container", support: "rendered", source: true },
+  grid: { kind: "container", support: "rendered", source: true },
+  "grid-item": { kind: "container", support: "rendered", source: true },
 
-  // Typography. `text`/`title`/`caption` are the compiled form of a Markdown paragraph,
-  // heading and aside — containers that hold prose, never members of it.
-  title: { kind: "container", support: "rendered" },
-  text: { kind: "container", support: "rendered", svg: true, note: "SVG text inside `<svg>`" },
-  caption: { kind: "container", support: "rendered" },
-  divider: { kind: "container", support: "rendered" },
-  blockquote: { kind: "container", support: "rendered" },
-
-  // Inline atoms — the ones a sentence may contain.
-  bold: { kind: "inline", support: "rendered" },
-  italic: { kind: "inline", support: "rendered" },
-  code: { kind: "inline", support: "rendered" },
-  badge: { kind: "inline", support: "rendered" },
-  icon: { kind: "inline", support: "rendered" },
-  math: { kind: "inline", support: "rendered", note: "`block` attribute for display math" },
-  Link: { kind: "inline", support: "rendered" },
-
-  // Code leaves.
-  "code-block": {
+  // Typography. A Markdown block lowers to `title`/`text`/`divider`; the model also writes
+  // `<text>` directly (209 in the corpus), so both flags apply.
+  title: { kind: "container", support: "rendered", source: true, lowered: true },
+  text: {
     kind: "container",
     support: "rendered",
-    note: "fence target; ChatGPT uses a client widget instead",
+    source: true,
+    lowered: true,
+    svg: true,
+    note: "SVG text inside `<svg>`",
   },
-  pre: { kind: "container", support: "fallback", note: "raw text element; not in the corpus" },
+  caption: { kind: "container", support: "rendered", source: true },
+  divider: { kind: "container", support: "rendered", source: true, lowered: true },
+  blockquote: { kind: "container", support: "rendered", lowered: true },
 
-  // Lists and tables (produced by Markdown lowering and written directly).
-  list: { kind: "container", support: "rendered" },
-  "list-item": { kind: "container", support: "rendered" },
-  table: { kind: "container", support: "rendered" },
-  "table-row": { kind: "container", support: "rendered" },
-  "table-cell": { kind: "container", support: "rendered" },
+  // Inline atoms — the ones a sentence may contain. `bold`/`italic`/`code`/`math` are
+  // Markdown's own syntax (`**x**`, `` `x` ``, `$x$`) lowered to tags; the model writes none
+  // of them, so they are lowered-only.
+  bold: { kind: "inline", support: "rendered", lowered: true },
+  italic: { kind: "inline", support: "rendered", lowered: true },
+  code: { kind: "inline", support: "rendered", lowered: true },
+  math: { kind: "inline", support: "rendered", lowered: true, note: "`block` attribute for display math" },
+  badge: { kind: "inline", support: "rendered", source: true },
+  icon: { kind: "inline", support: "rendered", source: true },
+  Link: { kind: "inline", support: "rendered", source: true, lowered: true },
 
-  // Interactive controls (`#48` — reference vocabulary, renderer pending).
-  button: { kind: "container", support: "fallback" },
-  "radio-group": { kind: "container", support: "fallback" },
-  radio: { kind: "container", support: "fallback" },
-  label: { kind: "container", support: "fallback" },
-  textarea: { kind: "container", support: "fallback" },
+  // Code leaves. A fence is Markdown in the source; our lowering represents it as
+  // `code-block`, which no model writes. ChatGPT compiles a fence to its client widget.
+  "code-block": { kind: "container", support: "rendered", lowered: true, note: "our fence target" },
+  pre: { kind: "container", support: "fallback", note: "grammar tolerance; nothing produces it" },
+
+  // Lists and tables: Markdown lowers here, and the model occasionally writes the tags.
+  list: { kind: "container", support: "rendered", source: true, lowered: true },
+  "list-item": { kind: "container", support: "rendered", source: true, lowered: true },
+  table: { kind: "container", support: "rendered", lowered: true },
+  "table-row": { kind: "container", support: "rendered", lowered: true },
+  "table-cell": { kind: "container", support: "rendered", lowered: true },
+
+  // Interactive controls (`#48` — written by the model, renderer pending).
+  button: { kind: "container", support: "fallback", source: true },
+  "radio-group": { kind: "container", support: "fallback", source: true },
+  radio: { kind: "container", support: "fallback", source: true },
+  label: { kind: "container", support: "fallback", source: true },
+  textarea: { kind: "container", support: "fallback", source: true },
 
   // SVG (`#47`). Every one of these is in `svg-map.ts`'s allowlist.
-  svg: { kind: "container", support: "rendered" },
-  defs: { kind: "container", support: "rendered", svg: true },
-  marker: { kind: "container", support: "rendered", svg: true },
-  g: { kind: "container", support: "rendered", svg: true },
-  rect: { kind: "container", support: "rendered", svg: true },
-  path: { kind: "container", support: "rendered", svg: true },
-  line: { kind: "container", support: "rendered", svg: true },
-  circle: { kind: "container", support: "rendered", svg: true },
-  ellipse: { kind: "container", support: "rendered", svg: true },
-  polygon: { kind: "container", support: "rendered", svg: true },
-  polyline: { kind: "container", support: "rendered", svg: true },
+  svg: { kind: "container", support: "rendered", source: true },
+  defs: { kind: "container", support: "rendered", source: true, svg: true },
+  marker: { kind: "container", support: "rendered", source: true, svg: true },
+  g: { kind: "container", support: "rendered", source: true, svg: true },
+  rect: { kind: "container", support: "rendered", source: true, svg: true },
+  path: { kind: "container", support: "rendered", source: true, svg: true },
+  line: { kind: "container", support: "rendered", source: true, svg: true },
+  circle: { kind: "container", support: "rendered", source: true, svg: true },
+  ellipse: { kind: "container", support: "rendered", source: true, svg: true },
+  polygon: { kind: "container", support: "rendered", source: true, svg: true },
+  polyline: { kind: "container", support: "rendered", source: true, svg: true },
 
   // Host-resolved components: resolved server-side and embedded in a sentence.
-  Cite: { kind: "inline", support: "fallback" },
-  Entity: { kind: "inline", support: "fallback" },
-  AsyncImage: { kind: "inline", support: "fallback" },
-  AsyncImageGroup: { kind: "inline", support: "fallback" },
+  Cite: { kind: "inline", support: "fallback", source: true },
+  Entity: { kind: "inline", support: "fallback", source: true },
+  AsyncImage: { kind: "inline", support: "fallback", source: true },
+  AsyncImageGroup: { kind: "inline", support: "fallback", source: true },
 
-  // Internal placeholder for a client-defined widget (a code editor takes over).
+  // Written by the model as the code-block tag; ChatGPT compiles it to a client widget.
+  CodeBlock: { kind: "container", support: "fallback", source: true },
+
+  // ChatGPT's compiler output; never in our source, never lowered by us.
   __chatgptClientDefinedWidget: { kind: "container", support: "internal" },
 } as const satisfies Record<string, TagEntry>;
 

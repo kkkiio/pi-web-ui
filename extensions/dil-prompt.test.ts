@@ -159,6 +159,7 @@ test("every tag the prompt mentions is one the vocabulary marks as rendered", ()
     const entry = tagEntry(name);
     assert.ok(entry, `<${name}> is in the prompt but not in the vocabulary`);
     assert.equal(entry.support, "rendered", `<${name}> is advertised but renders as a fallback`);
+    assert.equal(entry.source, true, `<${name}> is taught but not a tag the model may write`);
   }
 });
 

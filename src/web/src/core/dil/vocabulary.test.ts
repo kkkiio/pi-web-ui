@@ -8,6 +8,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { parseDocument } from "./index.ts";
+import type { DilNode } from "./types.ts";
 import { DIL_VOCABULARY, INLINE_TAGS, isInlineTag, KNOWN_TAGS, tagEntry } from "./vocabulary.ts";
 
 test("inline atoms are exactly the tags an emphasis pair may wrap", () => {
@@ -58,4 +60,62 @@ test("an unknown tag is neither inline nor known, so it keeps its place and fall
   assert.ok(KNOWN_TAGS.includes("box"));
   assert.ok(!KNOWN_TAGS.includes("my-widget"));
   assert.equal(Object.keys(DIL_VOCABULARY).length, KNOWN_TAGS.length);
+});
+
+test("source and lowered say where a tag can come from", () => {
+  // Both: a Markdown paragraph lowers to `<text>`, and the model also writes `<text>` itself.
+  assert.equal(tagEntry("text")?.source, true);
+  assert.equal(tagEntry("text")?.lowered, true);
+  // Lowered only: the model writes `**bold**`, never `<bold>`.
+  assert.equal(tagEntry("bold")?.lowered, true);
+  assert.equal(tagEntry("bold")?.source, undefined);
+  // Source only: layout is written, never produced by Markdown.
+  assert.equal(tagEntry("box")?.source, true);
+  assert.equal(tagEntry("box")?.lowered, undefined);
+  // Neither: grammar tolerance, and ChatGPT's own compiler placeholder.
+  assert.equal(tagEntry("pre")?.source, undefined);
+  assert.equal(tagEntry("pre")?.lowered, undefined);
+  assert.equal(tagEntry("__chatgptClientDefinedWidget")?.source, undefined);
+  assert.equal(tagEntry("__chatgptClientDefinedWidget")?.lowered, undefined);
+});
+
+test("every tag our lowering emits is flagged lowered", () => {
+  // Markdown-only source: every element in the tree must be a lowering target.
+  const source = [
+    "# Heading",
+    "",
+    "A **bold**, *italic*, `code`, $x$, ~~struck~~ and [link](https://a.test) paragraph.",
+    "",
+    "- one",
+    "- two",
+    "",
+    "| a | b |",
+    "| --- | --- |",
+    "| 1 | 2 |",
+    "",
+    "> quote",
+    "",
+    "---",
+    "",
+    "```js",
+    "const a = 1;",
+    "```",
+  ].join("\n");
+
+  const names = new Set<string>();
+  const walk = (nodes: readonly DilNode[]) => {
+    for (const node of nodes) {
+      if (node.type === "element") {
+        names.add(node.name);
+        walk(node.children);
+      } else if (node.type === "each") walk(node.body);
+      else if (node.type === "if") for (const branch of node.branches) walk(branch.body);
+    }
+  };
+  walk(parseDocument(source).tree);
+
+  assert.ok(names.size >= 10, "the fixture reaches every construct");
+  for (const name of names) {
+    assert.equal(tagEntry(name)?.lowered, true, `<${name}> is emitted by lowering but not flagged`);
+  }
 });
