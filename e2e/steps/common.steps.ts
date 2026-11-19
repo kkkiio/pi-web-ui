@@ -27,6 +27,10 @@ Given("Pi replies with a DIL layout", () => {
   world.fixture = "dil-render";
 });
 
+Given("Pi replies with DIL math and code", () => {
+  world.fixture = "dil-heavy";
+});
+
 Given("Pi replies with a DIL diagram", () => {
   world.fixture = "dil-svg";
 });
@@ -88,6 +92,27 @@ Then("the DIL layout is rendered", async ({ page }) => {
   await expect(root).toBeVisible();
   await expect(root.getByText("Request path", { exact: true })).toBeVisible();
   await expect(root.getByText("62%")).toBeVisible();
+});
+
+Then("the math, the code block and the connected list are rendered", async ({ page }) => {
+  const log = page.getByRole("log");
+  // KaTeX: an inline formula and a display block, both typeset (not the raw LaTeX source).
+  await expect(log.locator(".dil-root .katex").first()).toBeVisible();
+  await expect(log.locator(".dil-root .katex-display").first()).toBeVisible();
+  // KaTeX keeps the TeX source in its MathML annotation, so the proof is the absence of the
+  // `$$` delimiters, which would mean the block was never parsed as math.
+  await expect(log.getByText("$$", { exact: true })).toHaveCount(0);
+
+  // Shiki: the fence keeps its language and its code text.
+  const code = log.locator('.dil-root [data-language="js"]').first();
+  await expect(code).toBeVisible();
+  await expect(code).toContainText("const energy");
+
+  // `connector="solid" gap={2}` reaches the list element.
+  const list = log.locator(".dil-root ol").first();
+  await expect(list).toBeVisible();
+  await expect(list).toHaveClass(/space-y-2/);
+  await expect(list).toHaveClass(/border-l-2/);
 });
 
 Then("the DIL diagram is rendered", async ({ page }) => {

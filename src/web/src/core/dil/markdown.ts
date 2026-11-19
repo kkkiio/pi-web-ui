@@ -9,7 +9,7 @@
  *                                 with CommonMark's indented code block disabled because
  *                                 DIL indentation is layout and code is always fenced.
  *
- *   element level   `InlineFlow`  **no** block Markdown at all: blank lines are the only
+ *   element level   `InlineProse` **no** block Markdown at all: blank lines are the only
  *                                 paragraph separator, everything else is the InlineRun
  *                                 subset from `inline.ts` (`**bold**`, `*italic*`,
  *                                 `~~strike~~`, `` `code` ``, `$math$`, `[label](url)`).
@@ -35,9 +35,10 @@ import type { Code, List, ListItem, PhrasingContent, RootContent, Table, TableRo
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
-import { isInlineTag, parseInline } from "./inline.ts";
+import { parseInline } from "./inline.ts";
 import { repairStreamTail } from "./stream-repair.ts";
 import type { DilAttribute, DilElementNode, DilFenceNode, DilNode } from "./types.ts";
+import { isInlineTag } from "./vocabulary.ts";
 
 const HEADING_SIZE: Record<number, string> = { 1: "xl", 2: "lg", 3: "md", 4: "md", 5: "md", 6: "md" };
 
@@ -98,7 +99,7 @@ export function fenceToElement(fence: DilFenceNode): DilElementNode {
 }
 
 function lowerNodes(nodes: DilNode[], tier: ProseTier, sourceLength?: number): DilNode[] {
-  return tier === "document" ? lowerDocumentProse(nodes, sourceLength) : lowerInlineFlow(nodes, sourceLength);
+  return tier === "document" ? lowerDocumentProse(nodes, sourceLength) : lowerInlineProse(nodes, sourceLength);
 }
 
 function lowerNode(node: DilNode, tier: ProseTier, sourceLength?: number): DilNode {
@@ -273,49 +274,54 @@ function stripPlaceholders(value: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Element tier — InlineFlow (no block Markdown)
+// Element tier — InlineProse (no block Markdown)
 // ---------------------------------------------------------------------------
 
 /**
- * `InlineFlow ::= InlineRun ( BlankLine+ InlineRun )*`.
+ * `InlineProse ::= InlineRun ( BlankLine+ InlineRun )*`.
  *
  * A single run is emitted unwrapped, so `<row>数量：{n} 与 **两种**</row>` stays a flex
  * row of inline nodes; several runs (blank-line separated) each become one `<text>`.
+ *
+ * This tier is the one that needs `resolveSpanningEmphasis`: there is no Markdown string
+ * here, so `**<Link/>**` has no lexer to pair its delimiters. The document tier hands that
+ * job to micromark with placeholders instead.
  */
-function lowerInlineFlow(nodes: DilNode[], sourceLength?: number): DilNode[] {
+function lowerInlineProse(input: DilNode[], sourceLength?: number): DilNode[] {
   const pieces: Array<{ readonly nodes: DilNode[]; readonly tail: boolean } | { readonly block: DilNode }> = [];
-  let flow: DilNode[] = [];
+  const nodes = resolveSpanningEmphasis(input);
+  let prose: DilNode[] = [];
 
-  const flushFlow = (): void => {
-    const tail = isTail(flow, sourceLength);
-    const trimmed = trimFlowEdges(flow);
+  const flushProse = (): void => {
+    const tail = isTail(prose, sourceLength);
+    const trimmed = trimProseEdges(prose);
     if (trimmed.length) pieces.push({ nodes: trimmed, tail });
-    flow = [];
+    prose = [];
   };
 
   for (const node of nodes) {
     if (node.type === "text") {
       if (node.raw) {
-        flow.push(node);
+        prose.push(node);
         continue;
       }
       const runs = node.value.split(/\n[ \t]*\n/);
       runs.forEach((run, index) => {
-        if (index > 0) flushFlow(); // BlankLine ends the paragraph
-        if (run) flow.push({ ...node, value: run });
+        if (index > 0) flushProse(); // BlankLine ends the paragraph
+        if (run) prose.push({ ...node, value: run });
       });
       continue;
     }
     if (node.type === "expr" || (node.type === "element" && isInlineTag(node.name))) {
-      flow.push(node);
+      prose.push(node);
       continue;
     }
-    flushFlow();
+    flushProse();
     pieces.push({ block: lowerNode(node, "element", sourceLength) });
   }
-  flushFlow();
+  flushProse();
 
-  const flowCount = pieces.filter((piece) => "nodes" in piece).length;
+  const proseCount = pieces.filter((piece) => "nodes" in piece).length;
   const out: DilNode[] = [];
   for (const piece of pieces) {
     if ("block" in piece) {
@@ -327,7 +333,7 @@ function lowerInlineFlow(nodes: DilNode[], sourceLength?: number): DilNode[] {
     piece.nodes.forEach((node, index) => {
       if (node.type === "text") {
         if (node.raw) {
-          // `<code>`, `<code-block>` and `<pre>` hold literal text: `**x**` stays four
+          // `<code>`, `<code-block>` and `<CodeBlock>` hold literal text: `**x**` stays four
           // characters, and the tail is not repaired because nothing here is Markdown.
           children.push(node);
           return;
@@ -339,7 +345,7 @@ function lowerInlineFlow(nodes: DilNode[], sourceLength?: number): DilNode[] {
       }
     });
     if (!children.length) continue;
-    if (flowCount > 1) {
+    if (proseCount > 1) {
       const pos = piece.nodes[0].pos;
       out.push(el("text", children, pos, pos));
     } else {
@@ -350,7 +356,7 @@ function lowerInlineFlow(nodes: DilNode[], sourceLength?: number): DilNode[] {
 }
 
 /** Leading indentation and trailing layout whitespace are XML formatting, not content. */
-function trimFlowEdges(nodes: DilNode[]): DilNode[] {
+function trimProseEdges(nodes: DilNode[]): DilNode[] {
   const out = [...nodes];
   trimStart(out);
   trimEnd(out);
@@ -594,7 +600,8 @@ function spanOf(
  * sibling — only across inline nodes, and only when no nested delimiter makes the
  * wrap ambiguous.
  *
- * Runs on the raw AST, before lowering, so document-level runs still are text nodes.
+ * The element tier is the only caller: the document tier hands the same job to micromark
+ * through placeholders.
  */
 export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
   const out: DilNode[] = [];
@@ -606,7 +613,7 @@ export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
       continue;
     }
 
-    const opener = /(\*\*|__|\*|_)$/.exec(node.value);
+    const opener = /(\*\*|__|\*|_|~~)$/.exec(node.value);
     if (!opener) {
       out.push(node);
       continue;
@@ -629,7 +636,7 @@ export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
     if (
       close < 0 ||
       !inner.length ||
-      !inner.every(isInlineNode) ||
+      !inner.every(canSpanEmphasis) ||
       inner.some((child) => child.type === "text" && child.value.includes(delimiter[0]))
     ) {
       out.push(node);
@@ -638,15 +645,7 @@ export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
 
     const prefix = node.value.slice(0, contentEnd);
     if (prefix) out.push({ ...node, value: prefix });
-    out.push({
-      type: "element",
-      name: delimiter.length === 2 ? "bold" : "italic",
-      attrs: [],
-      children: inner,
-      pos: node.pos,
-      end: node.pos,
-      closed: true,
-    });
+    out.push(emphasisElement(delimiter, inner, node.pos));
     const closingNode = nodes[close] as { value: string; pos: number };
     const rest = closingNode.value.slice(delimiter.length);
     if (!rest) {
@@ -658,6 +657,12 @@ export function resolveSpanningEmphasis(nodes: DilNode[]): DilNode[] {
   }
 
   return out;
+}
+
+/** `**x**` → `<bold>`, `*x*`/`_x_` → `<italic>`, `~~x~~` → `<text lineThrough>`. */
+function emphasisElement(delimiter: string, children: DilNode[], pos: number): DilElementNode {
+  if (delimiter === "~~") return el("text", children, pos, pos, [booleanAttr("lineThrough", pos)]);
+  return el(delimiter.length === 2 ? "bold" : "italic", children, pos, pos);
 }
 
 function resolveChildEmphasis(node: DilNode): DilNode {
@@ -673,32 +678,12 @@ function resolveChildEmphasis(node: DilNode): DilNode {
 }
 
 /**
- * Block-level tags never join a prose run; everything else (inline DIL elements and
- * unknown host tags) is treated as inline.
+ * Can an emphasis pair span this node? Prose and inline atoms only — a container ends the
+ * sentence it would have to wrap, so pairing across it has no meaning.
  */
-const BLOCK_LEVEL_TAGS: ReadonlySet<string> = new Set([
-  "box",
-  "row",
-  "col",
-  "column",
-  "grid",
-  "grid-item",
-  "list",
-  "list-item",
-  "table",
-  "table-row",
-  "table-cell",
-  "blockquote",
-  "svg",
-  "code-block",
-  "pre",
-  "divider",
-  "title",
-]);
-
-function isInlineNode(node: DilNode): boolean {
+function canSpanEmphasis(node: DilNode): boolean {
   if (node.type === "text" || node.type === "expr") return true;
-  if (node.type === "element") return !BLOCK_LEVEL_TAGS.has(node.name);
+  if (node.type === "element") return isInlineTag(node.name);
   return false;
 }
 

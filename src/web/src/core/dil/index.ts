@@ -14,7 +14,7 @@
  * diagnostics, which is what keeps the transcript stable while tokens arrive.
  */
 
-import { lowerMarkdown, resolveSpanningEmphasis } from "./markdown.ts";
+import { lowerMarkdown } from "./markdown.ts";
 import { normalizeSource, parse } from "./parser.ts";
 import { pruneEmptyIncomplete } from "./prune.ts";
 import { findStateDeclarations, splitStatements } from "./statements.ts";
@@ -22,11 +22,10 @@ import type { DilDocument, DilNode } from "./types.ts";
 
 export function parseDocument(source: string): DilDocument {
   const result = parse(source);
-  const prepared = resolveSpanningEmphasis(result.nodes);
   // `sourceLength` marks the fragment that still owns the end of the source: the only
   // one `stream-repair.ts` may close constructs in.
   const tree = pruneEmptyIncomplete(
-    lowerMarkdown(prepared, { document: true, sourceLength: normalizeSource(source).length }),
+    lowerMarkdown(result.nodes, { document: true, sourceLength: normalizeSource(source).length }),
   );
   return {
     raw: result.nodes,
@@ -65,7 +64,7 @@ export type { DilScope } from "./evaluator.ts";
 export { evaluateCondition, evaluateList, evaluateStatements, formatValue, safeEvaluate } from "./evaluator.ts";
 export { tidyFallback, toFallbackMarkdown } from "./fallback.ts";
 export { fenceToElement, lowerInline, lowerMarkdown, resolveSpanningEmphasis } from "./markdown.ts";
-export { mergeText, normalizeSource, parse, RAW_TEXT_TAGS } from "./parser.ts";
+export { normalizeSource, parse, RAW_TEXT_TAGS } from "./parser.ts";
 export { CONTAINER_TAGS, pruneEmptyIncomplete } from "./prune.ts";
 export { findTopLevel, LineIndex, readBalanced, splitEachClause, topLevelIndex } from "./scanner.ts";
 export type { StateDeclaration } from "./statements.ts";
@@ -89,3 +88,5 @@ export type {
   DilStmtNode,
   DilTextNode,
 } from "./types.ts";
+export type { DilTagName, TagEntry, TagKind, TagSupport } from "./vocabulary.ts";
+export { DIL_VOCABULARY, INLINE_TAGS, isInlineTag, isKnownTag, KNOWN_TAGS, tagEntry } from "./vocabulary.ts";

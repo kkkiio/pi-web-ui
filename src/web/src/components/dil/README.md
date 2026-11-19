@@ -158,9 +158,8 @@ Anything not listed behaves as its Markdown counterpart does.
 - **[#46 Core MVP](https://github.com/kkkiio/pi-web-ui/issues/46)** — layout primitives,
   typography, throttled render + safe evaluation. **Done in this package.**
 - **[#49 Document & data primitives](https://github.com/kkkiio/pi-web-ui/issues/49)** —
-  styled `list`/`table`/`blockquote`/`Link`, Shiki `code-block`, KaTeX `math`.
-  Fallbacks exist; replace their bodies, keep the leaf memo keys (`code`, `language`,
-  `closed` / `value`, `block`).
+  `list` (incl. `connector` / `gap`), `table`, `blockquote`, `Link`, Shiki `CodeBlock`,
+  KaTeX `math`. **Done**, except `table-cell` alignment, which the corpus never shows.
 - **[#47 Parametric SVG](https://github.com/kkkiio/pi-web-ui/issues/47)** — `svg` +
   `defs`/`marker`/`rect`/`path`/`text` with DIL attributes. **Done in this package**:
   `svg-map.ts` owns the per-tag allowlist and id namespacing (pure, unit-tested), the

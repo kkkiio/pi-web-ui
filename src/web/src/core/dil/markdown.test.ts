@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { lowerInline, parseDocument } from "./index.ts";
+import { lowerMarkdown } from "./markdown.ts";
+import { parse } from "./parser.ts";
 import type { DilElementNode, DilNode } from "./types.ts";
 
 test("a reference definition stays visible instead of vanishing", () => {
@@ -301,7 +303,7 @@ test("inline code content is never lowered as markdown", () => {
   assert.equal(child.raw, true);
 });
 
-test("inside an element, prose stays one inline flow", () => {
+test("inside an element, prose stays one inline prose", () => {
   const nodes = tree("<row>数量：{n}，共 **两种**</row>");
   const row = only(nodes, "row");
   assert.deepEqual(
@@ -311,7 +313,7 @@ test("inside an element, prose stays one inline flow", () => {
   assert.equal(elements(row.children, "text").length, 0, "no <text> wrapper inside a row");
 });
 
-test("element interior has no block Markdown, only InlineFlow", () => {
+test("element interior has no block Markdown, only InlineProse", () => {
   const lines = tree("<box>\n  **布局** 说明\n</box>");
   assert.equal(findAll(lines, "bold").length, 1);
   assert.equal(findAll(lines, "code-block").length, 0);
@@ -399,12 +401,38 @@ test("both tiers agree on the InlineRun subset", () => {
   }
 });
 
-test("emphasis that wraps an inline element is resolved across nodes", () => {
-  const bold = findAll(tree('**<Link url="https://a.test" title="A"/>**'), "bold")[0];
-  assert.equal(only(bold.children, "Link").name, "Link");
+test("the document tier pairs emphasis with placeholders, not with an AST pass", () => {
+  // `lowerMarkdown` on its own has no AST pairing step: inline atoms become placeholders, so
+  // micromark sees one `**…**` run and pairs it. This is the whole reason the main pipeline
+  // does not call `resolveSpanningEmphasis` for document-level prose.
+  for (const source of ['**<Link url="https://a.test" title="A"/>**', '**<Cite refs={["t1"]}/>**', "**{n}**"]) {
+    const bold = findAll(lowerMarkdown(parse(source).nodes, { document: true }), "bold")[0];
+    assert.ok(bold, `${source} pairs through the lexer`);
+  }
+});
 
+test("strikethrough spans nodes the same way emphasis does", () => {
+  // `~~` is a delimiter like `**`: inside an element there is no lexer to pair it, so it
+  // goes through the same AST pass, and the wrapper is `<text lineThrough>`, not `<italic>`.
+  const box = only(tree('<box>~~<badge text="b"/>~~</box>'), "box");
+  const strike = only(box.children, "text");
+  assert.equal(only(strike.children, "badge").name, "badge");
+  assert.equal(
+    strike.attrs.find((attribute) => attribute.name === "lineThrough")?.value,
+    true,
+    "the wrapper carries lineThrough",
+  );
+
+  // The document tier keeps working through GFM's delete rule.
+  assert.equal(findAll(tree("~~<badge/>~~"), "badge").length, 1);
+});
+
+test("the element tier pairs emphasis on the AST, because it has no lexer", () => {
   const box = only(tree('<box>\n  **<icon name="star"/>**\n</box>'), "box");
   assert.equal(elements(box.children, "bold").length, 1);
+
+  const link = only(tree('<row>**<Link url="https://a.test">文档</Link>**</row>'), "row");
+  assert.equal(elements(link.children, "bold").length, 1);
 });
 
 test("half-streamed empty containers are pruned, non-empty ones are kept", () => {
@@ -419,4 +447,30 @@ test("state declarations are collected from {@body} directives", () => {
   const document = parseDocument('{@body const [tab,setTab] = DIL.useState("a"); const count = 2}\n<box>{tab}</box>');
   assert.equal(document.diagnosticSummary, "clean");
   assert.deepEqual(document.state, [{ name: "tab", setter: "setTab", initial: '"a"' }]);
+});
+
+test("a host-resolved component stays inside its sentence", () => {
+  // ChatGPT's compiler emits `<Cite/>` as a child of the surrounding `<text>`, so a sentence
+  // that cites a source is one paragraph, not three. The same holds for `<Entity/>`.
+  const cite = tree('GitHub 默认包含 bug<Cite refs={["t1"]}/>。');
+  assert.equal(cite.length, 1, "one paragraph, not a split at the tag");
+  assert.equal(cite[0]?.type, "element");
+  assert.equal((cite[0] as DilElementNode).name, "text");
+  assert.deepEqual(
+    (cite[0] as DilElementNode).children.map((child) => (child.type === "element" ? child.name : child.type)),
+    ["text", "Cite", "text"],
+  );
+
+  const entity = tree('全名是 <Entity category="software" value="Microsoft Orleans"/>。');
+  assert.equal(entity.length, 1);
+});
+
+test("emphasis never wraps a container", () => {
+  // `<text>` is the compiled form of a Markdown paragraph: an emphasis pair spanning it would
+  // put a block inside a sentence. The markers stay literal instead.
+  const wrapped = tree("**<text>x</text>**");
+  assert.equal(findAll(wrapped, "bold").length, 0, "no <bold> around a container");
+
+  // An unknown tag is not a member of the vocabulary either, so it is not guessed to be inline.
+  assert.equal(findAll(tree('**<my-widget text="b"/>**'), "bold").length, 0);
 });

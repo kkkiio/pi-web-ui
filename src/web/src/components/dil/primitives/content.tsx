@@ -8,14 +8,16 @@
  * typography the rest of the transcript uses.
  *
  * Nothing here is a placeholder to throw away: the fallbacks are what a reader gets when
- * a later slice is unavailable, and `math` / `code-block` stay unstyled on purpose (no
- * KaTeX, no Shiki, no Mermaid) so nothing is computed twice when the real primitives
- * arrive.
+ * a later slice is unavailable. `math` (KaTeX) and `code-block` (Shiki) are the real
+ * primitives, so they are `memo`ised on their content rather than re-rendered per token.
  */
 
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, useMemo } from "react";
+import type { BundledLanguage } from "shiki";
+import { CodeBlock } from "@/components/ai-elements/code-block";
 import { cn } from "@/lib/utils";
-import { safeLinkUrl } from "../tokens";
+import { mathHtml } from "../math";
+import { layoutSkin, safeLinkUrl } from "../tokens";
 
 interface FallbackProps {
   readonly className?: string;
@@ -24,7 +26,7 @@ interface FallbackProps {
 }
 
 export function FallbackList({ props, children }: FallbackProps) {
-  const className = cn("my-1 space-y-1 pl-5", "marker:text-muted-foreground");
+  const className = cn("my-1 pl-5", "marker:text-muted-foreground", layoutSkin("list", props ?? {}).className);
   if (props?.marker === "number") {
     // `5. Deploy` continues the list it belongs to; dropping `start` renumbers it to 1.
     const start = typeof props.start === "number" ? props.start : Number.parseInt(String(props.start ?? ""), 10);
@@ -65,38 +67,58 @@ export function FallbackBlockquote({ children }: FallbackProps) {
 }
 
 /**
- * `math` and `code-block` are the heavy leaves of a transcript (#49 adds KaTeX and
- * Shiki). They receive primitives, not nodes, so `memo` can skip a block that finished
- * while the tail kept streaming — the caching decision in `README.md`.
+ * The heavy leaves of a transcript: KaTeX and Shiki, `memo`ised on their content so the tail
+ * keeps streaming without re-typesetting what already finished (the caching decision in
+ * `README.md`). Both render their source while the construct is still open.
  */
-export const MathLeaf = memo(function MathLeaf({ value, block }: { readonly value: string; readonly block: boolean }) {
-  if (block) {
-    return (
-      <pre className="my-2 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
-        {value}
-      </pre>
-    );
+export const MathLeaf = memo(function MathLeaf({
+  value,
+  block,
+  closed = true,
+}: {
+  readonly value: string;
+  readonly block: boolean;
+  readonly closed?: boolean;
+}) {
+  const html = useMemo(() => (block && !closed ? null : mathHtml(value, block)), [value, block, closed]);
+  if (html === null) {
+    if (block) {
+      return (
+        <pre className="my-2 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs text-foreground">
+          {value}
+        </pre>
+      );
+    }
+    return <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]">{value}</code>;
   }
-  return <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]">{value}</code>;
+  // KaTeX output is generated from LaTeX with `trust: false`: it contains no model markup.
+  return (
+    <span
+      className={block ? "my-2 block overflow-x-auto" : "inline"}
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: KaTeX output, not model HTML
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 });
 
+/** A fence is highlighted once it closed; while it streams, the plain text is cheaper. */
 export const CodeBlockLeaf = memo(function CodeBlockLeaf({
   code,
   language,
+  closed = true,
 }: {
   readonly code: string;
   readonly language: string | undefined;
+  readonly closed?: boolean;
 }) {
-  return (
-    <div className="my-2 overflow-hidden rounded-lg border border-border bg-muted/40">
-      {language ? (
-        <div className="border-b border-border/60 px-3 py-1 font-mono text-[0.7rem] text-muted-foreground">
-          {language}
-        </div>
-      ) : null}
-      <pre className="overflow-x-auto px-3 py-2 font-mono text-xs leading-5">{code}</pre>
-    </div>
-  );
+  if (!closed) {
+    return (
+      <pre className="my-2 overflow-x-auto rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs">
+        {code}
+      </pre>
+    );
+  }
+  return <CodeBlock className="my-2" code={code} language={(language ?? "text") as BundledLanguage} />;
 });
 
 export function FallbackLink({ props, children }: FallbackProps) {

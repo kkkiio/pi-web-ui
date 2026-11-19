@@ -248,6 +248,18 @@ function containerSkin(props: SkinProps, base: string): Skin {
 // Layout primitives
 // ---------------------------------------------------------------------------
 
+/** `gap` on a list cannot be a flex gap (an item keeps `display: list-item`). */
+const LIST_GAP: Record<number, string> = {
+  0: "space-y-0",
+  1: "space-y-1",
+  2: "space-y-2",
+  3: "space-y-3",
+  4: "space-y-4",
+  5: "space-y-5",
+  6: "space-y-6",
+  8: "space-y-8",
+};
+
 export function layoutSkin(name: string, props: SkinProps): Skin {
   switch (name) {
     case "box": {
@@ -272,6 +284,13 @@ export function layoutSkin(name: string, props: SkinProps): Skin {
         return merge(skin, { style: { gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))" } });
       }
       return skin;
+    }
+    case "list": {
+      // `connector="solid"` draws a rule through the item markers (a step/flow timeline);
+      // the per-item border reads as one continuous line because the items are adjacent.
+      const gap = LIST_GAP[readNumber(props.gap) ?? 1] ?? "space-y-1";
+      const connector = props.connector === "solid" ? "[&>li]:border-l-2 [&>li]:border-border/60 [&>li]:pl-3" : "";
+      return { className: `${gap} ${connector}`.trim(), style: {} };
     }
     case "grid-item":
       return { className: "min-w-0", style: sizeStyle(props) };

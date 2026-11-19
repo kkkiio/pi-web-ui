@@ -2,6 +2,7 @@ import { fauxProvider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import askUserQuestionResponses from "./responses/ask-user-question.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
+import dilHeavyResponses from "./responses/dil-heavy.ts";
 import dilListResponses from "./responses/dil-list.ts";
 import dilRenderResponses from "./responses/dil-render.ts";
 import dilSvgResponses from "./responses/dil-svg.ts";
@@ -28,6 +29,7 @@ const responsesByName = {
   "dil-render": dilRenderResponses,
   "dil-svg": dilSvgResponses,
   "dil-list": dilListResponses,
+  "dil-heavy": dilHeavyResponses,
   "duplicate-artifact": duplicateArtifactResponses,
   "external-artifact": externalArtifactResponses,
   "tool-failure": toolFailureResponses,

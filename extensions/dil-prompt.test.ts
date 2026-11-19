@@ -11,6 +11,7 @@ import { test } from "node:test";
 import { resolveNodes } from "../src/web/src/components/dil/resolve.ts";
 import { parseDocument } from "../src/web/src/core/dil/index.ts";
 import type { DilNode } from "../src/web/src/core/dil/types.ts";
+import { tagEntry } from "../src/web/src/core/dil/vocabulary.ts";
 import { DIL_EXAMPLE_SVG, DIL_PROMPT_EXAMPLES, DIL_SYSTEM_PROMPT } from "./dil-system-prompt.ts";
 
 function tags(tree: readonly DilNode[]): string[] {
@@ -147,4 +148,35 @@ test("the prompt stays small enough to sit in every turn", () => {
   // The section is diffed into the system prompt once per activation; it must not grow
   // into a manual. 4000 characters is roughly 1k tokens.
   assert.ok(DIL_SYSTEM_PROMPT.length < 4000, `prompt is ${DIL_SYSTEM_PROMPT.length} characters`);
+});
+
+test("every tag the prompt mentions is one the vocabulary marks as rendered", () => {
+  // Two failure modes this catches: the prompt advertising markup we cannot draw (the model
+  // then wastes a turn on a fallback), and the vocabulary dropping a tag the prompt teaches.
+  const mentioned = new Set([...DIL_SYSTEM_PROMPT.matchAll(/<([A-Za-z][A-Za-z0-9-]*)/g)].map((match) => match[1]));
+  assert.ok(mentioned.size > 10, "the reference list is part of the prompt");
+  for (const name of mentioned) {
+    const entry = tagEntry(name);
+    assert.ok(entry, `<${name}> is in the prompt but not in the vocabulary`);
+    assert.equal(entry.support, "rendered", `<${name}> is advertised but renders as a fallback`);
+    assert.equal(entry.source, true, `<${name}> is taught but not a tag the model may write`);
+  }
+});
+
+test("the parser agrees with the vocabulary about inline atoms", () => {
+  // `<badge/>` inside a sentence stays in the paragraph; `<text>` never does.
+  const inSentence = parseDocument("前 <badge>new</badge> 后").tree;
+  assert.equal(inSentence.length, 1, "<badge> does not split the paragraph");
+  const paragraph = parseDocument("前 <text>x</text> 后").tree;
+  assert.equal(paragraph.length, 3, "<text> is a container and does split it");
+});
+
+test("the prompt teaches Markdown for inline formatting, not tags", () => {
+  // The captured model output writes `**bold**`, `` `code` `` and `$math$` — never
+  // `<bold>`, `<italic>` or `<code>` (0 occurrences over 76 samples). Teaching both spellings
+  // only makes the transcript harder to copy back as Markdown.
+  for (const tag of ["<bold", "<italic", "<code"]) {
+    assert.ok(!DIL_SYSTEM_PROMPT.includes(tag), `${tag}…> is not taught`);
+  }
+  assert.match(DIL_SYSTEM_PROMPT, /inline formatting/, "Markdown formatting is the pointer taught");
 });

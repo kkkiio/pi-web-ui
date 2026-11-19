@@ -72,7 +72,7 @@ export const DIL_PROMPT_EXAMPLES = {
 
 export const DIL_SYSTEM_PROMPT = `Pi Web UI supports DIL (Dynamic Interface Language), a Markdown superset for what prose describes badly: containment, side-by-side comparison, flow, proportions.
 
-Keep paragraphs, lists, tables and fenced code in Markdown. Put spatial structure in DIL, output it directly (no code fence), and close every tag.
+Keep paragraphs, lists, tables, fenced code and inline formatting (bold, italic, inline code) in Markdown. Put spatial structure in DIL, output it directly (no code fence), and close every tag.
 
 ${DIL_EXAMPLE_PROPORTIONS}
 
@@ -85,7 +85,7 @@ That is the whole idea: a container for what groups, a repeated block for what v
 Reference — every tag and value the Web UI renders:
 
 - Layout: <box> (group or card), <row>, <col>, <grid columns={n}>, <grid-item>, <divider/>
-- Text: <title>, <text>, <caption>, <badge>, <bold>, <italic>, <code>
+- Text: <title>, <text>, <caption>, <badge>
 - Icons: <icon name="arrow-down" size="sm"/> — lucide names such as arrow-down, check-circle, file-text
 - Diagram: <svg viewBox="0 0 300 130" width="100%">…</svg> holding <rect x y width height rx fill/>, <path d stroke markerEnd/>, <line x1 y1 x2 y2/>, <circle cx cy r/>, <g>. Declare markers in <defs><marker id="a" markerWidth="6" refX="5" orient="auto">…</marker></defs> and point to them with markerEnd="url(#a)". Inside <svg>, <text x y fontSize textAnchor fill> is SVG text, not the typography tag.
 - Control flow: {#each list as item, i}…{/each}, {#if cond}…{:else}…{/if}, {expr}

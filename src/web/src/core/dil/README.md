@@ -11,9 +11,10 @@ Formal grammar: [`dil.ebnf`](./dil.ebnf).
 
 ```
 source ── parse ─────────────────► structural AST + recovery diagnostics   parser.ts
-       ── resolveSpanningEmphasis ► `**<Link/>**` pairs across nodes      markdown.ts
-       ── stream repair ─────────► close the constructs the tail left open stream-repair.ts
        ── lowerMarkdown ─────────► prose → title / text / list / table …  markdown.ts
+       │    tail repair: the fragment owning EOF gets `**` / `` ` `` closed
+       │    document tier: placeholders let micromark pair `**<Link/>**`
+       │    element tier: `resolveSpanningEmphasis` pairs it on the AST
        ── pruneEmptyIncomplete ──► drop half-streamed empty containers    prune.ts
        ── evaluateStatements ────► `{@body}` scope for `{expr}`/{#if}/{#each} evaluator.ts
        ───────────────────────────► DilDocument { raw, tree, state, diagnostics }
@@ -30,13 +31,34 @@ const scope = evaluateStatements(collectStatements(document.raw)); // { items: [
 toFallbackMarkdown(document.tree); // Markdown projection for copy / quote
 ```
 
+### Vocabulary — five words, no "block"
+
+The parser deliberately has no component vocabulary, so prose and structure share one node
+list. These five words are all this module needs; each one has a single checkable
+definition.
+
+| word | definition | how to check it |
+| --- | --- | --- |
+| **prose** | the characters the Markdown lexer receives — the content layer | the string passed to `markdown.parse()`; in the AST, `text` nodes plus inline atoms |
+| **container** | a DIL element with its own layout box — the structure layer | it renders as a `div` (`primitives/typography.tsx` → `Text`, `Caption`, `Box`, …) |
+| **inline atom** | a node that can sit in the middle of a sentence: `{expr}` or a tag `vocabulary.ts` marks `kind: "inline"` | `INLINE_TAGS`, derived from `vocabulary.ts` |
+| **run** | consecutive siblings that lower to one Markdown string: text plus inline atoms | `lowerDocumentProse` and `lowerInlineProse` build runs; a container ends one |
+| **tier** | which prose grammar a fragment obeys: `document` (`BlockProse`, full GFM) or `element` (`InlineProse`, inline subset only) | `dil.ebnf` §1 and §7 |
+
+`container` vs `inline atom` **is** the block/inline distinction. "Block" is not a term
+this module defines — it collides with three unrelated things, so say the specific one:
+
+- CommonMark *block* (paragraph, heading, list, table, quote, rule) → **Markdown block**.
+- `{#if}` / `{#each}` → **control flow**.
+- `FallbackBlock` (`primitives/content.tsx`) — the `div` an unknown tag falls back to.
+
 ### Where the boundary is (language injection)
 
 Following the grammar's lexical modes, the host parser owns **all** DIL syntax; the
 Markdown lexer only ever receives prose spans (`DilTextNode`):
 
 ```
-source ─┬─ ``` / ~~~ / $$ / \[  and  `code` / \(math\) and <code>/<pre>   raw text, never parsed
+source ─┬─ ``` / ~~~ / $$ / \[  and  `code` / \(math\) / <code-block> / <CodeBlock>   raw text, never parsed
         ├─ {@body …}  {#if …}  {#each …}  {:else}  {/…}                block nodes
         ├─ <tag attr={…}> … </tag>                                      element nodes
         └─ everything else                                              ProseSpan
@@ -55,7 +77,7 @@ real-sample run shows zero leaks over 76 ChatGPT DIL documents.
 
 The same characters mean different things at the document level and inside an element:
 
-| | document level — `BlockProse` | element interior — `InlineFlow` |
+| | document level — `BlockProse` | element interior — `InlineProse` |
 | --- | --- | --- |
 | grammar | headings, lists, tables, quotes, rules, paragraphs | blank lines split paragraphs; **no** block Markdown |
 | lexer | `unified` + `remark-parse` + `remark-gfm` (CommonMark + GFM) | `inline.ts` — the `InlineRun` subset |
@@ -68,8 +90,10 @@ Two rules make the tiers work:
   fenced, so the document processor disables micromark's `codeIndented`
   (`.data("micromarkExtensions", [{ disable: { null: ["codeIndented"] } }])`) and element
   interiors never see a block lexer at all.
-- **inline nodes join the flow.** `{expr}`, `math`, `Link`, `icon`, `badge`, `bold`,
-  `italic` and `code` are atoms of the same `InlineRun`. At document level they are
+- **inline nodes join the flow.** `{expr}` and the tags `vocabulary.ts` marks `kind:
+  "inline"` (the grammar's `bold`/`italic`/`code`/`math`/`Link`/`icon`/`badge` plus the
+  host-resolved `Cite`/`Entity`/`AsyncImage`/`AsyncImageGroup`) are atoms of the same
+  `InlineRun`. At document level they are
   swapped for placeholders before block lexing (MDX-style) and substituted back into the
   parsed tree — that is what keeps `- <Link …/>` a list item, `## {title}` a heading and
   `公式 $E = mc^2$ 与…` one text flow with its spaces. Positions are mapped back to
@@ -86,11 +110,12 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 | `types.ts` | `DilNode` union, attributes, diagnostics, `DilDocument` |
 | `scanner.ts` | Balanced `{}`/`()` scanning that skips strings, templates, regex and comments; top-level splits; inline code/math spans (shared with the parser) |
 | `parser.ts` | Recursive descent over `dil.ebnf`: elements, attributes, `{#if}`/`{#each}`, `{@body}`, `{expr}`, fenced blocks, raw text elements |
-| `markdown.ts` | Prose injection layers: `BlockProse` (GFM via `unified`/`remark`) and `InlineFlow` (blank-line runs) → DIL elements |
+| `markdown.ts` | Prose injection layers: `BlockProse` (GFM via `unified`/`remark`) and `InlineProse` (blank-line runs) → DIL elements |
 | `stream-repair.ts` | Streaming tail repair: closes an unclosed `**`/`*`/`~~`/`` ` `` and drops a half-received link target before the prose is lexed |
 | `evaluator.ts` | Safe expression evaluation for `{expr}`, `{#if}`, `{#each}`, `{@body}` — `acorn` parses ESTree, an allowlisted tree walker evaluates it, no `eval`/`new Function` |
 | `evaluator-allowlist.ts` | What an expression may touch: `Math`/`Number`/`String`/`Array`, pure array/string/number methods, own-property access, work bounds |
 | `inline.ts` | `InlineRun` — the element-interior inline subset (`**bold**`, `*italic*`, `~~strike~~`, code, math, links, autolinks) |
+| `vocabulary.ts` | The tag table: `kind` (`container` / `inline`) and `support` (`rendered` / `fallback` / `internal`) per tag, transcribed from ChatGPT's component catalogue. `INLINE_TAGS` is derived from it, so run membership, emphasis spanning and the prompt's tag list cannot drift apart |
 | `entities.ts` | Shared character-reference decoding (prose once, raw text at parse time) |
 | `prune.ts` | Streaming pass: unclosed empty containers are not rendered (anti-flash) |
 | `detect.ts` | `hasDilElements`: did the model actually write DIL? (non-synthetic elements, `{#each}`/`{#if}`/`{expr}`; fences never count) |
@@ -101,7 +126,7 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
 ### What it parses
 
 1. **Prose + DIL mixed at the top level.** Fenced blocks (` ``` `, `~~~`, `$$`, `\[`),
-   inline code (`` ` ``) and raw-text elements (`<code>`, `<pre>`, `<code-block>`) are
+   inline code (`` ` ``) and raw-text elements (`<code>`, `<code-block>`, `<CodeBlock>`) are
    opaque: `<box>` or `{#each}` inside them stays literal text.
 2. **Layout, typography, lists, tables, SVG nodes.** Tags are taken as written — the
    parser has no component vocabulary; `src/components/dil` owns the rendering catalog.
@@ -113,7 +138,7 @@ ItalicSpan is `*`-only), and a Markdown list written inside a `<box>` stays lite
    the transcript renders with: headings → `title`, paragraphs → `text`, `-`/`1.`
    (nested, `start`) → `list`/`list-item`, GFM tables → `table`/`table-row`/`table-cell`
    (`header` on row 0), `>` → `blockquote`, `---` → `divider`, `~~x~~` → `text
-   lineThrough`, task lists → `☑`/`☐`. Element-interior `InlineFlow` uses `inline.ts`
+   lineThrough`, task lists → `☑`/`☐`. Element-interior `InlineProse` uses `inline.ts`
    only. Fences reach the same vocabulary as `code-block`/`math`. Inline math is the
    exception: `$…$` and `\(…\)` become `<math>` in `parser.ts`, because micromark would
    read `\(` as an escape and `$20 … $` as LaTeX. Two micromark constructs are off:

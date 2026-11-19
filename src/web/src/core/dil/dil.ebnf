@@ -11,7 +11,7 @@
 (* Top-level document allows full block Markdown (headings, GFM tables,       *)
 (* lists, blockquotes, horizontal rules) alongside DIL constructs.            *)
 (* Indented code blocks (4 spaces) do NOT exist in DIL; code is always fenced *)
-(* (``` / ~~~) or inside <code> / <pre> / <code-block>.                       *)
+(* (``` / ~~~) or inside <code> / <code-block> / <CodeBlock>.                 *)
 Document        ::= DocumentNode* ;
 
 DocumentNode    ::= AppDirective
@@ -28,7 +28,7 @@ ElementChild    ::= IfElementBlock
                   | EachElementBlock
                   | Element
                   | FencedBlock
-                  | InlineFlow ;
+                  | InlineProse ;
 
 (* -------------------------------------------------------------------------- *)
 (* 2. App Directives ({@body ...})                                            *)
@@ -94,7 +94,7 @@ NormalElement   ::= "<" TagName ( Ws+ Attribute )* Ws*
                     ( "/>"
                     | ">" ElementChild* "</" TagName Ws* ">" ) ;
 
-RawTagName      ::= "code" | "pre" | "code-block" ;
+RawTagName      ::= "code" | "code-block" | "CodeBlock" ;
 
 TagName         ::= Identifier ( [-.] Identifier )* ;
 
@@ -150,7 +150,7 @@ DisplayMathBlock ::= "$$" RawChars ( "$$" | EOF )
                    | "\\[" RawChars ( "\\]" | EOF ) ;
 
 (* -------------------------------------------------------------------------- *)
-(* 7. Two-Tier Markdown Grammar: BlockProse vs. InlineFlow                    *)
+(* 7. Two-Tier Markdown Grammar: BlockProse vs. InlineProse                   *)
 (* -------------------------------------------------------------------------- *)
 
 (* 7.1 Top-Level BlockProse (Document Level Only):                            *)
@@ -172,14 +172,14 @@ TableBlock      ::= TableHeaderRow TableDelimiterRow TableBodyRow* ;
 BlockquoteBlock ::= ( LineStart [ \t]* ">" [ \t]? InlineRun "\n" )+ ;
 ParagraphBlock  ::= InlineRun ( BlankLine | EOF ) ;
 
-(* 7.2 Element-Interior InlineFlow (Inside <box>, <row>, <radio>, etc.):      *)
+(* 7.2 Element-Interior InlineProse (Inside <box>, <row>, <radio>, etc.):     *)
 (* NO block headings, NO markdown lists, NO markdown tables, NO indented      *)
 (* code blocks. Leading line indentation is ignored as XML formatting.        *)
 (* Single paragraph stays unwrapped (inline); multiple paragraphs separated   *)
 (* by BlankLine (\n\n) each wrap in <text>.                                   *)
-InlineFlow      ::= InlineRun ( BlankLine+ InlineRun )* ;
+InlineProse     ::= InlineRun ( BlankLine+ InlineRun )* ;
 
-(* 7.3 Unified InlineRun (Shared by ParagraphBlock and InlineFlow):           *)
+(* 7.3 Unified InlineRun (Shared by ParagraphBlock and InlineProse):          *)
 (* Inline Markdown constructs, {expr} interpolations, and inline DIL tags     *)
 (* (<icon>, <badge>, <Link>, <math>, <code>, <bold>, <italic>) stay inside    *)
 (* the SAME InlineRun so spaces around "$E=mc^2$" or "{n}" are never lost.    *)
