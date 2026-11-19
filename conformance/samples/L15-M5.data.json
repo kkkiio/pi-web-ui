@@ -1,0 +1,123 @@
+{
+  "constants": {
+    "0": "A2UI（Agent-to-User Interface）使用 JSON，而不是 JSX。",
+    "1": "它是一种让 LLM 通过声明式 JSON 描述 UI，再由客户端渲染成实际界面的协议。",
+    "2": "根据 A2UI 官方规范，v0.9.1 是当前生产版本，v1.0 处于 Candidate 阶段，两者都以 JSON 为核心。",
+    "3": [
+      "turn516876search7",
+      "turn516876search0"
+    ],
+    "4": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "5": "JSON vs JSX",
+    "6": "维度",
+    "7": "A2UI（JSON）",
+    "8": "JSX",
+    "9": "LLM 输出",
+    "10": "JSON 消息",
+    "11": "JSX 代码",
+    "12": "UI 描述",
+    "13": "声明式组件数据",
+    "14": "类 HTML 的组件语法",
+    "15": "渲染方式",
+    "16": "Renderer 解析 JSON",
+    "17": "React 等框架渲染",
+    "18": "跨平台",
+    "19": "Web、Flutter 等",
+    "20": "主要依赖对应框架",
+    "21": "安全性",
+    "22": "只允许预定义组件和行为",
+    "23": "JSX 通常涉及 JS 运行环境",
+    "24": "流式输出",
+    "25": "原生支持增量更新",
+    "26": "需要额外实现"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://github.com/a2ui-project/a2ui/blob/main/docs/public/index.md",
+                "ref_id": "turn516876search7",
+                "refs": [
+                  {
+                    "turn_index": 516876,
+                    "ref_type": "search",
+                    "ref_index": 7
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "a2ui/docs/public/index.md at main · a2ui-project/a2ui",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://github.com/a2ui-project/a2ui/blob/main/specification/v1_0/docs/a2ui_protocol.md",
+                "ref_id": "turn516876search0",
+                "refs": [
+                  {
+                    "turn_index": 516876,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "a2ui/specification/v1_0/docs/a2ui_protocol.md at main · a2ui-project/a2ui",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://github.com/a2ui-project/a2ui/blob/main/docs/public/index.md",
+            "https://github.com/a2ui-project/a2ui/blob/main/specification/v1_0/docs/a2ui_protocol.md"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "**A2UI（Agent-to-User Interface）使用 JSON，而不是 JSX。**\n\n它是一种让 LLM 通过声明式 JSON 描述 UI，再由客户端渲染成实际界面的协议。\n\n根据 A2UI 官方规范，v0.9.1 是当前生产版本，v1.0 处于 Candidate 阶段，两者都以 JSON 为核心。citeturn516876search7turn516876search0\n\n### JSON vs JSX\n\n| 维度 | A2UI（JSON） | JSX |\n|--------|--------|--------|\n| LLM 输出 | JSON 消息 | JSX 代码 |\n| UI 描述 | 声明式组件数据 | 类 HTML 的组件语法 |\n| 渲染方式 | Renderer 解析 JSON | React 等框架渲染 |\n| 跨平台 | Web、Flutter 等 | 主要依赖对应框架 |\n| 安全性 | 只允许预定义组件和行为 | JSX 通常涉及 JS 运行环境 |\n| 流式输出 | 原生支持增量更新 | 需要额外实现 |",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        3,
+        4
+      ],
+      "start_index": 159,
+      "end_index": 215,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://github.com/a2ui-project/a2ui/blob/main/docs/public/index.md"
+        },
+        {
+          "url": "https://github.com/a2ui-project/a2ui/blob/main/specification/v1_0/docs/a2ui_protocol.md"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn516876search7"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn516876search0"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

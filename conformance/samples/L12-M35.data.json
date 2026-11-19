@@ -1,0 +1,169 @@
+{
+  "constants": {
+    "0": "可以！而且你的场景正好适合 Android 的无线 ADB 调试（Wireless Debugging）。",
+    "1": " 🎹",
+    "2": "我查了 Google 的 Android 开发文档和 Chrome DevTools 文档，确认 Mac 可以通过 Wi-Fi 连接 Android Pad，并远程调试 Pad 上的 Chrome 网页，不需要占用 Pad 的 USB 接口。",
+    "3": [
+      "turn142576search2",
+      "turn142576search1"
+    ],
+    "4": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "5": "这意味着你可以实现这样的开发环境：",
+    "6": "Mac",
+    "7": "写代码 · 启动网页 · Chrome DevTools",
+    "8": "Wi-Fi / 无线 ADB 调试",
+    "9": "小米 Pad 8 Pro",
+    "10": "Chrome 运行钢琴教学网页 · USB MIDI 输入",
+    "11": "USB-C 数据线",
+    "12": "特伦斯 V30 Pro",
+    "13": "真实弹奏 → MIDI 按键事件 → Pad",
+    "14": "你可以在 Mac 上修改代码，同时在 Pad 上观察真实运行结果，还可以在 Mac 的 Chrome DevTools 中查看：",
+    "15": "JavaScript Console 日志、错误堆栈",
+    "16": "MIDI 输入事件与设备连接状态",
+    "17": "页面 HTML、CSS、动画表现",
+    "18": "Performance 性能分析和 Network 网络请求",
+    "19": "不需要购买 USB Hub，也不需要先把 Pad 插到 Mac 上初始化。",
+    "20": " Android 11 及以上系统支持直接通过 Wi-Fi 配对。",
+    "21": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "22": "下面给你一套适合这个项目的完整操作方法。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://developer.android.com/tools/adb?authuser=610&hl=en",
+                "ref_id": "turn142576search2",
+                "refs": [
+                  {
+                    "turn_index": 142576,
+                    "ref_type": "search",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "Android Developers",
+                "title": "Android Debug Bridge (adb)  |  Android Studio  |  Android Developers",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://github.com/GoogleChrome/developer.chrome.com/blob/main/site/en/docs/devtools/remote-debugging/index.md",
+                "ref_id": "turn142576search1",
+                "refs": [
+                  {
+                    "turn_index": 142576,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "developer.chrome.com/site/en/docs/devtools/remote-debugging/index.md at main · GoogleChrome/developer.chrome.com",
+                "snippet": null,
+                "pub_timestamp": 1428883200,
+                "metadata_label": "四月 13, 2015"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://developer.android.com/tools/adb?authuser=610&hl=en",
+            "https://github.com/GoogleChrome/developer.chrome.com/blob/main/site/en/docs/devtools/remote-debugging/index.md"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://developer.android.com/tools/adb?authuser=2&hl=zh-cn",
+                "ref_id": "turn142576search5",
+                "refs": [
+                  {
+                    "turn_index": 142576,
+                    "ref_type": "search",
+                    "ref_index": 5
+                  }
+                ],
+                "source_label": "Android Developers",
+                "title": "Android 调试桥 (adb)  |  Android Studio  |  Android Developers",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://developer.android.com/tools/adb?authuser=2&hl=zh-cn"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "**可以！而且你的场景正好适合 Android 的无线 ADB 调试（Wireless Debugging）。** 🎹\n\n我查了 Google 的 Android 开发文档和 Chrome DevTools 文档，确认 Mac 可以通过 Wi-Fi 连接 Android Pad，并远程调试 Pad 上的 Chrome 网页，不需要占用 Pad 的 USB 接口。citeturn142576search2turn142576search1\n\n这意味着你可以实现这样的开发环境：\n\n**Mac**\n\n写代码 · 启动网页 · Chrome DevTools\n\nWi-Fi / 无线 ADB 调试\n\n**小米 Pad 8 Pro**\n\nChrome 运行钢琴教学网页 · USB MIDI 输入\n\nUSB-C 数据线\n\n**特伦斯 V30 Pro**\n\n真实弹奏 → MIDI 按键事件 → Pad\n\n你可以在 Mac 上修改代码，同时在 Pad 上观察真实运行结果，还可以在 Mac 的 Chrome DevTools 中查看：\n\n- JavaScript Console 日志、错误堆栈\n- MIDI 输入事件与设备连接状态\n- 页面 HTML、CSS、动画表现\n- Performance 性能分析和 Network 网络请求\n\n**不需要购买 USB Hub，也不需要先把 Pad 插到 Mac 上初始化。** Android 11 及以上系统支持直接通过 Wi-Fi 配对。citeturn142576search5\n\n下面给你一套适合这个项目的完整操作方法。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        3,
+        4
+      ],
+      "start_index": 182,
+      "end_index": 238,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://developer.android.com/tools/adb?authuser=610&hl=en"
+        },
+        {
+          "url": "https://github.com/GoogleChrome/developer.chrome.com/blob/main/site/en/docs/devtools/remote-debugging/index.md"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn142576search2"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn142576search1"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        38,
+        39
+      ],
+      "start_index": 1587,
+      "end_index": 1618,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://developer.android.com/tools/adb?authuser=2&hl=zh-cn"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn142576search5"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

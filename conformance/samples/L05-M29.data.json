@@ -1,0 +1,967 @@
+{
+  "constants": {
+    "0": "五、Tool Calling：与 OpenAI 的最大实践差异",
+    "1": "这是我最建议你仔细理解的部分，因为实际开发 Agent 时，最容易在这里遇到协议兼容问题。",
+    "2": "假设你想让 Claude 调用一个查询天气的函数。",
+    "3": "1. 定义工具",
+    "4": "在 Anthropic 请求中，工具定义类似这样：",
+    "5": "01ca4a94-db99-53fd-9a31-641a94663f6b",
+    "6": null,
+    "7": "与 OpenAI 的工具定义相比，主要区别是：",
+    "8": "OpenAI Chat Completions",
+    "9": "Anthropic Messages",
+    "10": "type: \"function\"",
+    "11": "自定义工具不需要这一层",
+    "12": "function.name",
+    "13": "name",
+    "14": "function.description",
+    "15": "description",
+    "16": "function.parameters",
+    "17": "input_schema",
+    "18": "本质上都用 JSON Schema 描述工具参数。",
+    "19": "2. Claude 决定调用工具",
+    "20": "假设用户问：",
+    "21": "What's the weather in Tokyo?",
+    "22": "Claude 可能返回：",
+    "23": "958e2551-ee43-5127-a2a0-e60d124196f4",
+    "24": null,
+    "25": "注意两点：",
+    "26": "工具参数 ",
+    "27": "input",
+    "28": " 是 JSON 对象，而 OpenAI Chat Completions 的 ",
+    "29": "function.arguments",
+    "30": " 通常是 JSON 字符串。",
+    "31": "stop_reason: \"tool_use\"",
+    "32": " 告诉你的程序需要执行工具，而不是把当前内容当成完整的最终回答。",
+    "33": "3. 执行工具并返回结果",
+    "34": "你的程序执行 ",
+    "35": "get_weather(\"Tokyo\")",
+    "36": "，假设获得 ",
+    "37": "22°C, Sunny",
+    "38": "。",
+    "39": "然后需要把工具调用结果放在一个 ",
+    "40": "role: \"user\"",
+    "41": " 的消息",
+    "42": "里：",
+    "43": "d74ca780-dbfa-5ebf-aa89-46e122e7e702",
+    "44": null,
+    "45": "下一次请求要包含原来的对话历史、Claude 返回的 ",
+    "46": "tool_use",
+    "47": " 消息，以及这条 ",
+    "48": "tool_result",
+    "49": " 消息。",
+    "50": "这里很容易踩坑：",
+    "51": "Anthropic 没有像 OpenAI Chat Completions 那样用独立的 ",
+    "52": "tool",
+    "53": " 角色承载工具结果。",
+    "54": "工具结果被包装成一个 ",
+    "55": "user",
+    "56": " Message 的 Content Block。",
+    "57": "可以用下面的交互流程来理解：",
+    "58": {
+      "x": 3,
+      "y": 2
+    },
+    "59": "1. Client → Claude",
+    "60": "发送 messages + tools",
+    "61": {
+      "x": 3,
+      "y": 2
+    },
+    "62": "2. Claude → Client",
+    "63": "tool_use / stop_reason: tool_use",
+    "64": {
+      "x": 3,
+      "y": 2
+    },
+    "65": "3. Client 执行工具",
+    "66": "运行函数，获取返回值",
+    "67": {
+      "x": 3,
+      "y": 2
+    },
+    "68": "4. Client → Claude",
+    "69": "附带历史与 tool_result",
+    "70": {
+      "x": 3,
+      "y": 2
+    },
+    "71": "5. Claude → Client",
+    "72": "生成回答，或继续调用工具",
+    "73": "你可以将它视为一个经典的 Agent Loop：",
+    "74": "ccdb8a65-341b-5e3a-aa9f-79e75e311023",
+    "75": null,
+    "76": "这是展示流程的伪代码，",
+    "77": "call_claude",
+    "78": " 和 ",
+    "79": "execute_tool_calls",
+    "80": " 需要由你实现，也要处理多工具调用及异常情况。",
+    "81": "另外，Anthropic 还区分：",
+    "82": "Client Tools",
+    "83": "：你的应用程序负责执行，比如 ",
+    "84": "get_weather",
+    "85": "。",
+    "86": "Server Tools",
+    "87": "：Anthropic 负责执行，比如官方的 Web Search、Web Fetch 等工具。",
+    "88": "对于 Server Tools，你通常不需要自行处理 ",
+    "89": "tool_result",
+    "90": " 往返。",
+    "91": [
+      "turn919162search1",
+      "turn919162search6"
+    ],
+    "92": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "93": "六、Streaming：都是 SSE，但事件协议不一样",
+    "94": "如果你熟悉 OpenAI Chat Completions 的流式模式，应该知道它经常返回这样的数据：",
+    "95": "1aea8b7a-a311-5c6a-a620-bf9cd33fb063",
+    "96": null,
+    "97": "Anthropic 也是使用 SSE（Server-Sent Events），但其协议显式区分 Message 事件和 Content Block 事件。",
+    "98": "一个典型的流式生命周期为：",
+    "99": "message_start",
+    "100": "创建 Message，通常含有空的 ",
+    "101": "content[]",
+    "102": "。",
+    "103": "content_block_start",
+    "104": "开始生成一个 Block，比如文本或工具调用。",
+    "105": "content_block_delta",
+    "106": "持续收到文本或结构化参数的增量。",
+    "107": "content_block_stop",
+    "108": "当前 Block 结束。可能继续出现下一个 Block。",
+    "109": "message_delta",
+    "110": "更新 Message 的最终状态，比如 ",
+    "111": "stop_reason",
+    "112": " 和 Token 使用量。",
+    "113": "message_stop",
+    "114": "整个消息生成结束。",
+    "115": "例如，一段极简的 Anthropic SSE：",
+    "116": "041ded96-4b7d-5fed-bdf3-9c7d5c08b3db",
+    "117": null,
+    "118": "这是完整生命周期中的一个片段。",
+    "119": "这里最重要的是：",
+    "120": "你不能简单地把 Anthropic SSE 的 ",
+    "121": "data",
+    "122": " 当成 OpenAI 的 ",
+    "123": "choices[].delta",
+    "124": " 来解析。",
+    "125": "需要根据事件名和 ",
+    "126": "delta.type",
+    "127": " 分发。",
+    "128": "不同的增量类型包括：",
+    "129": "delta.type",
+    "130": "含义",
+    "131": "text_delta",
+    "132": "文本增量",
+    "133": "input_json_delta",
+    "134": "工具调用参数的 JSON 字符串片段",
+    "135": "thinking_delta",
+    "136": "可见的推理摘要增量",
+    "137": "signature_delta",
+    "138": "Thinking 签名相关数据",
+    "139": "input_json_delta",
+    "140": " 中的 ",
+    "141": "partial_json",
+    "142": " 可能只是一段不完整 JSON，因此流式处理工具调用时应累积后再解析。",
+    "143": "此外，最终停止原因通常出现在 ",
+    "144": "message_delta",
+    "145": " 中，而不是 ",
+    "146": "message_stop",
+    "147": " 本身。流式过程中还可能出现 ",
+    "148": "ping",
+    "149": " 和 ",
+    "150": "error",
+    "151": " 事件。",
+    "152": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "153": "七、Thinking：与 OpenAI Reasoning 的对应关系",
+    "154": "在 OpenAI Responses API 中，你可能会看到 ",
+    "155": "reasoning",
+    "156": " 类型的 Output Item，以及 ",
+    "157": "reasoning.effort",
+    "158": " 一类控制参数。",
+    "159": "Anthropic 也支持对应的 Thinking 能力，并且有较为明确的协议表达。",
+    "160": "例如，在支持的 Claude 模型上，可以配置：",
+    "161": "53249e14-19f3-50f4-9376-db54f5ae5ba6",
+    "162": null,
+    "163": "这样 Claude 可以根据问题自行决定推理深度，并在支持的情况下返回推理摘要。",
+    "164": "返回内容可能包含：",
+    "165": "4966c913-a2a3-5f88-acc6-f6b5140ae20e",
+    "166": null,
+    "167": "这里有三个容易忽略的细节：",
+    "168": "thinking",
+    "169": " Block 不是最终回复的正文；",
+    "170": "text",
+    "171": " 才是通常要展示给用户的回答。",
+    "172": "返回的 Thinking 文本只是推理摘要，不是未经处理的完整内部推理。",
+    "173": "signature",
+    "174": " 是需要按官方规则原样保留并回传的数据，尤其是在多轮工具调用场景中。",
+    "175": "较早的 Claude 模型还支持通过 ",
+    "176": "thinking: {\"type\":\"enabled\",\"budget_tokens\":...}",
+    "177": " 指定推理预算。但新型号的支持情况已经发生变化，例如 Claude Opus 5.5 使用 Adaptive Thinking，不接受旧的手动 ",
+    "178": "budget_tokens",
+    "179": " 配置。",
+    "180": "因此不要假设所有 Claude 模型都接受完全相同的 Thinking 参数。",
+    "181": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "182": "八、另外几个值得知道的特性",
+    "183": "1. Structured Outputs",
+    "184": "Anthropic 也支持 JSON Schema 约束输出，最新协议使用 ",
+    "185": "output_config.format",
+    "186": "：",
+    "187": "d63fb59c-4897-5db5-82a1-6093adcc5b15",
+    "188": null,
+    "189": "它与 OpenAI Responses 的 ",
+    "190": "text.format",
+    "191": " 概念相近。生成的 JSON 会出现在 Claude 的 ",
+    "192": "text",
+    "193": " Content Block 中。",
+    "194": "Anthropic 的工具定义也支持 ",
+    "195": "strict: true",
+    "196": "，用于约束工具调用参数。JSON 输出和 Strict Tool Use 解决的是不同的问题。",
+    "197": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+    "198": "2. Prompt Caching",
+    "199": "Anthropic 的 Prompt Caching 也值得特别关注。",
+    "200": "对于长 System Prompt、RAG 上下文、长对话历史等复用场景，你可以在请求顶层指定：",
+    "201": "a379f56d-c773-50a2-8ba5-e7d538f41462",
+    "202": null,
+    "203": "这是自动缓存模式。你也可以把 ",
+    "204": "cache_control",
+    "205": " 放在特定 Content Block 上，明确指定缓存断点。",
+    "206": "缓存的默认 TTL 是 5 分钟，也支持 1 小时选项。返回的 ",
+    "207": "usage",
+    "208": " 会包含缓存创建和缓存命中相关的 Token 统计。",
+    "209": "注意：缓存不是对话状态。",
+    "210": " 即使命中 Prompt Cache，你仍需要按照 Messages API 的规则构造完整上下文。缓存只是让重复上下文处理更高效。",
+    "211": "4d343fcd-41df-5b74-81df-63c72367c41d",
+    "212": "3. 结束原因 Stop Reason",
+    "213": "Anthropic 的 ",
+    "214": "stop_reason",
+    "215": " 很值得专门处理，尤其在构建通用模型网关时。",
+    "216": "Anthropic",
+    "217": "含义",
+    "218": "end_turn",
+    "219": "模型正常结束当前回复",
+    "220": "max_tokens",
+    "221": "达到输出 Token 限制",
+    "222": "tool_use",
+    "223": "需要处理客户端工具调用",
+    "224": "stop_sequence",
+    "225": "命中自定义停止序列",
+    "226": "pause_turn",
+    "227": "服务端工具执行循环暂停",
+    "228": "refusal",
+    "229": "模型拒绝处理请求",
+    "230": "model_context_window_exceeded",
+    "231": "上下文窗口达到限制",
+    "232": "它不与 OpenAI Chat Completions 的 ",
+    "233": "finish_reason",
+    "234": " 完全一一对应。例如，Anthropic 对自定义停止序列和自然结束使用不同的原因值。",
+    "235": "工程上需要根据 ",
+    "236": "stop_reason",
+    "237": " 决定继续调用、执行工具、处理截断，还是结束当前任务。",
+    "238": "567c4e78-901e-511d-a9d6-a65480f3d154",
+    "239": "4. 旧版 Completion 与参数兼容性",
+    "240": "Anthropic 以前也有一个旧接口：",
+    "241": "e744f6d7-f3d5-58e0-8d9a-86e5e63d1de8",
+    "242": null,
+    "243": "这是类似传统 Prompt-to-Text Completion 的接口，",
+    "244": "现在已经标记为 Deprecated",
+    "245": "，新项目应使用 Messages API。",
+    "246": "77220593-0372-59ec-91ea-c8522e0f86d0",
+    "247": "另外，截至目前的官方文档，Claude 4.7 及以后的模型不再支持非默认的 ",
+    "248": "temperature",
+    "249": "、",
+    "250": "top_p",
+    "251": " 和 ",
+    "252": "top_k",
+    "253": " 采样配置；Claude 4.6 及以后的模型也不支持旧式 Assistant Prefill 技巧。迁移已有客户端时需要检查这些参数，避免 HTTP 400 错误。",
+    "254": "0ee4d5fd-1bff-5946-adc9-da984efdc759",
+    "255": "九、如果你要实现一个同时支持 OpenAI / Anthropic 的客户端",
+    "256": "建议不要直接在两套原始 JSON 之间进行简单的字段替换，而应该建立一个内部统一模型。",
+    "257": "比如：",
+    "258": "04ee1613-6751-5d57-ba94-0ee87edc864c",
+    "259": null,
+    "260": "这个定义只是简化的中间表示。如果支持 Thinking、图片、PDF、流式事件、并行工具调用等，还需要额外字段和类型，并保留不能丢失的供应商专有数据。",
+    "261": "整体架构可以是：",
+    "262": "Application / Agent",
+    "263": "你的业务代码",
+    "264": {
+      "size": 1,
+      "color": "default"
+    },
+    "265": "Unified LLM Abstraction",
+    "266": "Message、Content、Tool Call、Stop Reason、Stream Event",
+    "267": "每个 Adapter 要负责转换四个重要方面：输入消息结构、输出类型化内容、工具调用往返、以及 Streaming 事件和结束状态。",
+    "268": "十、最后帮你建立一个心智模型",
+    "269": "理解这三套 API，其实可以从设计重心入手：",
+    "270": "OpenAI Chat Completions",
+    "271": "：围绕聊天消息和工具调用组织协议。",
+    "272": "OpenAI Responses",
+    "273": "：围绕一次模型响应以及其中的多种类型化 Items 组织协议，并提供更多服务端状态管理方式。",
+    "274": "Anthropic Messages",
+    "275": "：围绕单个 Assistant Message 及其内部的类型化 Content Blocks 组织协议；基础对话是无状态的。",
+    "276": "如果你只记住最核心的一句话，我建议是：",
+    "277": "Anthropic Messages = Chat Completions 风格的对话管理 + Content Blocks 风格的结构化生成 + 一套独立的 Tool Use 和 Streaming 协议。",
+    "278": "官方文档",
+    "279": "这几份值得收藏：",
+    "280": "Anthropic Messages API Reference",
+    "281": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+    "282": "Using the Messages API",
+    "283": "dedf923e-efb9-5796-821d-1bd07d4a9183",
+    "284": "How Tool Use Works",
+    "285": "4ddbf0e3-3cd8-5180-91fb-b24f383fd167",
+    "286": "Streaming Messages",
+    "287": "3e979f04-30fe-57ef-933b-57fafb04a40e",
+    "288": "OpenAI: Migrate to Responses API",
+    "289": "a517026a-f527-57b2-baac-bce3110104a1",
+    "290": "如果你接下来要实现模型调用框架，我建议重点继续研究 ",
+    "291": "Anthropic 与 OpenAI 在 Streaming Tool Calls 和多轮 Thinking 上的兼容性",
+    "292": "。这两个部分是做跨厂商 Agent 或 LLM Gateway 时，最容易出现隐藏问题的地方。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "25bfac6e-fbcd-5e68-a028-1e13eb99de53": {
+          "status": "resolved",
+          "state": {
+            "url": "https://platform.claude.com/docs/en/api/messages/create",
+            "title": "Anthropic Messages API Reference",
+            "source_label": "platform.claude.com",
+            "domain": "platform.claude.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "Anthropic Messages API",
+            "title_last_word": "Reference"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/api/messages/create"
+          ],
+          "componentName": "Link"
+        },
+        "dedf923e-efb9-5796-821d-1bd07d4a9183": {
+          "status": "resolved",
+          "state": {
+            "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+            "title": "Using the Messages API",
+            "source_label": "platform.claude.com",
+            "domain": "platform.claude.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "Using the Messages",
+            "title_last_word": "API"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/working-with-messages"
+          ],
+          "componentName": "Link"
+        },
+        "4ddbf0e3-3cd8-5180-91fb-b24f383fd167": {
+          "status": "resolved",
+          "state": {
+            "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+            "title": "How Tool Use Works",
+            "source_label": "platform.claude.com",
+            "domain": "platform.claude.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "How Tool Use",
+            "title_last_word": "Works"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works"
+          ],
+          "componentName": "Link"
+        },
+        "3e979f04-30fe-57ef-933b-57fafb04a40e": {
+          "status": "resolved",
+          "state": {
+            "url": "https://platform.claude.com/docs/en/build-with-claude/streaming",
+            "title": "Streaming Messages",
+            "source_label": "platform.claude.com",
+            "domain": "platform.claude.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "Streaming",
+            "title_last_word": "Messages"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/streaming"
+          ],
+          "componentName": "Link"
+        },
+        "a517026a-f527-57b2-baac-bce3110104a1": {
+          "status": "resolved",
+          "state": {
+            "url": "https://developers.openai.com/api/docs/guides/migrate-to-responses",
+            "title": "OpenAI: Migrate to Responses API",
+            "source_label": "developers.openai.com",
+            "domain": "developers.openai.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "OpenAI: Migrate to Responses",
+            "title_last_word": "API"
+          },
+          "safe_urls": [
+            "https://developers.openai.com/api/docs/guides/migrate-to-responses"
+          ],
+          "componentName": "Link"
+        },
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/zh-CN/docs/build-with-claude/tool-use/overview",
+                "ref_id": "turn919162search1",
+                "refs": [
+                  {
+                    "turn_index": 919162,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Claude 的工具使用",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+                "ref_id": "turn919162search6",
+                "refs": [
+                  {
+                    "turn_index": 919162,
+                    "ref_type": "search",
+                    "ref_index": 6
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "How tool use works",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/zh-CN/docs/build-with-claude/tool-use/overview",
+            "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/streaming",
+                "ref_id": "turn618649search4",
+                "refs": [
+                  {
+                    "turn_index": 618649,
+                    "ref_type": "search",
+                    "ref_index": 4
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Streaming messages",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/streaming"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/thinking",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/HgDH10jdqThxf-f6AIqaeG9RLiPyxbAG6FiK9eBLCTM2qyJH4_aA8scemlZmTK7VLuj5Xs7wL0zi2FovbSRxYooAnoa-_xOrN1iCEx8YNA94roLN25eSbZHWLiXR2m8ctMBn3CUF2qPg8TzmO3HgsQ",
+                "ref_id": "turn670425view0",
+                "refs": [
+                  {
+                    "turn_index": 670425,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Thinking",
+                "snippet": "Total lines: 765",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/thinking",
+            "https://images.openai.com/static-rsc-1/HgDH10jdqThxf-f6AIqaeG9RLiPyxbAG6FiK9eBLCTM2qyJH4_aA8scemlZmTK7VLuj5Xs7wL0zi2FovbSRxYooAnoa-_xOrN1iCEx8YNA94roLN25eSbZHWLiXR2m8ctMBn3CUF2qPg8TzmO3HgsQ"
+          ],
+          "componentName": "Cite"
+        },
+        "f6f56486-f9e8-5487-bada-8d928fdfc15f": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/structured-outputs?trk=article-ssr-frontend-pulse_x-social-details_comments-action_comment-text",
+                "ref_id": "turn919162search3",
+                "refs": [
+                  {
+                    "turn_index": 919162,
+                    "ref_type": "search",
+                    "ref_index": 3
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Structured outputs",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/structured-outputs?trk=article-ssr-frontend-pulse_x-social-details_comments-action_comment-text"
+          ],
+          "componentName": "Cite"
+        },
+        "4d343fcd-41df-5b74-81df-63c72367c41d": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/zh-CN/build-with-claude/prompt-caching",
+                "ref_id": "turn104396search0",
+                "refs": [
+                  {
+                    "turn_index": 104396,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "提示缓存",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/zh-CN/build-with-claude/prompt-caching"
+          ],
+          "componentName": "Cite"
+        },
+        "567c4e78-901e-511d-a9d6-a65480f3d154": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons",
+                "ref_id": "turn919162search5",
+                "refs": [
+                  {
+                    "turn_index": 919162,
+                    "ref_type": "search",
+                    "ref_index": 5
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Stop reasons and fallback",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons"
+          ],
+          "componentName": "Cite"
+        },
+        "77220593-0372-59ec-91ea-c8522e0f86d0": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/api/completions/create",
+                "ref_id": "turn104396search1",
+                "refs": [
+                  {
+                    "turn_index": 104396,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Claude API Reference",
+                "title": "Create a Text Completion",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/api/completions/create"
+          ],
+          "componentName": "Cite"
+        },
+        "0ee4d5fd-1bff-5946-adc9-da984efdc759": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM",
+                "ref_id": "turn251480view0",
+                "refs": [
+                  {
+                    "turn_index": 251480,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Using the Messages API",
+                "snippet": "Total lines: 407",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+            "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 五、Tool Calling：与 OpenAI 的最大实践差异\n\n这是我最建议你仔细理解的部分，因为实际开发 Agent 时，最容易在这里遇到协议兼容问题。\n\n假设你想让 Claude 调用一个查询天气的函数。\n\n### 1\\. 定义工具\n\n在 Anthropic 请求中，工具定义类似这样：\n\n```json\n\n{\n  \"name\": \"get_weather\",\n  \"description\": \"Get weather for a city.\",\n  \"input_schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"city\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\"city\"]\n  }\n}\n```\n\n与 OpenAI 的工具定义相比，主要区别是：\n\n| OpenAI Chat Completions | Anthropic Messages |\n|--------|--------|\n| `type: \"function\"` | 自定义工具不需要这一层 |\n| `function.name` | `name` |\n| `function.description` | `description` |\n| `function.parameters` | `input_schema` |\n\n本质上都用 JSON Schema 描述工具参数。\n\n### 2\\. Claude 决定调用工具\n\n假设用户问：\n\n> What's the weather in Tokyo?\n\nClaude 可能返回：\n\n```json\n\n{\n  \"content\": [\n    {\n      \"type\": \"tool_use\",\n      \"id\": \"toolu_123\",\n      \"name\": \"get_weather\",\n      \"input\": {\n        \"city\": \"Tokyo\"\n      }\n    }\n  ],\n  \"stop_reason\": \"tool_use\"\n}\n```\n\n注意两点：\n\n- 工具参数 `input` 是 JSON 对象，而 OpenAI Chat Completions 的 `function.arguments` 通常是 JSON 字符串。\n- `stop_reason: \"tool_use\"` 告诉你的程序需要执行工具，而不是把当前内容当成完整的最终回答。\n\n### 3\\. 执行工具并返回结果\n\n你的程序执行 `get_weather(\"Tokyo\")`，假设获得 `22°C, Sunny`。\n\n然后需要把工具调用结果放在一个 **`role: \"user\"` 的消息**里：\n\n```json\n\n{\n  \"role\": \"user\",\n  \"content\": [\n    {\n      \"type\": \"tool_result\",\n      \"tool_use_id\": \"toolu_123\",\n      \"content\": \"22°C, Sunny\"\n    }\n  ]\n}\n```\n\n下一次请求要包含原来的对话历史、Claude 返回的 `tool_use` 消息，以及这条 `tool_result` 消息。\n\n这里很容易踩坑：\n\n**Anthropic 没有像 OpenAI Chat Completions 那样用独立的 `tool` 角色承载工具结果。**\n\n工具结果被包装成一个 `user` Message 的 Content Block。\n\n可以用下面的交互流程来理解：\n\n1\\. Client → Claude\n\n发送 messages + tools\n\n2\\. Claude → Client\n\ntool\\_use / stop\\_reason: tool\\_use\n\n3\\. Client 执行工具\n\n运行函数，获取返回值\n\n4\\. Client → Claude\n\n附带历史与 tool\\_result\n\n5\\. Claude → Client\n\n生成回答，或继续调用工具\n\n你可以将它视为一个经典的 Agent Loop：\n\n```python\nwhile True:\n    response = call_claude(messages, tools)\n\n    messages.append({\n        \"role\": \"assistant\",\n        \"content\": response.content\n    })\n\n    if response.stop_reason == \"tool_use\":\n        results = execute_tool_calls(response.content)\n        messages.append({\n            \"role\": \"user\",\n            \"content\": results\n        })\n        continue\n\n    break\n```\n\n这是展示流程的伪代码，`call_claude` 和 `execute_tool_calls` 需要由你实现，也要处理多工具调用及异常情况。\n\n另外，Anthropic 还区分：\n\n- **Client Tools**：你的应用程序负责执行，比如 `get_weather`。\n- **Server Tools**：Anthropic 负责执行，比如官方的 Web Search、Web Fetch 等工具。\n\n对于 Server Tools，你通常不需要自行处理 `tool_result` 往返。citeturn919162search1turn919162search6\n\n## 六、Streaming：都是 SSE，但事件协议不一样\n\n如果你熟悉 OpenAI Chat Completions 的流式模式，应该知道它经常返回这样的数据：\n\n```text\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\ndata: [DONE]\n```\n\nAnthropic 也是使用 SSE（Server-Sent Events），但其协议显式区分 Message 事件和 Content Block 事件。\n\n一个典型的流式生命周期为：\n\n1. **`message_start`**\n   \n   创建 Message，通常含有空的 `content[]`。\n2. **`content_block_start`**\n   \n   开始生成一个 Block，比如文本或工具调用。\n3. **`content_block_delta`**\n   \n   持续收到文本或结构化参数的增量。\n4. **`content_block_stop`**\n   \n   当前 Block 结束。可能继续出现下一个 Block。\n5. **`message_delta`**\n   \n   更新 Message 的最终状态，比如 `stop_reason` 和 Token 使用量。\n6. **`message_stop`**\n   \n   整个消息生成结束。\n\n例如，一段极简的 Anthropic SSE：\n\n```text\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" world\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n```\n\n这是完整生命周期中的一个片段。\n\n这里最重要的是：\n\n**你不能简单地把 Anthropic SSE 的 `data` 当成 OpenAI 的 `choices[].delta` 来解析。**\n\n需要根据事件名和 `delta.type` 分发。\n\n不同的增量类型包括：\n\n| `delta.type` | 含义 |\n|--------|--------|\n| `text_delta` | 文本增量 |\n| `input_json_delta` | 工具调用参数的 JSON 字符串片段 |\n| `thinking_delta` | 可见的推理摘要增量 |\n| `signature_delta` | Thinking 签名相关数据 |\n\n`input_json_delta` 中的 `partial_json` 可能只是一段不完整 JSON，因此流式处理工具调用时应累积后再解析。\n\n此外，最终停止原因通常出现在 `message_delta` 中，而不是 `message_stop` 本身。流式过程中还可能出现 `ping` 和 `error` 事件。citeturn618649search4\n\n## 七、Thinking：与 OpenAI Reasoning 的对应关系\n\n在 OpenAI Responses API 中，你可能会看到 `reasoning` 类型的 Output Item，以及 `reasoning.effort` 一类控制参数。\n\nAnthropic 也支持对应的 Thinking 能力，并且有较为明确的协议表达。\n\n例如，在支持的 Claude 模型上，可以配置：\n\n```json\n{\n  \"thinking\": {\n    \"type\": \"adaptive\",\n    \"display\": \"summarized\"\n  }\n}\n```\n\n这样 Claude 可以根据问题自行决定推理深度，并在支持的情况下返回推理摘要。\n\n返回内容可能包含：\n\n```json\n{\n  \"content\": [\n    {\n      \"type\": \"thinking\",\n      \"thinking\": \"A short reasoning summary...\",\n      \"signature\": \"encrypted-signature...\"\n    },\n    {\n      \"type\": \"text\",\n      \"text\": \"The answer is 42.\"\n    }\n  ]\n}\n```\n\n这里有三个容易忽略的细节：\n\n1. `thinking` Block 不是最终回复的正文；`text` 才是通常要展示给用户的回答。\n2. 返回的 Thinking 文本只是推理摘要，不是未经处理的完整内部推理。\n3. `signature` 是需要按官方规则原样保留并回传的数据，尤其是在多轮工具调用场景中。\n\n较早的 Claude 模型还支持通过 `thinking: {\"type\":\"enabled\",\"budget_tokens\":...}` 指定推理预算。但新型号的支持情况已经发生变化，例如 Claude Opus 5.5 使用 Adaptive Thinking，不接受旧的手动 `budget_tokens` 配置。\n\n因此不要假设所有 Claude 模型都接受完全相同的 Thinking 参数。citeturn670425view0\n\n## 八、另外几个值得知道的特性\n\n### 1\\. Structured Outputs\n\nAnthropic 也支持 JSON Schema 约束输出，最新协议使用 `output_config.format`：\n\n```json\n\n{\n  \"output_config\": {\n    \"format\": {\n      \"type\": \"json_schema\",\n      \"schema\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"answer\": {\n            \"type\": \"string\"\n          }\n        },\n        \"required\": [\"answer\"],\n        \"additionalProperties\": false\n      }\n    }\n  }\n}\n```\n\n它与 OpenAI Responses 的 `text.format` 概念相近。生成的 JSON 会出现在 Claude 的 `text` Content Block 中。\n\nAnthropic 的工具定义也支持 `strict: true`，用于约束工具调用参数。JSON 输出和 Strict Tool Use 解决的是不同的问题。citeturn919162search3\n\n### 2\\. Prompt Caching\n\nAnthropic 的 Prompt Caching 也值得特别关注。\n\n对于长 System Prompt、RAG 上下文、长对话历史等复用场景，你可以在请求顶层指定：\n\n```json\n{\n  \"cache_control\": {\n    \"type\": \"ephemeral\"\n  }\n}\n```\n\n这是自动缓存模式。你也可以把 `cache_control` 放在特定 Content Block 上，明确指定缓存断点。\n\n缓存的默认 TTL 是 5 分钟，也支持 1 小时选项。返回的 `usage` 会包含缓存创建和缓存命中相关的 Token 统计。\n\n**注意：缓存不是对话状态。** 即使命中 Prompt Cache，你仍需要按照 Messages API 的规则构造完整上下文。缓存只是让重复上下文处理更高效。citeturn104396search0\n\n### 3\\. 结束原因 Stop Reason\n\nAnthropic 的 `stop_reason` 很值得专门处理，尤其在构建通用模型网关时。\n\n| Anthropic | 含义 |\n|--------|--------|\n| `end_turn` | 模型正常结束当前回复 |\n| `max_tokens` | 达到输出 Token 限制 |\n| `tool_use` | 需要处理客户端工具调用 |\n| `stop_sequence` | 命中自定义停止序列 |\n| `pause_turn` | 服务端工具执行循环暂停 |\n| `refusal` | 模型拒绝处理请求 |\n| `model_context_window_exceeded` | 上下文窗口达到限制 |\n\n它不与 OpenAI Chat Completions 的 `finish_reason` 完全一一对应。例如，Anthropic 对自定义停止序列和自然结束使用不同的原因值。\n\n工程上需要根据 `stop_reason` 决定继续调用、执行工具、处理截断，还是结束当前任务。citeturn919162search5\n\n### 4\\. 旧版 Completion 与参数兼容性\n\nAnthropic 以前也有一个旧接口：\n\n```http\nPOST /v1/complete\n```\n\n这是类似传统 Prompt-to-Text Completion 的接口，**现在已经标记为 Deprecated**，新项目应使用 Messages API。citeturn104396search1\n\n另外，截至目前的官方文档，Claude 4.7 及以后的模型不再支持非默认的 `temperature`、`top_p` 和 `top_k` 采样配置；Claude 4.6 及以后的模型也不支持旧式 Assistant Prefill 技巧。迁移已有客户端时需要检查这些参数，避免 HTTP 400 错误。citeturn251480view0\n\n---\n\n## 九、如果你要实现一个同时支持 OpenAI / Anthropic 的客户端\n\n建议不要直接在两套原始 JSON 之间进行简单的字段替换，而应该建立一个内部统一模型。\n\n比如：\n\n```typescript\ntype ContentPart =\n  | { type: \"text\"; text: string }\n  | {\n      type: \"tool_call\";\n      id: string;\n      name: string;\n      arguments: unknown;\n    }\n  | {\n      type: \"tool_result\";\n      callId: string;\n      result: unknown;\n    };\n\ntype UnifiedMessage = {\n  role: \"system\" | \"user\" | \"assistant\" | \"tool\";\n  content: ContentPart[];\n};\n```\n\n这个定义只是简化的中间表示。如果支持 Thinking、图片、PDF、流式事件、并行工具调用等，还需要额外字段和类型，并保留不能丢失的供应商专有数据。\n\n整体架构可以是：\n\n**Application / Agent**\n\n你的业务代码\n\n**Unified LLM Abstraction**\n\nMessage、Content、Tool Call、Stop Reason、Stream Event\n\n每个 Adapter 要负责转换四个重要方面：输入消息结构、输出类型化内容、工具调用往返、以及 Streaming 事件和结束状态。\n\n## 十、最后帮你建立一个心智模型\n\n理解这三套 API，其实可以从设计重心入手：\n\n- **OpenAI Chat Completions**：围绕聊天消息和工具调用组织协议。\n- **OpenAI Responses**：围绕一次模型响应以及其中的多种类型化 Items 组织协议，并提供更多服务端状态管理方式。\n- **Anthropic Messages**：围绕单个 Assistant Message 及其内部的类型化 Content Blocks 组织协议；基础对话是无状态的。\n\n如果你只记住最核心的一句话，我建议是：\n\n**Anthropic Messages = Chat Completions 风格的对话管理 + Content Blocks 风格的结构化生成 + 一套独立的 Tool Use 和 Streaming 协议。**\n\n### 官方文档\n\n这几份值得收藏：\n\n- urlAnthropic Messages API Referencehttps://platform.claude.com/docs/en/api/messages/create\n- urlUsing the Messages APIhttps://platform.claude.com/docs/en/build-with-claude/working-with-messages\n- urlHow Tool Use Workshttps://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works\n- urlStreaming Messageshttps://platform.claude.com/docs/en/build-with-claude/streaming\n- urlOpenAI: Migrate to Responses APIhttps://developers.openai.com/api/docs/guides/migrate-to-responses\n\n如果你接下来要实现模型调用框架，我建议重点继续研究 **Anthropic 与 OpenAI 在 Streaming Tool Calls 和多轮 Thinking 上的兼容性**。这两个部分是做跨厂商 Agent 或 LLM Gateway 时，最容易出现隐藏问题的地方。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite",
+    "Link"
+  ],
+  "genui_components": [
+    {
+      "type": "code_block",
+      "tree_range": [
+        2,
+        3
+      ],
+      "start_index": 150,
+      "end_index": 410
+    },
+    {
+      "type": "code_block",
+      "tree_range": [
+        39,
+        40
+      ],
+      "start_index": 752,
+      "end_index": 985
+    },
+    {
+      "type": "code_block",
+      "tree_range": [
+        55,
+        56
+      ],
+      "start_index": 1254,
+      "end_index": 1441
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        106,
+        107
+      ],
+      "start_index": 3807,
+      "end_index": 3863,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/zh-CN/docs/build-with-claude/tool-use/overview"
+        },
+        {
+          "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn919162search1"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn919162search6"
+        }
+      ]
+    },
+    {
+      "type": "code_block",
+      "tree_range": [
+        148,
+        149
+      ],
+      "start_index": 5128,
+      "end_index": 5598
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        194,
+        195
+      ],
+      "start_index": 6070,
+      "end_index": 6101,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/streaming"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn618649search4"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        220,
+        221
+      ],
+      "start_index": 7041,
+      "end_index": 7070,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/thinking"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/HgDH10jdqThxf-f6AIqaeG9RLiPyxbAG6FiK9eBLCTM2qyJH4_aA8scemlZmTK7VLuj5Xs7wL0zi2FovbSRxYooAnoa-_xOrN1iCEx8YNA94roLN25eSbZHWLiXR2m8ctMBn3CUF2qPg8TzmO3HgsQ"
+        }
+      ]
+    },
+    {
+      "type": "code_block",
+      "tree_range": [
+        225,
+        226
+      ],
+      "start_index": 7180,
+      "end_index": 7520
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        231,
+        232
+      ],
+      "start_index": 7691,
+      "end_index": 7722,
+      "component_resolution_id": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/structured-outputs?trk=article-ssr-frontend-pulse_x-social-details_comments-action_comment-text"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn919162search3"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        242,
+        243
+      ],
+      "start_index": 8112,
+      "end_index": 8143,
+      "component_resolution_id": "4d343fcd-41df-5b74-81df-63c72367c41d",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/zh-CN/build-with-claude/prompt-caching"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn104396search0"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        298,
+        299
+      ],
+      "start_index": 8613,
+      "end_index": 8644,
+      "component_resolution_id": "567c4e78-901e-511d-a9d6-a65480f3d154",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn919162search5"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        304,
+        305
+      ],
+      "start_index": 8808,
+      "end_index": 8839,
+      "component_resolution_id": "77220593-0372-59ec-91ea-c8522e0f86d0",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/api/completions/create"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn104396search1"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        309,
+        310
+      ],
+      "start_index": 8994,
+      "end_index": 9023,
+      "component_resolution_id": "0ee4d5fd-1bff-5946-adc9-da984efdc759",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        350,
+        351
+      ],
+      "start_index": 11097,
+      "end_index": 11207,
+      "component_resolution_id": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/api/messages/create"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        353,
+        354
+      ],
+      "start_index": 11210,
+      "end_index": 11330,
+      "component_resolution_id": "dedf923e-efb9-5796-821d-1bd07d4a9183",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        356,
+        357
+      ],
+      "start_index": 11333,
+      "end_index": 11454,
+      "component_resolution_id": "4ddbf0e3-3cd8-5180-91fb-b24f383fd167",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        359,
+        360
+      ],
+      "start_index": 11457,
+      "end_index": 11561,
+      "component_resolution_id": "3e979f04-30fe-57ef-933b-57fafb04a40e",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/streaming"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        362,
+        363
+      ],
+      "start_index": 11564,
+      "end_index": 11685,
+      "component_resolution_id": "a517026a-f527-57b2-baac-bce3110104a1",
+      "safe_urls": [
+        {
+          "url": "https://developers.openai.com/api/docs/guides/migrate-to-responses"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

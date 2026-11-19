@@ -1,0 +1,272 @@
+{
+  "constants": {
+    "0": "你的理解基本准确，而且你提出的网络分区问题，恰好触及了 ",
+    "1": "Durable Objects 设计里最关键的一致性边界",
+    "2": "。",
+    "3": "1. 你想起来的微软框架叫 Orleans",
+    "4": "全名是 ",
+    "5": "Microsoft Orleans",
+    "6": "3ffebd24-1b61-5e95-8b90-4667c80853e6",
+    "7": "。",
+    "8": "它的核心抽象叫 ",
+    "9": "Virtual Actor",
+    "10": "，具体实例叫 Grain。",
+    "11": "微软从 2010 年开始研究 Orleans，后来用于 Halo 系列游戏的云端服务。",
+    "12": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "13": "它与 Durable Objects 的核心思想几乎一致：",
+    "14": "Actor 有稳定的逻辑身份。",
+    "15": "Runtime 自动管理激活、休眠、故障恢复。",
+    "16": "每个 Actor 独立管理自己的状态。",
+    "17": "大量 Actor 分布在不同机器上运行。",
+    "18": "不过有个区别：Orleans 更偏向通用分布式 Actor 框架，支持多种状态存储方案；Durable Objects 把私有持久化存储直接纳入核心编程模型。",
+    "19": "2. 对象存储现在真的支持强一致 CAS？",
+    "20": "是的，但并不是所有对象存储都支持。",
+    "21": "几个典型例子：",
+    "22": "服务",
+    "23": "条件写入机制",
+    "24": "Amazon S3",
+    "25": "If-Match",
+    "26": " / ",
+    "27": "If-None-Match",
+    "28": "Cloudflare R2",
+    "29": "ETag 条件写入",
+    "30": "Google Cloud Storage",
+    "31": "Generation Preconditions",
+    "32": "Azure Blob",
+    "33": "ETag + 条件请求",
+    "34": "例如 S3：",
+    "35": "3ed03f6a-acca-5f48-a30a-6e96e8ed0ae3",
+    "36": null,
+    "37": "如果 Node A 已经修改了这个对象，Node B 的请求就会失败。",
+    "38": "这是存储服务原子执行的条件写入，而不是客户端先检查再覆盖，因此可以用于实现 CAS。",
+    "39": [
+      "turn767889search2",
+      "turn767889search4",
+      "turn767889view0"
+    ],
+    "40": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "41": "不过，一个容易忽略的地方是：",
+    "42": "强一致读写不等于支持 CAS",
+    "43": "，而兼容 S3 API 也不代表完整实现了相关条件写入语义。",
+    "44": "celld 官方就明确排除了部分对象存储实现，并提供了条件写入测试。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "3ffebd24-1b61-5e95-8b90-4667c80853e6": {
+          "status": "resolved",
+          "state": {
+            "value": "Microsoft Orleans",
+            "action_payload": {
+              "query": "Microsoft Orleans",
+              "category": "software",
+              "extraParams": {
+                "disambiguation": "微软 .NET Virtual Actor 分布式框架"
+              },
+              "event_name": "chatgpt_entity_action",
+              "event_data": {
+                "action_type": "clicked",
+                "surface_location": "response",
+                "entity_affordance": "inline",
+                "content_reference_type": "entity",
+                "entity_category": "software"
+              }
+            },
+            "click_action": {
+              "handler": "client",
+              "type": "open_entity_detail",
+              "payload": {
+                "query": "Microsoft Orleans",
+                "category": "software",
+                "extraParams": {
+                  "disambiguation": "微软 .NET Virtual Actor 分布式框架"
+                },
+                "event_name": "chatgpt_entity_action",
+                "event_data": {
+                  "action_type": "clicked",
+                  "surface_location": "response",
+                  "entity_affordance": "inline",
+                  "content_reference_type": "entity",
+                  "entity_category": "software"
+                }
+              }
+            },
+            "entity_data": null,
+            "image_url": null,
+            "directions_url": null
+          },
+          "componentName": "Entity"
+        },
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://www.microsoft.com/en-us/research/project/orleans-virtual-actors/",
+                "ref_id": "turn590424search3",
+                "refs": [
+                  {
+                    "turn_index": 590424,
+                    "ref_type": "search",
+                    "ref_index": 3
+                  }
+                ],
+                "source_label": "Microsoft Research",
+                "title": "Orleans - Virtual Actors",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://www.microsoft.com/en-us/research/project/orleans-virtual-actors/"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html",
+                "ref_id": "turn767889search2",
+                "refs": [
+                  {
+                    "turn_index": 767889,
+                    "ref_type": "search",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "Amazon Simple Storage Service",
+                "title": "How to prevent object overwrites with conditional writes",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://developers.cloudflare.com/r2/api/workers/workers-api-reference/",
+                "ref_id": "turn767889search4",
+                "refs": [
+                  {
+                    "turn_index": 767889,
+                    "ref_type": "search",
+                    "ref_index": 4
+                  }
+                ],
+                "source_label": "Cloudflare R2 docs",
+                "title": "Workers API reference",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://celld.dev/docs/guarantees/",
+                "ref_id": "turn767889view0",
+                "refs": [
+                  {
+                    "turn_index": 767889,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "celld",
+                "title": "What celld guarantees",
+                "snippet": "Total lines: 112",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "3 个Sources"
+          },
+          "safe_urls": [
+            "https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html",
+            "https://developers.cloudflare.com/r2/api/workers/workers-api-reference/",
+            "https://celld.dev/docs/guarantees/"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "你的理解基本准确，而且你提出的网络分区问题，恰好触及了 **Durable Objects 设计里最关键的一致性边界**。\n\n## 1\\. 你想起来的微软框架叫 Orleans\n\n全名是 entity[\"software\",\"Microsoft Orleans\",\"微软 .NET Virtual Actor 分布式框架\"]。\n\n它的核心抽象叫 **Virtual Actor**，具体实例叫 Grain。\n\n微软从 2010 年开始研究 Orleans，后来用于 Halo 系列游戏的云端服务。citeturn590424search3\n\n它与 Durable Objects 的核心思想几乎一致：\n\n- Actor 有稳定的逻辑身份。\n- Runtime 自动管理激活、休眠、故障恢复。\n- 每个 Actor 独立管理自己的状态。\n- 大量 Actor 分布在不同机器上运行。\n\n不过有个区别：Orleans 更偏向通用分布式 Actor 框架，支持多种状态存储方案；Durable Objects 把私有持久化存储直接纳入核心编程模型。\n\n## 2\\. 对象存储现在真的支持强一致 CAS？\n\n**是的，但并不是所有对象存储都支持。**\n\n几个典型例子：\n\n| 服务 | 条件写入机制 |\n|--------|--------|\n| Amazon S3 | `If-Match` / `If-None-Match` |\n| Cloudflare R2 | ETag 条件写入 |\n| Google Cloud Storage | Generation Preconditions |\n| Azure Blob | ETag + 条件请求 |\n\n例如 S3：\n\n```text\n读取 owner.json\n得到 ETag = abc123\n\nPUT owner.json\nIf-Match: abc123\nBody: { \"owner\": \"Node-B\" }\n```\n\n如果 Node A 已经修改了这个对象，Node B 的请求就会失败。\n\n这是存储服务原子执行的条件写入，而不是客户端先检查再覆盖，因此可以用于实现 CAS。citeturn767889search2turn767889search4turn767889view0\n\n不过，一个容易忽略的地方是：**强一致读写不等于支持 CAS**，而兼容 S3 API 也不代表完整实现了相关条件写入语义。\n\ncelld 官方就明确排除了部分对象存储实现，并提供了条件写入测试。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite",
+    "Entity"
+  ],
+  "genui_components": [
+    {
+      "type": "entity",
+      "tree_range": [
+        4,
+        5
+      ],
+      "start_index": 93,
+      "end_index": 187,
+      "component_resolution_id": "3ffebd24-1b61-5e95-8b90-4667c80853e6",
+      "entities": [
+        {
+          "entity_type": "entity"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        8,
+        9
+      ],
+      "start_index": 273,
+      "end_index": 304,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://www.microsoft.com/en-us/research/project/orleans-virtual-actors/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn590424search3"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        56,
+        57
+      ],
+      "start_index": 941,
+      "end_index": 1015,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html"
+        },
+        {
+          "url": "https://developers.cloudflare.com/r2/api/workers/workers-api-reference/"
+        },
+        {
+          "url": "https://celld.dev/docs/guarantees/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn767889search2"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn767889search4"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

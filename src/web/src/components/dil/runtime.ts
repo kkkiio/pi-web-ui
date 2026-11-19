@@ -9,10 +9,11 @@
  *
  * Three decisions worth knowing before reading the code:
  *
- *   - **State is bound as a getter, not a copy.** Handlers capture the scope object of
- *     the render that created them; a `scope.x = value` copy would leave
- *     `onChange={v => { setX(v); log(x) }}` reading the previous render's `x`. With a
- *     getter, every read — including one from a handler created earlier — sees the slot.
+ *   - **A render binds values, not accessors.** The compiled reference is ordinary
+ *     JavaScript: `const [x, setX] = DIL.useState(…)` is a `const` of the render that
+ *     created the handler, so a handler that writes a slot and then reads it sees the value
+ *     from *its* render. `derived.test.ts` in `conformance/` pins that against the reference
+ *     runtime; `setX(prev => …)` is how a handler derives from the current value.
  *   - **The probe runs the handler for real, with side effects switched off.** A button
  *     cannot be classified as "sends a turn" by reading its source text: `{#if}`,
  *     lookups and template literals decide at evaluation time. So setters and `GenUI`
@@ -73,42 +74,20 @@ export class DilRuntime {
    * `const price = seats * 29` has to follow `setSeats(10)`, which a freshly evaluated
    * initial value would erase on every re-resolve.
    */
-  useState = (name: string, initial: unknown, key?: string): readonly [unknown, unknown] => {
+  // Named `stateSlot`, not `useState`: the lint rule for React hooks reads a call of a
+  // `use…` identifier as a hook, and this is an injected factory.
+  stateSlot = (name: string, initial: unknown, key?: string): readonly [unknown, unknown] => {
     const slot = key ?? name;
     if (!this.slots.has(slot)) this.slots.set(slot, initial);
     return [this.slots.get(slot), callable(([next]) => this.write(slot, next))];
   };
 
   /**
-   * Bind each declaration's value as a **getter** on the scope.
-   *
-   * `evaluateStatements` bound a plain property holding the current value, which is enough
-   * for every statement and for control-flow conditions on this render. A handler is the
-   * exception: it captures the scope object, and `onChange={v => { setChoice(v);
-   * setRevealed(false) }}` must be able to read what it just wrote. The getter is what
-   * makes the second read live; the setter replaces the one `useState` supplied, and both
-   * write the same slot.
+   * The document's slots, as plain data — the same shape the reference persists as
+   * `view_state.root`. Used by the conformance harness to compare state, not by the UI.
    */
-  bindState(scope: DilScope, declarations: readonly DilStateDeclaration[]): void {
-    // The caller owns this scope object; `DilScope` is readonly for consumers only.
-    const target = scope as Record<string, unknown>;
-    for (const declaration of declarations) {
-      const key = declaration.key ?? declaration.name;
-      // `document.state` is lexical, so a declaration that is still streaming is reported
-      // before `evaluateStatements` can evaluate it. Seeding the slot from such a name
-      // would pin it to `undefined` and make `useState` ignore the real initializer once
-      // the rest of the source arrives — only an evaluated binding may create a slot.
-      if (Object.hasOwn(target, declaration.name) && !this.slots.has(key)) {
-        this.slots.set(key, target[declaration.name]);
-      }
-      Object.defineProperty(target, declaration.name, {
-        get: () => this.slots.get(key),
-        enumerable: true,
-        configurable: true,
-      });
-      if (!declaration.setter) continue;
-      target[declaration.setter] = callable(([next]) => this.write(key, next));
-    }
+  state(): Record<string, unknown> {
+    return Object.fromEntries(this.slots);
   }
 
   /** The one global the renderer adds: `GenUI`. Everything else comes from the document. */

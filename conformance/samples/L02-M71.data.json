@@ -1,0 +1,392 @@
+{
+  "constants": {
+    "0": "二、Cloudflare Access 其实比你想象的更适合做这件事",
+    "1": "你担心的场景是：",
+    "2": "我忘记给 Tunnel 配置 Access，或者某次更新把 Access 策略搞坏了，结果全世界都能直接向 Agent 发送指令。",
+    "3": "这是非常合理的威胁模型。而 Cloudflare 恰好提供了两个很有用的防护机制。",
+    "4": "第一层：强制所有域名都必须有 Access 保护",
+    "5": "Cloudflare 在 2026 年新增了 ",
+    "6": "Require Access protection",
+    "7": " 功能。",
+    "8": "打开之后，没有配置匹配 Access 应用的域名会被默认阻止，而不是默认公开。",
+    "9": [
+      "turn662996search8",
+      "turn119338search0"
+    ],
+    "10": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "11": "这正是为了防止你担心的「创建了 Tunnel 或 DNS 记录，却忘记配置身份验证」的问题。",
+    "12": "第二层：让家里的 cloudflared 再次验证 JWT",
+    "13": "这一点尤其值得你注意。",
+    "14": "Cloudflare Tunnel 提供 ",
+    "15": "Protect with Access",
+    "16": " 选项。开启后，家里运行的 ",
+    "17": "cloudflared",
+    "18": " 也会验证请求携带的 Access JWT，验证通过才转发给 Agent Web 服务。",
+    "19": [
+      "turn119338search1",
+      "turn119338search5"
+    ],
+    "20": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "21": "这样就形成：",
+    "22": "你的 iPhone",
+    "23": "Safari / 浏览器",
+    "24": "Cloudflare Access",
+    "25": "验证你的身份、登录会话和访问策略",
+    "26": "Mac 上的 cloudflared",
+    "27": "再次检查 JWT 签名、签发方和目标应用",
+    "28": "本地认证层",
+    "29": "由你控制的第二套独立认证凭据",
+    "30": "Agent Web UI",
+    "31": "运行在受限制的系统账号中",
+    "32": "这几层防护的意义不同：",
+    "33": "Cloudflare Access 管理谁有权限访问。",
+    "34": "cloudflared",
+    "35": " 验证 JWT，避免仅因边缘访问配置失误就放行无凭据请求。",
+    "36": "本地认证使用另一套凭据，防止 Cloudflare 策略意外放宽时 Agent 直接失守。",
+    "37": "Agent 运行权限限制攻击成功后的破坏范围。",
+    "38": "注意，JWT 验证仍属于 Cloudflare 这套信任体系，",
+    "39": "不能代替真正独立的第二层认证",
+    "40": "。",
+    "41": "三、我会怎样具体配置",
+    "42": "对于你一个人使用的情况，我会这样设置：",
+    "43": "Access 只允许一个明确的身份",
+    "44": "：例如自己的 Google 账号邮箱，而不是允许某个邮箱域名下的所有人；登录账号开启 Passkey 或 MFA。这里验证的是你指定的登录身份，不是简单地验证「拥有 Cloudflare 管理员账号」。",
+    "45": "开启 Require Access protection 和 Protect with Access",
+    "46": "：一个在 Cloudflare 边缘默认阻止未保护的域名，一个在 Mac 上验证 Access JWT。",
+    "47": "Agent Web UI 只监听 ",
+    "48": "127.0.0.1",
+    "49": "：由本机 ",
+    "50": "cloudflared",
+    "51": " 转发到它。不在路由器上做端口映射，也不允许局域网之外通过其他路径直接访问服务。",
+    "52": "保留独立的应用认证",
+    "53": "：如果 Agent Web UI 自带可靠的登录功能，就保留。如果没有，可以在本机增加一个带认证功能的反向代理。不要只凭某个 HTTP Header 就认定请求合法。",
+    "54": "用陌生设备进行拒绝访问测试",
+    "55": "：未登录、错误账号、无 JWT、未经授权的 API 和 WebSocket 请求都应该被拒绝；然后再测试自己的 iPhone 是否能正常使用。",
+    "56": "Cloudflare Access 还支持缩短会话有效期。对于高权限 Agent，不建议长期保持几乎无需重新认证的会话。",
+    "57": [
+      "turn764879search6",
+      "turn187539search5"
+    ],
+    "58": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "59": "如果你希望验证的不只是账号，",
+    "60": "而是必须是你持有的 iPhone",
+    "61": "，那就需要进一步使用客户端证书（mTLS）或设备状态校验。Cloudflare 有相应能力，但配置和套餐限制需要单独考虑。",
+    "62": [
+      "turn764879search9",
+      "turn764879search13"
+    ],
+    "63": "f6f56486-f9e8-5487-bada-8d928fdfc15f"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://developers.cloudflare.com/changelog/post/2026-01-22-deny-by-default-for-zones/",
+                "ref_id": "turn662996search8",
+                "refs": [
+                  {
+                    "turn_index": 662996,
+                    "ref_type": "search",
+                    "ref_index": 8
+                  }
+                ],
+                "source_label": "Changelog",
+                "title": "Require Access protection for zones",
+                "snippet": null,
+                "pub_timestamp": 1769040000,
+                "metadata_label": "一月 22, 2026"
+              },
+              {
+                "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/require-access-protection/",
+                "ref_id": "turn119338search0",
+                "refs": [
+                  {
+                    "turn_index": 119338,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Cloudflare One docs",
+                "title": "Require Access protection",
+                "snippet": null,
+                "pub_timestamp": 1776729600,
+                "metadata_label": "四月 21, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://developers.cloudflare.com/changelog/post/2026-01-22-deny-by-default-for-zones/",
+            "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/require-access-protection/"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/",
+                "ref_id": "turn119338search1",
+                "refs": [
+                  {
+                    "turn_index": 119338,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Cloudflare One docs",
+                "title": "Origin parameters",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/",
+                "ref_id": "turn119338search5",
+                "refs": [
+                  {
+                    "turn_index": 119338,
+                    "ref_type": "search",
+                    "ref_index": 5
+                  }
+                ],
+                "source_label": "Cloudflare One docs",
+                "title": "Publish a self-hosted application to the Internet",
+                "snippet": null,
+                "pub_timestamp": 1776384000,
+                "metadata_label": "四月 17, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/",
+            "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/",
+                "ref_id": "turn764879search6",
+                "refs": [
+                  {
+                    "turn_index": 764879,
+                    "ref_type": "search",
+                    "ref_index": 6
+                  }
+                ],
+                "source_label": "Cloudflare One docs",
+                "title": "Session management",
+                "snippet": null,
+                "pub_timestamp": 1788480000,
+                "metadata_label": "九月 4, 2026"
+              },
+              {
+                "url": "https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html",
+                "ref_id": "turn187539search5",
+                "refs": [
+                  {
+                    "turn_index": 187539,
+                    "ref_type": "search",
+                    "ref_index": 5
+                  }
+                ],
+                "source_label": "OWASP Cheat Sheet Series",
+                "title": "WebSocket Security",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/",
+            "https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html"
+          ],
+          "componentName": "Cite"
+        },
+        "f6f56486-f9e8-5487-bada-8d928fdfc15f": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://developers.cloudflare.com/ssl/client-certificates/",
+                "ref_id": "turn764879search9",
+                "refs": [
+                  {
+                    "turn_index": 764879,
+                    "ref_type": "search",
+                    "ref_index": 9
+                  }
+                ],
+                "source_label": "Cloudflare SSL/TLS docs",
+                "title": "Client certificates (mTLS)",
+                "snippet": null,
+                "pub_timestamp": 1788825600,
+                "metadata_label": "九月 8, 2026"
+              },
+              {
+                "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/mutual-tls-authentication/",
+                "ref_id": "turn764879search13",
+                "refs": [
+                  {
+                    "turn_index": 764879,
+                    "ref_type": "search",
+                    "ref_index": 13
+                  }
+                ],
+                "source_label": "Cloudflare One docs",
+                "title": "Mutual TLS",
+                "snippet": null,
+                "pub_timestamp": 1788998400,
+                "metadata_label": "九月 10, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://developers.cloudflare.com/ssl/client-certificates/",
+            "https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/mutual-tls-authentication/"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 二、Cloudflare Access 其实比你想象的更适合做这件事\n\n你担心的场景是：\n\n> 我忘记给 Tunnel 配置 Access，或者某次更新把 Access 策略搞坏了，结果全世界都能直接向 Agent 发送指令。\n\n这是非常合理的威胁模型。而 Cloudflare 恰好提供了两个很有用的防护机制。\n\n### 第一层：强制所有域名都必须有 Access 保护\n\nCloudflare 在 2026 年新增了 **Require Access protection** 功能。\n\n打开之后，没有配置匹配 Access 应用的域名会被默认阻止，而不是默认公开。citeturn662996search8turn119338search0\n\n这正是为了防止你担心的「创建了 Tunnel 或 DNS 记录，却忘记配置身份验证」的问题。\n\n### 第二层：让家里的 cloudflared 再次验证 JWT\n\n这一点尤其值得你注意。\n\nCloudflare Tunnel 提供 **Protect with Access** 选项。开启后，家里运行的 `cloudflared` 也会验证请求携带的 Access JWT，验证通过才转发给 Agent Web 服务。citeturn119338search1turn119338search5\n\n这样就形成：\n\n**你的 iPhone**\n\nSafari / 浏览器\n\n**Cloudflare Access**\n\n验证你的身份、登录会话和访问策略\n\n**Mac 上的 cloudflared**\n\n再次检查 JWT 签名、签发方和目标应用\n\n**本地认证层**\n\n由你控制的第二套独立认证凭据\n\n**Agent Web UI**\n\n运行在受限制的系统账号中\n\n这几层防护的意义不同：\n\n- Cloudflare Access 管理谁有权限访问。\n- `cloudflared` 验证 JWT，避免仅因边缘访问配置失误就放行无凭据请求。\n- 本地认证使用另一套凭据，防止 Cloudflare 策略意外放宽时 Agent 直接失守。\n- Agent 运行权限限制攻击成功后的破坏范围。\n\n注意，JWT 验证仍属于 Cloudflare 这套信任体系，**不能代替真正独立的第二层认证**。\n\n## 三、我会怎样具体配置\n\n对于你一个人使用的情况，我会这样设置：\n\n1. **Access 只允许一个明确的身份**：例如自己的 Google 账号邮箱，而不是允许某个邮箱域名下的所有人；登录账号开启 Passkey 或 MFA。这里验证的是你指定的登录身份，不是简单地验证「拥有 Cloudflare 管理员账号」。\n2. **开启 Require Access protection 和 Protect with Access**：一个在 Cloudflare 边缘默认阻止未保护的域名，一个在 Mac 上验证 Access JWT。\n3. **Agent Web UI 只监听 `127.0.0.1`**：由本机 `cloudflared` 转发到它。不在路由器上做端口映射，也不允许局域网之外通过其他路径直接访问服务。\n4. **保留独立的应用认证**：如果 Agent Web UI 自带可靠的登录功能，就保留。如果没有，可以在本机增加一个带认证功能的反向代理。不要只凭某个 HTTP Header 就认定请求合法。\n5. **用陌生设备进行拒绝访问测试**：未登录、错误账号、无 JWT、未经授权的 API 和 WebSocket 请求都应该被拒绝；然后再测试自己的 iPhone 是否能正常使用。\n\nCloudflare Access 还支持缩短会话有效期。对于高权限 Agent，不建议长期保持几乎无需重新认证的会话。citeturn764879search6turn187539search5\n\n如果你希望验证的不只是账号，**而是必须是你持有的 iPhone**，那就需要进一步使用客户端证书（mTLS）或设备状态校验。Cloudflare 有相应能力，但配置和套餐限制需要单独考虑。citeturn764879search9turn764879search13",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        7,
+        8
+      ],
+      "start_index": 288,
+      "end_index": 344,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://developers.cloudflare.com/changelog/post/2026-01-22-deny-by-default-for-zones/"
+        },
+        {
+          "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/require-access-protection/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn662996search8"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn119338search0"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        12,
+        13
+      ],
+      "start_index": 557,
+      "end_index": 613,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/"
+        },
+        {
+          "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn119338search1"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn119338search5"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        78,
+        79
+      ],
+      "start_index": 2945,
+      "end_index": 3001,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/"
+        },
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn764879search6"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn187539search5"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        81,
+        82
+      ],
+      "start_index": 3098,
+      "end_index": 3155,
+      "component_resolution_id": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+      "safe_urls": [
+        {
+          "url": "https://developers.cloudflare.com/ssl/client-certificates/"
+        },
+        {
+          "url": "https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/mutual-tls-authentication/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn764879search9"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn764879search13"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

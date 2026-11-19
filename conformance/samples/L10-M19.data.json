@@ -1,0 +1,127 @@
+{
+  "constants": {
+    "0": "✅ ",
+    "1": "对，你理解得没错！从截图来看，Devin 的自动充值功能是关闭的，正常情况下不会因为超出 Pro 套餐额度而自动从你的信用卡扣款。",
+    "2": "你的截图显示：",
+    "3": "Enable auto-reload：关闭",
+    "4": "（灰色开关）",
+    "5": "Auto-reload spend this cycle：$0.00",
+    "6": "（本周期自动充值金额为零）",
+    "7": "On-demand 剩余余额：$2.04",
+    "8": "（上一张截图）",
+    "9": "这意味着 Devin 目前会继续消耗你已有的 On-demand 余额，而不是自动充值。",
+    "10": "建议你再点击一下 ",
+    "11": "Save",
+    "12": "，确保关闭状态已经保存。",
+    "13": "我也查了 ",
+    "14": "Devin 官方计费说明",
+    "15": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+    "16": "，确认 On-demand credits 是",
+    "17": "预付费余额",
+    "18": "，自动充值是可选功能。",
+    "19": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "20": "因此，当剩下的 $2.04 用完时，只要自动充值仍然关闭，通常需要你主动购买更多额度才能继续超额使用。",
+    "21": "唯一要注意的是：",
+    "22": " 你的 Pro 订阅仍会按月续费 $20（截图显示下次续费日期为 2026 年 11 月 10 日），这是正常的订阅扣款，和 On-demand 自动充值是两回事。",
+    "23": "所以目前不需要太担心额外的自动扣费。👍"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "25bfac6e-fbcd-5e68-a028-1e13eb99de53": {
+          "status": "resolved",
+          "state": {
+            "url": "https://docs.devin.ai/admin/billing/self-serve",
+            "title": "Devin 官方计费说明",
+            "source_label": "Devin Docs",
+            "domain": "docs.devin.ai",
+            "snippet": "Total lines: 279",
+            "metadata_label": null,
+            "refid": "turn373549view0",
+            "title_before_last_word": "Devin",
+            "title_last_word": "官方计费说明"
+          },
+          "safe_urls": [
+            "https://docs.devin.ai/admin/billing/self-serve"
+          ],
+          "componentName": "Link"
+        },
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://docs.devin.ai/admin/billing/self-serve",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/mOPOYddJMyljGGbaG7Eb9Ffj-rnyJGRpN8-ZnKGec5j_21wb67jS2U9BYMf2LeUlyAk3Bn03HLrFMVNu2OO1HxXoAY9_HoX6Aax2cbIakCXHXl5GMAMoW29jsuJIMEnNTRLiMAjJ22pC56S07m7pTnG1sHge5qMbfpWZTYXyJvUV9dVBCDOQ_qc73OHvX9zARI7tfMu8R0Q4gnpD0GLNUbONlfPxdlY882nrg7z-ynpkwEJhVCLleq_94y3oasMHAk3r1ZHrMnPsZlcTLssGIbyhn7QPLUtG1k3Zm2us_OSvlRBjPWg7hPfMT30T6bciBLrWah2V-9_1SsbYXjuPgEIaJYU0q5EugAyySOIB4nyxcbiC4_1aaxC6NfxRUaLc4-vZYBkkYZAWRveH263iYoKrhZE847-88b0_cN6WSu85w0mKewsqS4VnBkBThE4getotpQhtoWn8N3Gzn7KtvbaS0qBHWcxsVHN-t53YcgJDKo406PO-7KAo5Kq-GtGc",
+                "ref_id": "turn373549view0",
+                "refs": [
+                  {
+                    "turn_index": 373549,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Devin Docs",
+                "title": "Self-serve plans",
+                "snippet": "Total lines: 279",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 Source"
+          },
+          "safe_urls": [
+            "https://docs.devin.ai/admin/billing/self-serve",
+            "https://images.openai.com/static-rsc-1/mOPOYddJMyljGGbaG7Eb9Ffj-rnyJGRpN8-ZnKGec5j_21wb67jS2U9BYMf2LeUlyAk3Bn03HLrFMVNu2OO1HxXoAY9_HoX6Aax2cbIakCXHXl5GMAMoW29jsuJIMEnNTRLiMAjJ22pC56S07m7pTnG1sHge5qMbfpWZTYXyJvUV9dVBCDOQ_qc73OHvX9zARI7tfMu8R0Q4gnpD0GLNUbONlfPxdlY882nrg7z-ynpkwEJhVCLleq_94y3oasMHAk3r1ZHrMnPsZlcTLssGIbyhn7QPLUtG1k3Zm2us_OSvlRBjPWg7hPfMT30T6bciBLrWah2V-9_1SsbYXjuPgEIaJYU0q5EugAyySOIB4nyxcbiC4_1aaxC6NfxRUaLc4-vZYBkkYZAWRveH263iYoKrhZE847-88b0_cN6WSu85w0mKewsqS4VnBkBThE4getotpQhtoWn8N3Gzn7KtvbaS0qBHWcxsVHN-t53YcgJDKo406PO-7KAo5Kq-GtGc"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "✅ **对，你理解得没错！从截图来看，Devin 的自动充值功能是关闭的，正常情况下不会因为超出 Pro 套餐额度而自动从你的信用卡扣款。**\n\n你的截图显示：\n\n- **Enable auto-reload：关闭**（灰色开关）\n- **Auto-reload spend this cycle：\\$0.00**（本周期自动充值金额为零）\n- **On-demand 剩余余额：\\$2.04**（上一张截图）\n\n这意味着 Devin 目前会继续消耗你已有的 On-demand 余额，而不是自动充值。\n\n建议你再点击一下 **Save**，确保关闭状态已经保存。\n\n我也查了 urlDevin 官方计费说明turn373549view0，确认 On-demand credits 是**预付费余额**，自动充值是可选功能。citeturn373549view0\n\n因此，当剩下的 \\$2.04 用完时，只要自动充值仍然关闭，通常需要你主动购买更多额度才能继续超额使用。\n\n**唯一要注意的是：** 你的 Pro 订阅仍会按月续费 \\$20（截图显示下次续费日期为 2026 年 11 月 10 日），这是正常的订阅扣款，和 On-demand 自动充值是两回事。\n\n所以目前不需要太担心额外的自动扣费。👍",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite",
+    "Link"
+  ],
+  "genui_components": [
+    {
+      "type": "link",
+      "tree_range": [
+        15,
+        16
+      ],
+      "start_index": 287,
+      "end_index": 337,
+      "component_resolution_id": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+      "safe_urls": [
+        {
+          "url": "https://docs.devin.ai/admin/billing/self-serve"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        17,
+        18
+      ],
+      "start_index": 380,
+      "end_index": 409,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://docs.devin.ai/admin/billing/self-serve"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/mOPOYddJMyljGGbaG7Eb9Ffj-rnyJGRpN8-ZnKGec5j_21wb67jS2U9BYMf2LeUlyAk3Bn03HLrFMVNu2OO1HxXoAY9_HoX6Aax2cbIakCXHXl5GMAMoW29jsuJIMEnNTRLiMAjJ22pC56S07m7pTnG1sHge5qMbfpWZTYXyJvUV9dVBCDOQ_qc73OHvX9zARI7tfMu8R0Q4gnpD0GLNUbONlfPxdlY882nrg7z-ynpkwEJhVCLleq_94y3oasMHAk3r1ZHrMnPsZlcTLssGIbyhn7QPLUtG1k3Zm2us_OSvlRBjPWg7hPfMT30T6bciBLrWah2V-9_1SsbYXjuPgEIaJYU0q5EugAyySOIB4nyxcbiC4_1aaxC6NfxRUaLc4-vZYBkkYZAWRveH263iYoKrhZE847-88b0_cN6WSu85w0mKewsqS4VnBkBThE4getotpQhtoWn8N3Gzn7KtvbaS0qBHWcxsVHN-t53YcgJDKo406PO-7KAo5Kq-GtGc"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

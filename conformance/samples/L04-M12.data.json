@@ -1,0 +1,416 @@
+{
+  "constants": {
+    "0": "我查了一下 MoonBit 目前的实现，发现你的想法其实已经有几种很接近的先例了。而且我觉得你提出的方向很值得探索，尤其是在 AI 生成代码越来越多的情况下。",
+    "1": "我的核心判断是：与其强迫 AI 写出每一行都适合人类阅读的代码，不如把代码分成两个层次：",
+    "2": "Contract / Specification（契约层）",
+    "3": "：由人重点阅读和审查，包括函数签名、数据模型、不变量、行为约束、错误语义。",
+    "4": "Implementation（实现层）",
+    "5": "：允许 AI 生成较冗长的防御性代码、边界检查、异常处理和辅助函数，只要它满足上层契约。",
+    "6": "但这里有一个关键区别：",
+    "7": "公开 API 不一定等于真正值得 review 的核心逻辑。",
+    "8": "你希望审查的可能不仅是“这个函数输入输出什么”，还包括“它承诺做什么、依赖什么、哪些行为绝对不允许发生”。",
+    "9": "下面先看 MoonBit 的机制，再对比其他语言。",
+    "10": "一、MoonBit：你的记忆基本正确，但有三种不同机制",
+    "11": "1. ",
+    "12": ".mbti",
+    "13": "：自动生成的 API 摘要",
+    "14": "普通 MoonBit 项目可以执行：",
+    "15": "439bb524-ed37-52a2-a1fe-ab0d0e1472f7",
+    "16": null,
+    "17": "当前工具链会生成类似 ",
+    "18": "pkg.generated.mbti",
+    "19": " 的接口文件，展示一个 package 对外暴露的类型、函数和方法签名。",
+    "20": "它的用途很适合代码审查：你可以通过 Git diff 判断一次修改是否改变了公开 API。MoonBit 社区项目也确实有这样的实践。",
+    "21": [
+      "turn174266search16",
+      "turn174266search2"
+    ],
+    "22": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "23": "但是，它不是最理想的",
+    "24": "人工维护契约",
+    "25": "：生成文件可能被覆盖，而且通常不包含足够丰富的业务行为描述。",
+    "26": "2. ",
+    "27": "declare",
+    "28": "：先写声明，再写实现",
+    "29": "MoonBit 在 2026 年 1 月引入 ",
+    "30": "#declaration_only",
+    "31": "，又在 2 月的 0.8.0 版本中将其替换为 ",
+    "32": "declare",
+    "33": " 关键字。",
+    "34": "官方明确把它定位为面向 AI 的 specification-first development：人先写声明和测试，让 AI 根据这些约束实现代码。",
+    "35": [
+      "turn363959search0",
+      "turn363959search1"
+    ],
+    "36": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "37": "例如：",
+    "38": "343b7f5e-1a31-58d2-9b65-11ab2190dc59",
+    "39": null,
+    "40": "然后可以在同一个 package 的其他源码位置提供匹配的实现：",
+    "41": "644ed60c-b613-511d-aeee-41aad819c7e9",
+    "42": null,
+    "43": "MoonBit 官方说明，声明和实现必须在函数名称、可见性、泛型参数、参数、返回值和 effects 等方面一致。",
+    "44": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "45": "所以，",
+    "46": "它非常接近你设想的“声明与实现分离”",
+    "47": "。",
+    "48": "不过有个重要限制：目前的诊断文档还定义了 ",
+    "49": "declaration_implemented",
+    "50": " 警告，即声明找到对应实现时，编译器可能认为声明已经多余。这意味着 ",
+    "51": "declare",
+    "52": " 更偏向“先设计、后实现”的开发过程，而不是已经完全成熟的永久双文件契约机制。",
+    "53": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+    "54": "3. Virtual Package：真正具有约束作用的接口文件",
+    "55": "MoonBit 还有一个 2025 年引入的 experimental virtual package 机制。",
+    "56": "它允许人工编写 ",
+    "57": ".mbti",
+    "58": "，指定一个 package 必须提供的函数接口；实现可以在同一 package 中提供，也可以由其他 package 实现并在构建时替换。",
+    "59": "编译工具会检查实现是否满足接口约束。",
+    "60": [
+      "turn174266search0",
+      "turn174266search1"
+    ],
+    "61": "4d343fcd-41df-5b74-81df-63c72367c41d",
+    "62": "这在结构上比普通 ",
+    "63": "declare",
+    "64": " 更接近传统的 Interface / Implementation Separation，不过官方仍将其标为实验特性，并说明目前 virtual package 仅支持普通函数。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://moonbitlang.github.io/moon/commands.html",
+                "ref_id": "turn174266search16",
+                "refs": [
+                  {
+                    "turn_index": 174266,
+                    "ref_type": "search",
+                    "ref_index": 16
+                  }
+                ],
+                "source_label": "Moon Manual",
+                "title": "Moon Commands",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://github.com/moonbit-community/pug-mbt/blob/main/AGENTS.md",
+                "ref_id": "turn174266search2",
+                "refs": [
+                  {
+                    "turn_index": 174266,
+                    "ref_type": "search",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "pug-mbt/AGENTS.md at main · moonbit-community/pug-mbt",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://moonbitlang.github.io/moon/commands.html",
+            "https://github.com/moonbit-community/pug-mbt/blob/main/AGENTS.md"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://www.moonbitlang.com/updates",
+                "ref_id": "turn363959search0",
+                "refs": [
+                  {
+                    "turn_index": 363959,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "MoonBit",
+                "title": "Updates",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://www.moonbitlang.com/updates/moonbit-0-8-0-release",
+                "ref_id": "turn363959search1",
+                "refs": [
+                  {
+                    "turn_index": 363959,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "MoonBit",
+                "title": "MoonBit 0.8.0 Released",
+                "snippet": null,
+                "pub_timestamp": 1770595200,
+                "metadata_label": "二月 9, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://www.moonbitlang.com/updates",
+            "https://www.moonbitlang.com/updates/moonbit-0-8-0-release"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://docs.moonbitlang.com/en/latest/language/fundamentals.html",
+                "ref_id": "turn363959search3",
+                "refs": [
+                  {
+                    "turn_index": 363959,
+                    "ref_type": "search",
+                    "ref_index": 3
+                  }
+                ],
+                "source_label": "MoonBit nightly documentation",
+                "title": "Fundamentals",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://docs.moonbitlang.com/en/latest/language/fundamentals.html"
+          ],
+          "componentName": "Cite"
+        },
+        "f6f56486-f9e8-5487-bada-8d928fdfc15f": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://docs.moonbitlang.com/en/latest/language/error_codes/E0069.html",
+                "ref_id": "turn174266search10",
+                "refs": [
+                  {
+                    "turn_index": 174266,
+                    "ref_type": "search",
+                    "ref_index": 10
+                  }
+                ],
+                "source_label": "MoonBit v0.10.12 documentation",
+                "title": "E0069",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://docs.moonbitlang.com/en/latest/language/error_codes/E0069.html"
+          ],
+          "componentName": "Cite"
+        },
+        "4d343fcd-41df-5b74-81df-63c72367c41d": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://www.moonbitlang.com/blog/virtual-package",
+                "ref_id": "turn174266search0",
+                "refs": [
+                  {
+                    "turn_index": 174266,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "MoonBit",
+                "title": "Introducing virtual package in MoonBit",
+                "snippet": null,
+                "pub_timestamp": 1747353600,
+                "metadata_label": "五月 16, 2025"
+              },
+              {
+                "url": "https://docs.moonbitlang.com/en/stable/language/packages.html",
+                "ref_id": "turn174266search1",
+                "refs": [
+                  {
+                    "turn_index": 174266,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "MoonBit stable documentation",
+                "title": "Managing Projects with Packages",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://www.moonbitlang.com/blog/virtual-package",
+            "https://docs.moonbitlang.com/en/stable/language/packages.html"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "我查了一下 MoonBit 目前的实现，发现你的想法其实已经有几种很接近的先例了。而且我觉得你提出的方向很值得探索，尤其是在 AI 生成代码越来越多的情况下。\n\n**我的核心判断是：与其强迫 AI 写出每一行都适合人类阅读的代码，不如把代码分成两个层次：**\n\n- **Contract / Specification（契约层）**：由人重点阅读和审查，包括函数签名、数据模型、不变量、行为约束、错误语义。\n- **Implementation（实现层）**：允许 AI 生成较冗长的防御性代码、边界检查、异常处理和辅助函数，只要它满足上层契约。\n\n但这里有一个关键区别：**公开 API 不一定等于真正值得 review 的核心逻辑。**\n\n你希望审查的可能不仅是“这个函数输入输出什么”，还包括“它承诺做什么、依赖什么、哪些行为绝对不允许发生”。\n\n下面先看 MoonBit 的机制，再对比其他语言。\n\n## 一、MoonBit：你的记忆基本正确，但有三种不同机制\n\n### 1\\. `.mbti`：自动生成的 API 摘要\n\n普通 MoonBit 项目可以执行：\n\n```bash\nmoon info\n```\n\n当前工具链会生成类似 `pkg.generated.mbti` 的接口文件，展示一个 package 对外暴露的类型、函数和方法签名。\n\n它的用途很适合代码审查：你可以通过 Git diff 判断一次修改是否改变了公开 API。MoonBit 社区项目也确实有这样的实践。citeturn174266search16turn174266search2\n\n但是，它不是最理想的**人工维护契约**：生成文件可能被覆盖，而且通常不包含足够丰富的业务行为描述。\n\n### 2\\. `declare`：先写声明，再写实现\n\nMoonBit 在 2026 年 1 月引入 `#declaration_only`，又在 2 月的 0.8.0 版本中将其替换为 `declare` 关键字。\n\n官方明确把它定位为面向 AI 的 specification-first development：人先写声明和测试，让 AI 根据这些约束实现代码。citeturn363959search0turn363959search1\n\n例如：\n\n```moonbit\n/// 根据规则计算最终价格。\n/// 返回值不能小于零。\ndeclare fn calculate_price(\n  original : Int,\n  discount : Int\n) -> Int\n```\n\n然后可以在同一个 package 的其他源码位置提供匹配的实现：\n\n```moonbit\nfn calculate_price(\n  original : Int,\n  discount : Int\n) -> Int {\n  // 这里放完整的实现\n  ...\n}\n```\n\nMoonBit 官方说明，声明和实现必须在函数名称、可见性、泛型参数、参数、返回值和 effects 等方面一致。citeturn363959search3\n\n所以，**它非常接近你设想的“声明与实现分离”**。\n\n不过有个重要限制：目前的诊断文档还定义了 `declaration_implemented` 警告，即声明找到对应实现时，编译器可能认为声明已经多余。这意味着 `declare` 更偏向“先设计、后实现”的开发过程，而不是已经完全成熟的永久双文件契约机制。citeturn174266search10\n\n### 3\\. Virtual Package：真正具有约束作用的接口文件\n\nMoonBit 还有一个 2025 年引入的 experimental virtual package 机制。\n\n它允许人工编写 `.mbti`，指定一个 package 必须提供的函数接口；实现可以在同一 package 中提供，也可以由其他 package 实现并在构建时替换。\n\n编译工具会检查实现是否满足接口约束。citeturn174266search0turn174266search1\n\n这在结构上比普通 `declare` 更接近传统的 Interface / Implementation Separation，不过官方仍将其标为实验特性，并说明目前 virtual package 仅支持普通函数。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        22,
+        23
+      ],
+      "start_index": 644,
+      "end_index": 701,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://moonbitlang.github.io/moon/commands.html"
+        },
+        {
+          "url": "https://github.com/moonbit-community/pug-mbt/blob/main/AGENTS.md"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn174266search16"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn174266search2"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        31,
+        32
+      ],
+      "start_index": 939,
+      "end_index": 995,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://www.moonbitlang.com/updates"
+        },
+        {
+          "url": "https://www.moonbitlang.com/updates/moonbit-0-8-0-release"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn363959search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn363959search1"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        37,
+        38
+      ],
+      "start_index": 1315,
+      "end_index": 1346,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://docs.moonbitlang.com/en/latest/language/fundamentals.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn363959search3"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        43,
+        44
+      ],
+      "start_index": 1504,
+      "end_index": 1536,
+      "component_resolution_id": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+      "safe_urls": [
+        {
+          "url": "https://docs.moonbitlang.com/en/latest/language/error_codes/E0069.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn174266search10"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        48,
+        49
+      ],
+      "start_index": 1737,
+      "end_index": 1793,
+      "component_resolution_id": "4d343fcd-41df-5b74-81df-63c72367c41d",
+      "safe_urls": [
+        {
+          "url": "https://www.moonbitlang.com/blog/virtual-package"
+        },
+        {
+          "url": "https://docs.moonbitlang.com/en/stable/language/packages.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn174266search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn174266search1"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

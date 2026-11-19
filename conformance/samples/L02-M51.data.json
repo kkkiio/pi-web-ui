@@ -1,0 +1,109 @@
+{
+  "constants": {
+    "0": "真正有价值的区别：Ponte 可以借助你自己的代理节点建立远程连接",
+    "1": "这是截图里推荐 Ponte 的人可能真正看重的功能。",
+    "2": "Surge 官方明确支持 ",
+    "3": "通过代理进行 NAT 穿透",
+    "4": "，可以利用支持 UDP 转发的 Shadowsocks、Trojan、SOCKS5 等代理。客户端也能配置代理路径，以改善某些网络环境下的连接。",
+    "5": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "6": "对比如下：",
+    "7": "Shadowrocket + Tailscale",
+    "8": "Surge + Ponte",
+    "9": "代理与组网共用一个 App",
+    "10": "✅",
+    "11": "✅",
+    "12": "远程访问 Mac 的网页服务",
+    "13": "✅",
+    "14": "✅",
+    "15": "依赖 Tailscale 控制服务",
+    "16": "是",
+    "17": "否",
+    "18": "使用 Tailscale DERP",
+    "19": "可能",
+    "20": "否",
+    "21": "支持通过自选代理辅助穿透",
+    "22": "取决于具体路由能力",
+    "23": "官方明确支持",
+    "24": "Mac 必须安装 Surge",
+    "25": "不需要",
+    "26": "需要",
+    "27": "跨平台组网",
+    "28": "Tailscale 支持多平台",
+    "29": "Ponte 主要限于 Apple 生态",
+    "30": "对你之前的问题，有没有实际帮助？",
+    "31": "你之前强制使用 DERP，连接仍然很差。",
+    "32": "如果瓶颈确实是 DERP 中继线路，那么：",
+    "33": "换成 Shadowrocket 内置 Tailscale：主要解决两个 VPN 共存的问题，继续使用原来的 Tailscale 网络，",
+    "34": "不保证改善 DERP 线路质量",
+    "35": "。",
+    "36": "换成 Surge Ponte：能使用另一套连接机制，并借助你已有的稳定代理节点，",
+    "37": "有机会绕开之前表现很差的 DERP 路径",
+    "38": "。",
+    "39": "当然，Ponte 也不能保证一定更快。",
+    "40": "我的建议",
+    "41": "如果你已经购买 Shadowrocket，就先别为了 Ponte 买 Surge。",
+    "42": "可以先试 Shadowrocket 新增的 Tailscale 功能。如果网页仍然经常加载失败，说明仅仅统一 VPN 接口可能不够，你更需要改变远程连接的传输路径。",
+    "43": "另外，你的实际需求只是「在外面用 iPhone 访问 Mac 的 Web 服务」，未必需要完整的虚拟局域网。使用受身份验证保护的 HTTPS Tunnel，也可能比这两套方案更适合。",
+    "44": "一句话总结：Shadowrocket 已经解决了你说的「功能统一」；Ponte 真正值得关注的是「它提供了另一种远程连接和代理辅助穿透路径」，而不只是把 Tailscale 的功能重新做了一遍。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://kb.nssurge.com/surge-knowledge-base/zh/guidelines/ponte",
+                "ref_id": "turn101378view1",
+                "refs": [
+                  {
+                    "turn_index": 101378,
+                    "ref_type": "view",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "kb.nssurge.com",
+                "title": null,
+                "snippet": "Total lines: 109",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://kb.nssurge.com/surge-knowledge-base/zh/guidelines/ponte"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 真正有价值的区别：Ponte 可以借助你自己的代理节点建立远程连接\n\n这是截图里推荐 Ponte 的人可能真正看重的功能。\n\nSurge 官方明确支持 **通过代理进行 NAT 穿透**，可以利用支持 UDP 转发的 Shadowsocks、Trojan、SOCKS5 等代理。客户端也能配置代理路径，以改善某些网络环境下的连接。citeturn101378view1\n\n对比如下：\n\n|  | Shadowrocket + Tailscale | Surge + Ponte |\n|--------|--------|--------|\n| 代理与组网共用一个 App | ✅ | ✅ |\n| 远程访问 Mac 的网页服务 | ✅ | ✅ |\n| 依赖 Tailscale 控制服务 | 是 | 否 |\n| 使用 Tailscale DERP | 可能 | 否 |\n| 支持通过自选代理辅助穿透 | 取决于具体路由能力 | 官方明确支持 |\n| Mac 必须安装 Surge | 不需要 | 需要 |\n| 跨平台组网 | Tailscale 支持多平台 | Ponte 主要限于 Apple 生态 |\n\n## 对你之前的问题，有没有实际帮助？\n\n你之前强制使用 DERP，连接仍然很差。\n\n**如果瓶颈确实是 DERP 中继线路，那么：**\n\n- 换成 Shadowrocket 内置 Tailscale：主要解决两个 VPN 共存的问题，继续使用原来的 Tailscale 网络，**不保证改善 DERP 线路质量**。\n- 换成 Surge Ponte：能使用另一套连接机制，并借助你已有的稳定代理节点，**有机会绕开之前表现很差的 DERP 路径**。\n\n当然，Ponte 也不能保证一定更快。\n\n## 我的建议\n\n**如果你已经购买 Shadowrocket，就先别为了 Ponte 买 Surge。**\n\n可以先试 Shadowrocket 新增的 Tailscale 功能。如果网页仍然经常加载失败，说明仅仅统一 VPN 接口可能不够，你更需要改变远程连接的传输路径。\n\n另外，你的实际需求只是「在外面用 iPhone 访问 Mac 的 Web 服务」，未必需要完整的虚拟局域网。使用受身份验证保护的 HTTPS Tunnel，也可能比这两套方案更适合。\n\n**一句话总结：Shadowrocket 已经解决了你说的「功能统一」；Ponte 真正值得关注的是「它提供了另一种远程连接和代理辅助穿透路径」，而不只是把 Tailscale 的功能重新做了一遍。**",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        3,
+        4
+      ],
+      "start_index": 168,
+      "end_index": 197,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://kb.nssurge.com/surge-knowledge-base/zh/guidelines/ponte"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

@@ -1,0 +1,472 @@
+{
+  "constants": {
+    "0": "二、最基本的 HTTP 请求与响应",
+    "1": "1. 请求格式",
+    "2": "下面是一个可以直接运行的 cURL 示例：",
+    "3": "f41995e6-03f5-53ac-8f18-b892c893cd28",
+    "4": null,
+    "5": "你会发现它与 Chat Completions 相当接近。",
+    "6": "但注意几个地方：",
+    "7": "第一，Anthropic 有一个比较特别的 HTTP Header：",
+    "8": "cacb835f-3492-5b92-908f-1a71a28c8f42",
+    "9": null,
+    "10": "这是 Anthropic 的 API 协议版本，不是模型版本，也不是指模型在 2023 年发布。",
+    "11": "此外，Anthropic 目前支持 ",
+    "12": "Authorization: Bearer ...",
+    "13": "，同时兼容 ",
+    "14": "x-api-key",
+    "15": " 方式。官方 SDK 会自动处理这些请求头。",
+    "16": [
+      "turn602376view2",
+      "turn618649search1"
+    ],
+    "17": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "18": "第二，",
+    "19": "max_tokens",
+    "20": " 是请求中的必需字段。",
+    "21": "而 OpenAI Chat Completions 中的 ",
+    "22": "max_completion_tokens",
+    "23": "、Responses 中的 ",
+    "24": "max_output_tokens",
+    "25": "，在很多使用方式下可以省略。",
+    "26": "第三，",
+    "27": "system",
+    "28": " 放在顶层。",
+    "29": "OpenAI Chat Completions 的常见写法是：",
+    "30": "85601d04-9c31-5237-9ea6-65f864f29472",
+    "31": null,
+    "32": "Anthropic 的常见写法则是：",
+    "33": "6a293552-8691-5adb-ba9b-3536293a08c3",
+    "34": null,
+    "35": "这有点类似于 Responses API 将系统级指令提取为顶层 ",
+    "36": "instructions",
+    "37": "。",
+    "38": "补充一个较新的变化：部分新款 Claude 模型也支持在 ",
+    "39": "messages",
+    "40": " 中间插入 ",
+    "41": "system",
+    "42": " 角色消息，用于动态追加指令，但",
+    "43": "对话开始时的系统指令仍应使用顶层 ",
+    "44": "system",
+    "45": "，并且中途插入有模型及位置限制。",
+    "46": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "47": "2. 响应格式",
+    "48": "一个简化的响应可能是：",
+    "49": "3db5edd6-9de1-564b-9a6b-7a94580fef68",
+    "50": null,
+    "51": "示意响应，省略部分可选字段；ID 和 Token 数仅用于说明结构。",
+    "52": "对照 OpenAI，最重要的是你如何读取模型生成的文本：",
+    "53": "OpenAI Chat Completions",
+    "54": "choices[0].message.content",
+    "55": "string",
+    "56": "OpenAI Responses",
+    "57": "output_text",
+    "58": " （SDK 便捷属性）",
+    "59": "string",
+    "60": "底层需要遍历 ",
+    "61": "output[]",
+    "62": " 中的消息与内容。",
+    "63": "Anthropic Messages",
+    "64": "content[i].text",
+    "65": "string",
+    "66": "先检查 ",
+    "67": "content[i].type == \"text\"",
+    "68": "，而不是假设所有 Block 都是文本。",
+    "69": "这就引出了 Anthropic 协议中最核心的设计：Content Blocks。",
+    "70": "三、Content Blocks：Anthropic 最重要的抽象",
+    "71": "OpenAI Chat Completions 主要围绕 Message 组织数据。",
+    "72": "OpenAI Responses 则将 Message、Function Call、Reasoning 等放入类型化的 Items。",
+    "73": "Anthropic 使用了介于两者之间的结构：",
+    "74": {
+      "x": 4,
+      "y": 2
+    },
+    "75": "Message",
+    "76": "role: assistant",
+    "77": "content[]",
+    "78": "text",
+    "79": "tool_use",
+    "80": "thinking",
+    "81": "例如，Claude 可能在同一个 assistant Message 中同时返回文字和工具调用：",
+    "82": "42fa02cb-d6ca-50a3-b42b-c3705b6be957",
+    "83": null,
+    "84": "在 OpenAI Chat Completions 中，这两部分通常对应：",
+    "85": "message.content",
+    "86": "message.tool_calls",
+    "87": "在 OpenAI Responses 中，文字 Message 和 ",
+    "88": "function_call",
+    "89": " 通常是 ",
+    "90": "output[]",
+    "91": " 内不同类型的 Item。",
+    "92": "而 Anthropic 将它们统一放进同一个 Message 的 ",
+    "93": "content[]",
+    "94": " 里。",
+    "95": "因此可以把两种模型抽象成：",
+    "96": "afbd9b80-0aeb-52b0-9620-b6f414102ed8",
+    "97": null,
+    "98": "请注意，这是为了理解结构而做的简化图，不代表它们支持的所有类型。",
+    "99": "对于构建统一 LLM SDK 的开发者，这个区别很重要：两个 API 都能表达工具调用，但结构化事件所在的层级不一样。",
+    "100": "输入端同样可以使用 Content Blocks。例如，给 Claude 发送图片时，",
+    "101": "user.content",
+    "102": " 可以包含 ",
+    "103": "image",
+    "104": " Block 和 ",
+    "105": "text",
+    "106": " Block：",
+    "107": "92bb3fef-c0ca-513e-b3c4-187d09265570",
+    "108": null,
+    "109": "这种设计也可以扩展到文档、搜索结果等不同类型的输入。",
+    "110": [
+      "turn618649search1",
+      "turn251480view1"
+    ],
+    "111": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "112": "四、多轮对话：更像 Chat Completions，而不是有状态的 Responses",
+    "113": "这个区别对后端开发特别重要。",
+    "114": "Anthropic Messages API 默认是 Stateless（无状态）的。",
+    "115": "意思是说，你发送一次消息，拿到模型结果，下一次请求并不能仅仅提供上一次返回的 ",
+    "116": "msg_id",
+    "117": "，就让模型自动知道历史对话。",
+    "118": "你需要把历史消息重新提交。",
+    "119": "例如：",
+    "120": "b110907f-d573-521a-8eef-b41b6a72d0cb",
+    "121": null,
+    "122": "这里的 ",
+    "123": "msg_id",
+    "124": " 只是响应标识，不等价于 OpenAI Responses API 的 ",
+    "125": "previous_response_id",
+    "126": "。",
+    "127": "关键理解",
+    "128": "Anthropic Messages 的核心思路是：",
+    "129": "模型计算一条新消息，客户端负责准备它所需要的上下文。",
+    "130": "而 OpenAI Responses API 既支持客户端手动传入完整历史，也支持通过 ",
+    "131": "previous_response_id",
+    "132": " 或 Conversations API 关联服务端保存的上下文。",
+    "133": [
+      "turn251480view0",
+      "turn528979view3"
+    ],
+    "134": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+    "135": "Anthropic 另外提供 Managed Agents 和 Sessions 等机制，但它们属于另一层产品能力，不应与基本的无状态 Messages 协议混为一谈。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/api/overview",
+                "ref_id": "turn602376view2",
+                "refs": [
+                  {
+                    "turn_index": 602376,
+                    "ref_type": "view",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "API overview",
+                "snippet": "Total lines: 383",
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://platform.claude.com/docs/en/api/messages/create",
+                "ref_id": "turn618649search1",
+                "refs": [
+                  {
+                    "turn_index": 618649,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Claude API Reference",
+                "title": "Create a Message",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/api/overview",
+            "https://platform.claude.com/docs/en/api/messages/create"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM",
+                "ref_id": "turn251480view0",
+                "refs": [
+                  {
+                    "turn_index": 251480,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Using the Messages API",
+                "snippet": "Total lines: 407",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+            "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/api/messages/create",
+                "ref_id": "turn618649search1",
+                "refs": [
+                  {
+                    "turn_index": 618649,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Claude API Reference",
+                "title": "Create a Message",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/zR7PXZezX6fC7z0eyIHipTHHbygKGnt20VdsSDDXPuSU5z2YnmwCpx7NYHLlI1orrJKF1JxsXU7VeyU8Accn4FIvwiJHwEY3UKSniqFHVBnBw3z0GY0w0i3kx11wxzcIlrqXe-k9mwLz4uK7B7MkgL_T1-_vx1TW_31-1Tx6Ndk",
+                "ref_id": "turn251480view1",
+                "refs": [
+                  {
+                    "turn_index": 251480,
+                    "ref_type": "view",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Using the Messages API",
+                "snippet": "Total lines: 407",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/api/messages/create",
+            "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+            "https://images.openai.com/static-rsc-1/zR7PXZezX6fC7z0eyIHipTHHbygKGnt20VdsSDDXPuSU5z2YnmwCpx7NYHLlI1orrJKF1JxsXU7VeyU8Accn4FIvwiJHwEY3UKSniqFHVBnBw3z0GY0w0i3kx11wxzcIlrqXe-k9mwLz4uK7B7MkgL_T1-_vx1TW_31-1Tx6Ndk"
+          ],
+          "componentName": "Cite"
+        },
+        "f6f56486-f9e8-5487-bada-8d928fdfc15f": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM",
+                "ref_id": "turn251480view0",
+                "refs": [
+                  {
+                    "turn_index": 251480,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Claude Platform Docs",
+                "title": "Using the Messages API",
+                "snippet": "Total lines: 407",
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://platform.openai.com/docs/guides/migrate-to-responses",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/uBbHbJ_mjjUSzf1Zo19Soy8VZhxSnu5WKcbh7BjEI2nZ_RQ4iLhnnf5ubMLGWbDdcVdq6JKZpKuJpDd-xdJlBjd_awbQIC--Arc0-1AGKgSFsBFAPwMFaCSj5dWbpy_A",
+                "ref_id": "turn528979view3",
+                "refs": [
+                  {
+                    "turn_index": 528979,
+                    "ref_type": "view",
+                    "ref_index": 3
+                  }
+                ],
+                "source_label": "OpenAI API",
+                "title": "Migrate to the Responses API",
+                "snippet": "Total lines: 4420",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://platform.claude.com/docs/en/build-with-claude/working-with-messages",
+            "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM",
+            "https://platform.openai.com/docs/guides/migrate-to-responses",
+            "https://images.openai.com/static-rsc-1/uBbHbJ_mjjUSzf1Zo19Soy8VZhxSnu5WKcbh7BjEI2nZ_RQ4iLhnnf5ubMLGWbDdcVdq6JKZpKuJpDd-xdJlBjd_awbQIC--Arc0-1AGKgSFsBFAPwMFaCSj5dWbpy_A"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 二、最基本的 HTTP 请求与响应\n\n### 1\\. 请求格式\n\n下面是一个可以直接运行的 cURL 示例：\n\n```bash\n\ncurl https://api.anthropic.com/v1/messages \\\n  -H \"Authorization: Bearer $ANTHROPIC_API_KEY\" \\\n  -H \"anthropic-version: 2023-06-01\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"model\": \"claude-sonnet-5-5\",\n    \"max_tokens\": 1024,\n    \"system\": \"You are a helpful assistant.\",\n    \"messages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Explain what an API is.\"\n      }\n    ]\n  }'\n```\n\n你会发现它与 Chat Completions 相当接近。\n\n但注意几个地方：\n\n**第一，Anthropic 有一个比较特别的 HTTP Header：**\n\n```http\nanthropic-version: 2023-06-01\n```\n\n这是 Anthropic 的 API 协议版本，不是模型版本，也不是指模型在 2023 年发布。\n\n此外，Anthropic 目前支持 `Authorization: Bearer ...`，同时兼容 `x-api-key` 方式。官方 SDK 会自动处理这些请求头。citeturn602376view2turn618649search1\n\n**第二，`max_tokens` 是请求中的必需字段。**\n\n而 OpenAI Chat Completions 中的 `max_completion_tokens`、Responses 中的 `max_output_tokens`，在很多使用方式下可以省略。\n\n**第三，`system` 放在顶层。**\n\nOpenAI Chat Completions 的常见写法是：\n\n```json\n{\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a helpful assistant.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello\"\n    }\n  ]\n}\n```\n\nAnthropic 的常见写法则是：\n\n```json\n{\n  \"system\": \"You are a helpful assistant.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello\"\n    }\n  ]\n}\n```\n\n这有点类似于 Responses API 将系统级指令提取为顶层 `instructions`。\n\n补充一个较新的变化：部分新款 Claude 模型也支持在 `messages` 中间插入 `system` 角色消息，用于动态追加指令，但**对话开始时的系统指令仍应使用顶层 `system`**，并且中途插入有模型及位置限制。citeturn251480view0\n\n### 2\\. 响应格式\n\n一个简化的响应可能是：\n\n```json\n\n{\n  \"id\": \"msg_01abc123\",\n  \"type\": \"message\",\n  \"role\": \"assistant\",\n  \"model\": \"claude-sonnet-5-5\",\n  \"content\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"An API is a way for software systems to communicate.\"\n    }\n  ],\n  \"stop_reason\": \"end_turn\",\n  \"stop_sequence\": null,\n  \"usage\": {\n    \"input_tokens\": 25,\n    \"output_tokens\": 18\n  }\n}\n```\n\n示意响应，省略部分可选字段；ID 和 Token 数仅用于说明结构。\n\n对照 OpenAI，最重要的是你如何读取模型生成的文本：\n\nOpenAI Chat Completions\n\n`choices[0].message.content` (string)\n\n---\n\nOpenAI Responses\n\n`output_text` （SDK 便捷属性） (string)\n\n底层需要遍历 `output[]` 中的消息与内容。\n\n---\n\nAnthropic Messages\n\n`content[i].text` (string)\n\n先检查 `content[i].type == \"text\"`，而不是假设所有 Block 都是文本。\n\n这就引出了 Anthropic 协议中最核心的设计：Content Blocks。\n\n## 三、Content Blocks：Anthropic 最重要的抽象\n\nOpenAI Chat Completions 主要围绕 Message 组织数据。\n\nOpenAI Responses 则将 Message、Function Call、Reasoning 等放入类型化的 Items。\n\nAnthropic 使用了介于两者之间的结构：\n\n**Message**\n\nrole: assistant\n\n`content[]`\n\ntext\n\ntool\\_use\n\nthinking\n\n例如，Claude 可能在同一个 assistant Message 中同时返回文字和工具调用：\n\n```json\n\n{\n  \"role\": \"assistant\",\n  \"content\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"I'll check the weather.\"\n    },\n    {\n      \"type\": \"tool_use\",\n      \"id\": \"toolu_123\",\n      \"name\": \"get_weather\",\n      \"input\": {\n        \"city\": \"San Francisco\"\n      }\n    }\n  ],\n  \"stop_reason\": \"tool_use\"\n}\n```\n\n在 OpenAI Chat Completions 中，这两部分通常对应：\n\n- `message.content`\n- `message.tool_calls`\n\n在 OpenAI Responses 中，文字 Message 和 `function_call` 通常是 `output[]` 内不同类型的 Item。\n\n而 Anthropic 将它们统一放进同一个 Message 的 `content[]` 里。\n\n因此可以把两种模型抽象成：\n\n```text\nOpenAI Responses:\nResponse\n  └── output[]\n       ├── message\n       │    └── content[]\n       ├── function_call\n       └── reasoning\n\nAnthropic Messages:\nMessage\n  └── content[]\n       ├── text\n       ├── tool_use\n       └── thinking\n```\n\n请注意，这是为了理解结构而做的简化图，不代表它们支持的所有类型。\n\n**对于构建统一 LLM SDK 的开发者，这个区别很重要：两个 API 都能表达工具调用，但结构化事件所在的层级不一样。**\n\n输入端同样可以使用 Content Blocks。例如，给 Claude 发送图片时，`user.content` 可以包含 `image` Block 和 `text` Block：\n\n```json\n{\n  \"role\": \"user\",\n  \"content\": [\n    {\n      \"type\": \"image\",\n      \"source\": {\n        \"type\": \"url\",\n        \"url\": \"https://example.com/photo.png\"\n      }\n    },\n    {\n      \"type\": \"text\",\n      \"text\": \"What is in this image?\"\n    }\n  ]\n}\n```\n\n这种设计也可以扩展到文档、搜索结果等不同类型的输入。citeturn618649search1turn251480view1\n\n## 四、多轮对话：更像 Chat Completions，而不是有状态的 Responses\n\n这个区别对后端开发特别重要。\n\n**Anthropic Messages API 默认是 Stateless（无状态）的。**\n\n意思是说，你发送一次消息，拿到模型结果，下一次请求并不能仅仅提供上一次返回的 `msg_id`，就让模型自动知道历史对话。\n\n你需要把历史消息重新提交。\n\n例如：\n\n```python\n\nimport anthropic\n\nclient = anthropic.Anthropic()\nmodel = \"claude-sonnet-5-5\"\n\nmessages = [\n    {\"role\": \"user\", \"content\": \"My name is Alice.\"}\n]\n\n# 第一轮\nr1 = client.messages.create(\n    model=model,\n    max_tokens=1024,\n    messages=messages,\n)\n\n# 保留完整的 assistant content\nmessages.append({\n    \"role\": \"assistant\",\n    \"content\": r1.content\n})\n\n# 第二轮\nmessages.append({\n    \"role\": \"user\",\n    \"content\": \"What is my name?\"\n})\n\nr2 = client.messages.create(\n    model=model,\n    max_tokens=1024,\n    messages=messages,\n)\n\nprint(r2.content)\n```\n\n这里的 `msg_id` 只是响应标识，不等价于 OpenAI Responses API 的 `previous_response_id`。\n\n**关键理解**\n\nAnthropic Messages 的核心思路是：**模型计算一条新消息，客户端负责准备它所需要的上下文。**\n\n而 OpenAI Responses API 既支持客户端手动传入完整历史，也支持通过 `previous_response_id` 或 Conversations API 关联服务端保存的上下文。citeturn251480view0turn528979view3\n\nAnthropic 另外提供 Managed Agents 和 Sessions 等机制，但它们属于另一层产品能力，不应与基本的无状态 Messages 协议混为一谈。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "code_block",
+      "tree_range": [
+        3,
+        4
+      ],
+      "start_index": 58,
+      "end_index": 507
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        13,
+        14
+      ],
+      "start_index": 767,
+      "end_index": 821,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/api/overview"
+        },
+        {
+          "url": "https://platform.claude.com/docs/en/api/messages/create"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn618649search1"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        34,
+        35
+      ],
+      "start_index": 1517,
+      "end_index": 1546,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM"
+        }
+      ]
+    },
+    {
+      "type": "code_block",
+      "tree_range": [
+        37,
+        38
+      ],
+      "start_index": 1574,
+      "end_index": 1960
+    },
+    {
+      "type": "code_block",
+      "tree_range": [
+        100,
+        101
+      ],
+      "start_index": 4686,
+      "end_index": 5025
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        125,
+        126
+      ],
+      "start_index": 5978,
+      "end_index": 6032,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/api/messages/create"
+        },
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/zR7PXZezX6fC7z0eyIHipTHHbygKGnt20VdsSDDXPuSU5z2YnmwCpx7NYHLlI1orrJKF1JxsXU7VeyU8Accn4FIvwiJHwEY3UKSniqFHVBnBw3z0GY0w0i3kx11wxzcIlrqXe-k9mwLz4uK7B7MkgL_T1-_vx1TW_31-1Tx6Ndk"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn618649search1"
+        }
+      ]
+    },
+    {
+      "type": "code_block",
+      "tree_range": [
+        134,
+        135
+      ],
+      "start_index": 6231,
+      "end_index": 6820
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        147,
+        148
+      ],
+      "start_index": 7182,
+      "end_index": 7234,
+      "component_resolution_id": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+      "safe_urls": [
+        {
+          "url": "https://platform.claude.com/docs/en/build-with-claude/working-with-messages"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/4Fbx9QjJEs760_F-lIv5kYcl_Bg8sTzM9_noQjnNcyb712AQ8AuzRUB-QJ2ytmIKyFYk1lqodK8tasLA3jiV7TBUDU_n2vgk4D4Lq8IPD_KBMUh7xJ7Q38MJq0ajgqNxyPHMXyHUTaQ_y93UUZ_retide_uvJ6uZlxYi2hkZFAM"
+        },
+        {
+          "url": "https://platform.openai.com/docs/guides/migrate-to-responses"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/uBbHbJ_mjjUSzf1Zo19Soy8VZhxSnu5WKcbh7BjEI2nZ_RQ4iLhnnf5ubMLGWbDdcVdq6JKZpKuJpDd-xdJlBjd_awbQIC--Arc0-1AGKgSFsBFAPwMFaCSj5dWbpy_A"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

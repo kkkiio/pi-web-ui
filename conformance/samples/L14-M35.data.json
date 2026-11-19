@@ -1,0 +1,141 @@
+{
+  "constants": {
+    "0": "一个与你刚才讨论的 Actor Lease 很相关的细节",
+    "1": "如果 ETag 是根据内容哈希生成的，就可能出现经典的 ",
+    "2": "ABA 问题",
+    "3": "：",
+    "4": "99f25d8b-c60f-5916-afca-27ad94f49d16",
+    "5": null,
+    "6": "第三次写入之后，旧客户端可能以为对象从未改变。",
+    "7": "因此设计 Actor Ownership 时，最好让所有权记录包含单调递增的 ",
+    "8": "epoch",
+    "9": "，使每次所有权变更都会改变对象内容，或者使用存储服务提供的专门版本编号进行比较。",
+    "10": "还有个有意思的历史细节：",
+    "11": "Amazon S3 直到 2024 年 11 月才增加基于 ",
+    "12": "If-Match",
+    "13": " 的条件写入支持。",
+    "14": " 所以你惊讶对象存储竟然能做 CAS，是有道理的！",
+    "15": [
+      "turn686971search6",
+      "turn686971search0",
+      "turn686971search2"
+    ],
+    "16": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "17": "简单记忆：",
+    "18": "Hash 是内容指纹，ETag 是资源校验标识，Version ID 是存储版本身份。",
+    "19": " 三者可能相关，但不能直接当成同一个概念。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://aws.amazon.com/about-aws/whats-new/2024/11/amazon-s3-functionality-conditional-writes/",
+                "ref_id": "turn686971search6",
+                "refs": [
+                  {
+                    "turn_index": 686971,
+                    "ref_type": "search",
+                    "ref_index": 6
+                  }
+                ],
+                "source_label": "AWS",
+                "title": "Amazon S3 adds new functionality for conditional writes",
+                "snippet": null,
+                "pub_timestamp": 1732492800,
+                "metadata_label": "十一月 25, 2024"
+              },
+              {
+                "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag",
+                "ref_id": "turn686971search0",
+                "refs": [
+                  {
+                    "turn_index": 686971,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "MDN",
+                "title": "ETag header - HTTP",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://docs.aws.amazon.com/us_en/AmazonS3/latest/userguide/mpuoverview.html",
+                "ref_id": "turn686971search2",
+                "refs": [
+                  {
+                    "turn_index": 686971,
+                    "ref_type": "search",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "Amazon Simple Storage Service",
+                "title": "Uploading and copying objects using multipart upload in Amazon S3",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "3 个Sources"
+          },
+          "safe_urls": [
+            "https://aws.amazon.com/about-aws/whats-new/2024/11/amazon-s3-functionality-conditional-writes/",
+            "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag",
+            "https://docs.aws.amazon.com/us_en/AmazonS3/latest/userguide/mpuoverview.html"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 一个与你刚才讨论的 Actor Lease 很相关的细节\n\n如果 ETag 是根据内容哈希生成的，就可能出现经典的 **ABA 问题**：\n\n```text\n内容 A → ETag 123\n内容 B → ETag 456\n内容 A → ETag 123\n```\n\n第三次写入之后，旧客户端可能以为对象从未改变。\n\n因此设计 Actor Ownership 时，最好让所有权记录包含单调递增的 `epoch`，使每次所有权变更都会改变对象内容，或者使用存储服务提供的专门版本编号进行比较。\n\n还有个有意思的历史细节：**Amazon S3 直到 2024 年 11 月才增加基于 `If-Match` 的条件写入支持。** 所以你惊讶对象存储竟然能做 CAS，是有道理的！citeturn686971search6turn686971search0turn686971search2\n\n简单记忆：\n\n**Hash 是内容指纹，ETag 是资源校验标识，Version ID 是存储版本身份。** 三者可能相关，但不能直接当成同一个概念。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        10,
+        11
+      ],
+      "start_index": 338,
+      "end_index": 414,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://aws.amazon.com/about-aws/whats-new/2024/11/amazon-s3-functionality-conditional-writes/"
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag"
+        },
+        {
+          "url": "https://docs.aws.amazon.com/us_en/AmazonS3/latest/userguide/mpuoverview.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn686971search6"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn686971search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn686971search2"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

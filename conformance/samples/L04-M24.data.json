@@ -1,0 +1,532 @@
+{
+  "constants": {
+    "0": "二、最接近你设想的成熟方案：OCaml 的 ",
+    "1": ".mli",
+    "2": "如果只推荐一种语言作为设计参考，我会选 ",
+    "3": "OCaml",
+    "4": "3ffebd24-1b61-5e95-8b90-4667c80853e6",
+    "5": "。",
+    "6": "OCaml 长期使用两种文件：",
+    "7": "pricing.mli",
+    "8": " — 人工维护的契约",
+    "9": "函数签名、抽象类型、文档注释、对外暴露的成员",
+    "10": "编译器检查兼容性",
+    "11": "pricing.ml",
+    "12": " — 实现代码",
+    "13": "算法、防御性检查、辅助函数、缓存及其他内部细节",
+    "14": "例如人工编写的 ",
+    "15": "pricing.mli",
+    "16": "：",
+    "17": "5401f675-b56a-5a30-8c34-1489cf54da6c",
+    "18": null,
+    "19": "对应的 ",
+    "20": "pricing.ml",
+    "21": " 则包含具体实现，可以由 AI 编写。",
+    "22": "这里有几个很重要的特性：",
+    "23": ".mli",
+    "24": " 是可以人工维护的源码，不是只能自动生成的产物。",
+    "25": "文档注释可以直接写在 ",
+    "26": ".mli",
+    "27": " 中，并用于生成 API 文档。",
+    "28": "编译器会检查 ",
+    "29": ".ml",
+    "30": " 的公开实现是否满足 ",
+    "31": ".mli",
+    "32": "。",
+    "33": "实现中没有暴露在 ",
+    "34": ".mli",
+    "35": " 里的辅助函数，可以对外隐藏。",
+    "36": "OCaml 甚至允许先从实现推导出接口，再人工修改、精简；也可以反过来先写接口，之后补充实现。官方文档专门讨论了这两种开发顺序。",
+    "37": [
+      "turn583220search1",
+      "turn125748search0"
+    ],
+    "38": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "39": "唯一需要注意的是：",
+    "40": "OCaml 的基本配对单位是 module，不是整个项目。",
+    "41": " 通常一个 ",
+    "42": "foo.mli",
+    "43": " 对应一个 ",
+    "44": "foo.ml",
+    "45": "。如果希望把多个子模块集中暴露在统一接口中，可以通过顶层模块签名来组织，但不是把任意文件中的函数直接汇总就可以了。",
+    "46": "其他语言的方案",
+    "47": "语言",
+    "48": "声明与实现分离",
+    "49": "适合你的程度",
+    "50": "OCaml",
+    "51": " ",
+    "52": ".mli",
+    "53": " / ",
+    "54": ".ml",
+    "55": "编译器检查，支持文档注释",
+    "56": "很高",
+    "57": "Ada / SPARK",
+    "58": " spec / body",
+    "59": "支持前置、后置条件，甚至形式化验证",
+    "60": "很高",
+    "61": "F#",
+    "62": " ",
+    "63": ".fsi",
+    "64": " / ",
+    "65": ".fs",
+    "66": "真正的签名文件，编译器检查",
+    "67": "高",
+    "68": "C / C++",
+    "69": " ",
+    "70": ".h",
+    "71": " / ",
+    "72": ".cpp",
+    "73": "经典声明与实现分离",
+    "74": "中高",
+    "75": "Python",
+    "76": " ",
+    "77": ".pyi",
+    "78": " / ",
+    "79": ".py",
+    "80": "方便集中阅读类型，需额外同步检查",
+    "81": "中",
+    "82": "TypeScript",
+    "83": " ",
+    "84": ".d.ts",
+    "85": "主要描述库的类型接口，不保证 JS 实现满足行为契约",
+    "86": "中",
+    "87": "其中两种值得展开：",
+    "88": "F# 的 ",
+    "89": ".fsi",
+    "90": " 也非常符合你的设想。编译器可以生成初始签名文件，然后开发者人工删除不需要暴露的成员。不过通常一个 ",
+    "91": ".fsi",
+    "92": " 对应一个 ",
+    "93": ".fs",
+    "94": "，不像 MoonBit 同一个 package 中多个 ",
+    "95": ".mbt",
+    "96": " 共享作用域那样自由。",
+    "97": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "98": "Python 的 ",
+    "99": ".pyi",
+    "100": " 可以和 ",
+    "101": ".py",
+    "102": " 分离维护，但 Python 类型检查器通常只读取 ",
+    "103": ".pyi",
+    "104": "，并不会自动证明实现符合它。社区会使用 ",
+    "105": "mypy stubtest",
+    "106": " 通过运行时检查寻找两者的不一致。这个案例也说明了分离方案最大的工程风险：声明和实现可能发生漂移。",
+    "107": [
+      "turn125748search5",
+      "turn125748search9"
+    ],
+    "108": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "109": "三、比函数签名更进一步：把行为约束也变成契约",
+    "110": "我觉得这是你的想法最有潜力的延伸。",
+    "111": "例如：",
+    "112": "aa54bbbb-2d15-5dd6-984d-b9901aea0d42",
+    "113": null,
+    "114": "只有这个签名时，我们并不知道：",
+    "115": "是否允许透支？",
+    "116": "负数金额是什么意思？",
+    "117": "余额不足时应该报错还是返回原余额？",
+    "118": "是否允许更改外部状态？",
+    "119": "所以仅审查签名，仍然很难评价 AI 实现得对不对。",
+    "120": "Ada / SPARK 的思路值得借鉴，它支持写在函数规格中的 ",
+    "121": "Pre",
+    "122": "、",
+    "123": "Post",
+    "124": " 和 ",
+    "125": "Global",
+    "126": " 契约。",
+    "127": "56adefb2-2ba2-58fa-8dd9-aa333dcf6b9c",
+    "128": null,
+    "129": "这份声明不仅规定类型，还表达了调用者和实现者双方的责任。Ada 可以在运行时检查相应条件，SPARK 则可以尝试静态证明。",
+    "130": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+    "131": "MoonBit 自己也正在往这个方向发展",
+    "132": "我还查到了一个更接近你想法的功能：MoonBit 的实验性形式化验证机制。",
+    "133": "它允许：",
+    "134": "在 ",
+    "135": ".mbtp",
+    "136": " 文件里集中定义 predicate、不变量和证明所需的逻辑模型。",
+    "137": "在 ",
+    "138": ".mbt",
+    "139": " 文件中通过 ",
+    "140": "proof_require",
+    "141": " 和 ",
+    "142": "proof_ensure",
+    "143": " 关联前后置条件。",
+    "144": "使用 ",
+    "145": "moon prove",
+    "146": " 尝试验证实现是否满足这些条件。",
+    "147": "这已经超出了单纯的“声明文件”，进入了“可机器验证的契约”阶段。",
+    "148": "4d343fcd-41df-5b74-81df-63c72367c41d",
+    "149": "不过目前 ",
+    "150": ".mbtp",
+    "151": " 不是普通函数声明文件，函数契约仍主要附着在 ",
+    "152": ".mbt",
+    "153": " 定义上，而且整套验证机制尚处于实验阶段。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "3ffebd24-1b61-5e95-8b90-4667c80853e6": {
+          "status": "resolved",
+          "state": {
+            "value": "OCaml",
+            "action_payload": {
+              "query": "OCaml",
+              "category": "software",
+              "extraParams": {
+                "disambiguation": "函数式编程语言"
+              },
+              "event_name": "chatgpt_entity_action",
+              "event_data": {
+                "action_type": "clicked",
+                "surface_location": "response",
+                "entity_affordance": "inline",
+                "content_reference_type": "entity",
+                "entity_category": "software"
+              }
+            },
+            "click_action": {
+              "handler": "client",
+              "type": "open_entity_detail",
+              "payload": {
+                "query": "OCaml",
+                "category": "software",
+                "extraParams": {
+                  "disambiguation": "函数式编程语言"
+                },
+                "event_name": "chatgpt_entity_action",
+                "event_data": {
+                  "action_type": "clicked",
+                  "surface_location": "response",
+                  "entity_affordance": "inline",
+                  "content_reference_type": "entity",
+                  "entity_category": "software"
+                }
+              }
+            },
+            "entity_data": null,
+            "image_url": null,
+            "directions_url": null
+          },
+          "componentName": "Entity"
+        },
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://ocaml.org/docs/compiler-frontend",
+                "ref_id": "turn583220search1",
+                "refs": [
+                  {
+                    "turn_index": 583220,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "OCaml Documentation",
+                "title": "Compiler Frontend",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://ocaml.org/manual/4.11/ocamldoc.html",
+                "ref_id": "turn125748search0",
+                "refs": [
+                  {
+                    "turn_index": 125748,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "OCaml",
+                "title": "Chapter ‍16 The documentation generator (ocamldoc)",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://ocaml.org/docs/compiler-frontend",
+            "https://ocaml.org/manual/4.11/ocamldoc.html"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/signature-files",
+                "ref_id": "turn125748search1",
+                "refs": [
+                  {
+                    "turn_index": 125748,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Microsoft Learn",
+                "title": "Signature files - F#",
+                "snippet": null,
+                "pub_timestamp": 1631664000,
+                "metadata_label": "九月 15, 2021"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/signature-files"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://typing.python.org/en/latest/guides/libraries.html",
+                "ref_id": "turn125748search5",
+                "refs": [
+                  {
+                    "turn_index": 125748,
+                    "ref_type": "search",
+                    "ref_index": 5
+                  }
+                ],
+                "source_label": "typing documentation",
+                "title": "Typing Python Libraries",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://mypy.readthedocs.io/en/stable/stubtest.html",
+                "ref_id": "turn125748search9",
+                "refs": [
+                  {
+                    "turn_index": 125748,
+                    "ref_type": "search",
+                    "ref_index": 9
+                  }
+                ],
+                "source_label": "mypy 2.4.0 documentation",
+                "title": "Automatic stub testing (stubtest)",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://typing.python.org/en/latest/guides/libraries.html",
+            "https://mypy.readthedocs.io/en/stable/stubtest.html"
+          ],
+          "componentName": "Cite"
+        },
+        "f6f56486-f9e8-5487-bada-8d928fdfc15f": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://learn.adacore.com/courses/Guidelines_for_Safe_and_Secure_Ada_SPARK/chapters/guidelines/robust_programming_practice/rpp09_use_precondition_and_postcondition_contracts.html",
+                "ref_id": "turn307826search2",
+                "refs": [
+                  {
+                    "turn_index": 307826,
+                    "ref_type": "search",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "learn.adacore.com",
+                "title": "Use Precondition and Postcondition Contracts (RPP09)",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://learn.adacore.com/courses/Guidelines_for_Safe_and_Secure_Ada_SPARK/chapters/guidelines/robust_programming_practice/rpp09_use_precondition_and_postcondition_contracts.html"
+          ],
+          "componentName": "Cite"
+        },
+        "4d343fcd-41df-5b74-81df-63c72367c41d": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://docs.moonbitlang.com/en/latest/language/verification.html",
+                "ref_id": "turn501245view0",
+                "refs": [
+                  {
+                    "turn_index": 501245,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "MoonBit nightly documentation",
+                "title": "Formal Verification",
+                "snippet": "Total lines: 878",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://docs.moonbitlang.com/en/latest/language/verification.html"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 二、最接近你设想的成熟方案：OCaml 的 `.mli`\n\n如果只推荐一种语言作为设计参考，我会选 entity[\"software\",\"OCaml\",\"函数式编程语言\"]。\n\nOCaml 长期使用两种文件：\n\n**`pricing.mli` — 人工维护的契约**\n\n函数签名、抽象类型、文档注释、对外暴露的成员\n\n编译器检查兼容性\n\n**`pricing.ml` — 实现代码**\n\n算法、防御性检查、辅助函数、缓存及其他内部细节\n\n例如人工编写的 `pricing.mli`：\n\n```ocaml\n(** 对订单应用折扣。\n\n    折扣不得大于原价。\n    合法输入的结果始终非负。\n    无效折扣返回 Error。\n*)\nval apply_discount :\n  price:int ->\n  discount:int ->\n  (int, string) result\n```\n\n对应的 `pricing.ml` 则包含具体实现，可以由 AI 编写。\n\n这里有几个很重要的特性：\n\n1. `.mli` 是可以人工维护的源码，不是只能自动生成的产物。\n2. 文档注释可以直接写在 `.mli` 中，并用于生成 API 文档。\n3. 编译器会检查 `.ml` 的公开实现是否满足 `.mli`。\n4. 实现中没有暴露在 `.mli` 里的辅助函数，可以对外隐藏。\n\nOCaml 甚至允许先从实现推导出接口，再人工修改、精简；也可以反过来先写接口，之后补充实现。官方文档专门讨论了这两种开发顺序。citeturn583220search1turn125748search0\n\n唯一需要注意的是：**OCaml 的基本配对单位是 module，不是整个项目。** 通常一个 `foo.mli` 对应一个 `foo.ml`。如果希望把多个子模块集中暴露在统一接口中，可以通过顶层模块签名来组织，但不是把任意文件中的函数直接汇总就可以了。\n\n### 其他语言的方案\n\n| 语言 | 声明与实现分离 | 适合你的程度 |\n|--------|--------|--------|\n| **OCaml** `.mli` / `.ml` | 编译器检查，支持文档注释 | 很高 |\n| **Ada / SPARK** spec / body | 支持前置、后置条件，甚至形式化验证 | 很高 |\n| **F\\#** `.fsi` / `.fs` | 真正的签名文件，编译器检查 | 高 |\n| **C / C++** `.h` / `.cpp` | 经典声明与实现分离 | 中高 |\n| **Python** `.pyi` / `.py` | 方便集中阅读类型，需额外同步检查 | 中 |\n| **TypeScript** `.d.ts` | 主要描述库的类型接口，不保证 JS 实现满足行为契约 | 中 |\n\n其中两种值得展开：\n\n**F\\# 的 `.fsi`** 也非常符合你的设想。编译器可以生成初始签名文件，然后开发者人工删除不需要暴露的成员。不过通常一个 `.fsi` 对应一个 `.fs`，不像 MoonBit 同一个 package 中多个 `.mbt` 共享作用域那样自由。citeturn125748search1\n\n**Python 的 `.pyi`** 可以和 `.py` 分离维护，但 Python 类型检查器通常只读取 `.pyi`，并不会自动证明实现符合它。社区会使用 `mypy stubtest` 通过运行时检查寻找两者的不一致。这个案例也说明了分离方案最大的工程风险：声明和实现可能发生漂移。citeturn125748search5turn125748search9\n\n## 三、比函数签名更进一步：把行为约束也变成契约\n\n我觉得这是你的想法最有潜力的延伸。\n\n例如：\n\n```text\nfn withdraw(balance: Int, amount: Int) -> Int\n```\n\n只有这个签名时，我们并不知道：\n\n- 是否允许透支？\n- 负数金额是什么意思？\n- 余额不足时应该报错还是返回原余额？\n- 是否允许更改外部状态？\n\n所以仅审查签名，仍然很难评价 AI 实现得对不对。\n\nAda / SPARK 的思路值得借鉴，它支持写在函数规格中的 `Pre`、`Post` 和 `Global` 契约。\n\n```ada\nfunction Withdraw\n  (Balance, Amount : Natural) return Natural\nwith\n  Pre  => Amount <= Balance,\n  Post => Withdraw'Result = Balance - Amount;\n```\n\n这份声明不仅规定类型，还表达了调用者和实现者双方的责任。Ada 可以在运行时检查相应条件，SPARK 则可以尝试静态证明。citeturn307826search2\n\n### MoonBit 自己也正在往这个方向发展\n\n我还查到了一个更接近你想法的功能：MoonBit 的实验性形式化验证机制。\n\n它允许：\n\n- 在 `.mbtp` 文件里集中定义 predicate、不变量和证明所需的逻辑模型。\n- 在 `.mbt` 文件中通过 `proof_require` 和 `proof_ensure` 关联前后置条件。\n- 使用 `moon prove` 尝试验证实现是否满足这些条件。\n\n这已经超出了单纯的“声明文件”，进入了“可机器验证的契约”阶段。citeturn501245view0\n\n不过目前 `.mbtp` 不是普通函数声明文件，函数契约仍主要附着在 `.mbt` 定义上，而且整套验证机制尚处于实验阶段。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite",
+    "Entity"
+  ],
+  "genui_components": [
+    {
+      "type": "entity",
+      "tree_range": [
+        3,
+        4
+      ],
+      "start_index": 53,
+      "end_index": 115,
+      "component_resolution_id": "3ffebd24-1b61-5e95-8b90-4667c80853e6",
+      "entities": [
+        {
+          "entity_type": "entity"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        45,
+        46
+      ],
+      "start_index": 1376,
+      "end_index": 1432,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://ocaml.org/docs/compiler-frontend"
+        },
+        {
+          "url": "https://ocaml.org/manual/4.11/ocamldoc.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn583220search1"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn125748search0"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        122,
+        123
+      ],
+      "start_index": 2068,
+      "end_index": 2099,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/signature-files"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn125748search1"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        129,
+        130
+      ],
+      "start_index": 2246,
+      "end_index": 2302,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://typing.python.org/en/latest/guides/libraries.html"
+        },
+        {
+          "url": "https://mypy.readthedocs.io/en/stable/stubtest.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn125748search5"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn125748search9"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        151,
+        152
+      ],
+      "start_index": 2793,
+      "end_index": 2824,
+      "component_resolution_id": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+      "safe_urls": [
+        {
+          "url": "https://learn.adacore.com/courses/Guidelines_for_Safe_and_Secure_Ada_SPARK/chapters/guidelines/robust_programming_practice/rpp09_use_precondition_and_postcondition_contracts.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn307826search2"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        166,
+        167
+      ],
+      "start_index": 3068,
+      "end_index": 3097,
+      "component_resolution_id": "4d343fcd-41df-5b74-81df-63c72367c41d",
+      "safe_urls": [
+        {
+          "url": "https://docs.moonbitlang.com/en/latest/language/verification.html"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

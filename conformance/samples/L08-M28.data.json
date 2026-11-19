@@ -1,0 +1,246 @@
+{
+  "constants": {
+    "0": "对，你这次的理解基本正确。",
+    "1": " 我们完全可以先忽略 Netfilter，单独研究 Linux 最基础的 IP 网络功能。",
+    "2": "1. iptables、nftables、conntrack 都可以暂时忽略吗？",
+    "3": "可以。",
+    "4": "iptables",
+    "5": "：基于 Netfilter 的规则处理机制。",
+    "6": "nftables",
+    "7": "：同样基于 Netfilter。",
+    "8": "conntrack",
+    "9": "：属于 Netfilter 体系，利用 Hook 跟踪网络流。",
+    "10": "它们都不是 Linux 实现基本 IP 通信和路由转发的必要条件。",
+    "11": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "12": "即使不使用这些功能，Linux 仍然可以作为一台正常的 IP 主机，甚至作为路由器转发数据包（需要开启 IP forwarding）。",
+    "13": "2. 那么最基础的 Linux 路由机制是什么？",
+    "14": "可以简化成：",
+    "15": "Routing Policy Database（RPDB）",
+    "16": "ip rule：决定查哪张路由表",
+    "17": "Routing Table",
+    "18": "ip route：最长前缀匹配，选择路由",
+    "19": "下一跳 + 出口网络接口",
+    "20": "随后通过 ARP / NDP 等机制完成链路层发送",
+    "21": "注意，现代 Linux 即使没有配置任何自定义 Policy Routing，默认也存在 RPDB。",
+    "22": "通常有三条默认规则：",
+    "23": "e41bcc2e-1d14-57e1-851f-d1f20c6c3086",
+    "24": null,
+    "25": "可以把它理解为：首先查本机地址相关的路由，再查普通路由表。如果没有找到合适路由，还可以继续查下一张表。",
+    "26": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "27": "所以，",
+    "28": "在现代 Linux 中，Policy Routing 是路由查找机制的一部分，但你完全可以先把它视为固定配置。",
+    "29": "3. 历史上是不是先有路由表，后来才有 Policy Routing？",
+    "30": "是的。",
+    "31": "在 Linux 的发展历史中：",
+    "32": "Linux 2.0 及以前",
+    "33": "：主要采用传统的、基于目的 IP 的单路由表查找。",
+    "34": "Linux 2.2 时代（1999 年）",
+    "35": "：引入了更先进的路由架构，支持多张路由表与基于规则的 Policy Routing。",
+    "36": [
+      "turn109933search8",
+      "turn109933search4"
+    ],
+    "37": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "38": "你的历史推断是正确的。",
+    "39": "4. 最后补充一个小区别",
+    "40": "如果我们讨论的是",
+    "41": "路由功能",
+    "42": "，那么只关注 RPDB 和 Routing Table 就足够建立基础模型了。",
+    "43": "但如果讨论的是整个",
+    "44": "基础网络协议栈",
+    "45": "，还需要 IP 协议处理、ARP、网络接口、TCP/UDP 等组件。",
+    "46": "所以现阶段，我建议我们就固定在这个模型上：",
+    "47": "Policy Routing → Routing Table → Next Hop / Network Interface",
+    "48": "暂时把 iptables、nftables、conntrack 和 Netfilter 全部放在一边。先彻底弄清楚 Linux 的路由查找机制，再往上增加其他功能。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://wiki.netfilter.org/wiki-nftables/index.php/Netfilter_hooks",
+                "ref_id": "turn310877search0",
+                "refs": [
+                  {
+                    "turn_index": 310877,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Netfilter hooks",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://wiki.netfilter.org/wiki-nftables/index.php/Netfilter_hooks"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://man7.org/linux/man-pages/man8/ip-rule.8.html",
+                "ref_id": "turn310877search1",
+                "refs": [
+                  {
+                    "turn_index": 310877,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "Linux manual page",
+                "title": "ip-rule(8)",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://man7.org/linux/man-pages/man8/ip-rule.8.html"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://linuxdocs.org/HOWTOs/Net-HOWTO/c1505.html",
+                "ref_id": "turn109933search8",
+                "refs": [
+                  {
+                    "turn_index": 109933,
+                    "ref_type": "search",
+                    "ref_index": 8
+                  }
+                ],
+                "source_label": "linuxdocs.org",
+                "title": "Advanced Networking with Kernel 2.2",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://rtime.ciirc.cvut.cz/gitweb/lisovros/iproute2_canprio.git/blob/HEAD%3A/doc/ip-cref.tex",
+                "ref_id": "turn109933search4",
+                "refs": [
+                  {
+                    "turn_index": 109933,
+                    "ref_type": "search",
+                    "ref_index": 4
+                  }
+                ],
+                "source_label": "rtime.ciirc.cvut.cz",
+                "title": null,
+                "snippet": null,
+                "pub_timestamp": 924048000,
+                "metadata_label": "四月 14, 1999"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://linuxdocs.org/HOWTOs/Net-HOWTO/c1505.html",
+            "https://rtime.ciirc.cvut.cz/gitweb/lisovros/iproute2_canprio.git/blob/HEAD%3A/doc/ip-cref.tex"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "**对，你这次的理解基本正确。** 我们完全可以先忽略 Netfilter，单独研究 Linux 最基础的 IP 网络功能。\n\n### 1\\. iptables、nftables、conntrack 都可以暂时忽略吗？\n\n**可以。**\n\n- `iptables`：基于 Netfilter 的规则处理机制。\n- `nftables`：同样基于 Netfilter。\n- `conntrack`：属于 Netfilter 体系，利用 Hook 跟踪网络流。\n\n它们都不是 Linux 实现基本 IP 通信和路由转发的必要条件。citeturn310877search0\n\n即使不使用这些功能，Linux 仍然可以作为一台正常的 IP 主机，甚至作为路由器转发数据包（需要开启 IP forwarding）。\n\n### 2\\. 那么最基础的 Linux 路由机制是什么？\n\n可以简化成：\n\n**Routing Policy Database（RPDB）**\n\nip rule：决定查哪张路由表\n\n**Routing Table**\n\nip route：最长前缀匹配，选择路由\n\n**下一跳 + 出口网络接口**\n\n随后通过 ARP / NDP 等机制完成链路层发送\n\n注意，现代 Linux 即使没有配置任何自定义 Policy Routing，默认也存在 RPDB。\n\n通常有三条默认规则：\n\n```text\n0:      from all lookup local\n32766:  from all lookup main\n32767:  from all lookup default\n```\n\n可以把它理解为：首先查本机地址相关的路由，再查普通路由表。如果没有找到合适路由，还可以继续查下一张表。citeturn310877search1\n\n所以，**在现代 Linux 中，Policy Routing 是路由查找机制的一部分，但你完全可以先把它视为固定配置。**\n\n### 3\\. 历史上是不是先有路由表，后来才有 Policy Routing？\n\n**是的。**\n\n在 Linux 的发展历史中：\n\n- **Linux 2.0 及以前**：主要采用传统的、基于目的 IP 的单路由表查找。\n- **Linux 2.2 时代（1999 年）**：引入了更先进的路由架构，支持多张路由表与基于规则的 Policy Routing。citeturn109933search8turn109933search4\n\n你的历史推断是正确的。\n\n### 4\\. 最后补充一个小区别\n\n如果我们讨论的是**路由功能**，那么只关注 RPDB 和 Routing Table 就足够建立基础模型了。\n\n但如果讨论的是整个**基础网络协议栈**，还需要 IP 协议处理、ARP、网络接口、TCP/UDP 等组件。\n\n所以现阶段，我建议我们就固定在这个模型上：\n\n**Policy Routing → Routing Table → Next Hop / Network Interface**\n\n暂时把 iptables、nftables、conntrack 和 Netfilter 全部放在一边。先彻底弄清楚 Linux 的路由查找机制，再往上增加其他功能。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        16,
+        17
+      ],
+      "start_index": 262,
+      "end_index": 293,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://wiki.netfilter.org/wiki-nftables/index.php/Netfilter_hooks"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn310877search0"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        37,
+        38
+      ],
+      "start_index": 1379,
+      "end_index": 1410,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://man7.org/linux/man-pages/man8/ip-rule.8.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn310877search1"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        50,
+        51
+      ],
+      "start_index": 1656,
+      "end_index": 1712,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://linuxdocs.org/HOWTOs/Net-HOWTO/c1505.html"
+        },
+        {
+          "url": "https://rtime.ciirc.cvut.cz/gitweb/lisovros/iproute2_canprio.git/blob/HEAD%3A/doc/ip-cref.tex"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn109933search8"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn109933search4"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

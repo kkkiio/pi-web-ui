@@ -10,6 +10,7 @@
     "ignoreUnknown": true,
     "includes": [
       "components.json",
+      "conformance/**/*.ts",
       "e2e/**/*.ts",
       "evals/**/*.ts",
       "evals/**/*.tsx",

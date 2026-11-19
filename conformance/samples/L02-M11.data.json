@@ -1,0 +1,25 @@
+{
+  "constants": {
+    "0": "我打开了你发的 ChatGPT 分享链接，页面标题是 ",
+    "1": "《填写 Tailscale 设置》",
+    "2": "。",
+    "3": "不过，目前只能读取到标题，无法获取对话的具体内容。",
+    "4": "你可以把其中的关键设置、诊断结果或对话截图发给我。",
+    "5": "我会结合你之前的情况——",
+    "6": "iPhone 使用蜂窝网络，通过 Tailscale 访问家里 Mac 的 Web 服务，即使强制使用 DERP 也经常加载失败",
+    "7": "——帮你判断：",
+    "8": "之前的 Tailscale 配置有没有问题。",
+    "9": "故障更可能发生在网络链路、DERP 中继还是 Web 服务层。",
+    "10": "是否值得换成 Surge Ponte，或者采用其他更可靠的远程访问方案。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {},
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "我打开了你发的 ChatGPT 分享链接，页面标题是 **《填写 Tailscale 设置》**。\n\n不过，目前只能读取到标题，无法获取对话的具体内容。\n\n你可以把其中的关键设置、诊断结果或对话截图发给我。\n\n我会结合你之前的情况——**iPhone 使用蜂窝网络，通过 Tailscale 访问家里 Mac 的 Web 服务，即使强制使用 DERP 也经常加载失败**——帮你判断：\n\n1. 之前的 Tailscale 配置有没有问题。\n2. 故障更可能发生在网络链路、DERP 中继还是 Web 服务层。\n3. 是否值得换成 Surge Ponte，或者采用其他更可靠的远程访问方案。",
+  "fallbackMarkdownVersion": 1,
+  "view_state": {}
+}

@@ -1,0 +1,81 @@
+{
+  "constants": {
+    "0": "对，你说得对。Shadowrocket 已经支持 Tailscale，所以没必要为了「代理和 Tailscale 共存」专门买 Surge。",
+    "1": "我查了 Shadowrocket 的 App Store 更新日志，确实已经加入了 Tailscale 隧道、MagicDNS、设备管理和延迟显示等功能。",
+    "2": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "3": "但 Surge 的 Ponte 和 Shadowrocket 集成 Tailscale，有一个关键区别：",
+    "4": "Shadowrocket + Tailscale",
+    "5": "：在一个 App 中集成代理和 Tailscale 组网，继续使用原来的 Tailscale 网络。",
+    "6": "Surge + Ponte",
+    "7": "：在 Surge 中使用另一套远程组网系统，",
+    "8": "Ponte 本身不是 Tailscale",
+    "9": "，不需要依赖 Tailscale 的 DERP 中继。",
+    "10": "两者不仅是解决 iPhone 上两个 VPN 互相冲突的问题，还能让你在外面访问家里的 Mac、NAS 和 Web 服务。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://apps.apple.com/us/app/shadowrocket/id932747118?l=en-us&platform=ipad",
+                "ref_id": "turn787659search4",
+                "refs": [
+                  {
+                    "turn_index": 787659,
+                    "ref_type": "search",
+                    "ref_index": 4
+                  }
+                ],
+                "source_label": "App Store",
+                "title": "‎Shadowrocket App",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://apps.apple.com/us/app/shadowrocket/id932747118?l=en-us&platform=ipad"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "**对，你说得对。Shadowrocket 已经支持 Tailscale，所以没必要为了「代理和 Tailscale 共存」专门买 Surge。**\n\n我查了 Shadowrocket 的 App Store 更新日志，确实已经加入了 Tailscale 隧道、MagicDNS、设备管理和延迟显示等功能。citeturn787659search4\n\n但 Surge 的 Ponte 和 Shadowrocket 集成 Tailscale，有一个关键区别：\n\n- **Shadowrocket + Tailscale**：在一个 App 中集成代理和 Tailscale 组网，继续使用原来的 Tailscale 网络。\n- **Surge + Ponte**：在 Surge 中使用另一套远程组网系统，**Ponte 本身不是 Tailscale**，不需要依赖 Tailscale 的 DERP 中继。\n\n两者不仅是解决 iPhone 上两个 VPN 互相冲突的问题，还能让你在外面访问家里的 Mac、NAS 和 Web 服务。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        3,
+        4
+      ],
+      "start_index": 153,
+      "end_index": 184,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://apps.apple.com/us/app/shadowrocket/id932747118?l=en-us&platform=ipad"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn787659search4"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

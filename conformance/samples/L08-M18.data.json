@@ -1,0 +1,593 @@
+{
+  "constants": {
+    "0": "三、最重要的一张图：Linux 数据包处理流程",
+    "1": "我们暂时不考虑 XDP、tc、bridge、flow offload 等额外机制，只观察普通 IPv4 数据包进入 Linux 内核后的经典处理路径。",
+    "2": "Linux IPv4 数据包处理路径（简化版）",
+    "3": "网卡接收 IP 包",
+    "4": {
+      "size": 1,
+      "color": "info"
+    },
+    "5": "PREROUTING Hook",
+    "6": "可执行 conntrack、DNAT、过滤等处理",
+    "7": {
+      "size": 1,
+      "color": "success"
+    },
+    "8": "路由决策（Routing Decision）",
+    "9": "Policy Routing → Routing Table Lookup",
+    "10": "判断目标是本机还是其他机器",
+    "11": "目标是本机",
+    "12": {
+      "size": 1,
+      "color": "info"
+    },
+    "13": "INPUT Hook",
+    "14": "本机入站规则",
+    "15": "本机 Socket / 应用程序",
+    "16": "需要转发",
+    "17": {
+      "size": 1,
+      "color": "info"
+    },
+    "18": "FORWARD Hook",
+    "19": "转发规则",
+    "20": {
+      "size": 1,
+      "color": "info"
+    },
+    "21": "POSTROUTING Hook",
+    "22": "可执行 SNAT",
+    "23": "出口网卡发送",
+    "24": "本机主动发起的流量则走另一条路径",
+    "25": "本机应用程序 / Socket",
+    "26": {
+      "size": 1,
+      "color": "success"
+    },
+    "27": "初始路由查找",
+    "28": {
+      "size": 1,
+      "color": "info"
+    },
+    "29": "OUTPUT Hook",
+    "30": {
+      "size": 1,
+      "color": "info"
+    },
+    "31": "POSTROUTING Hook",
+    "32": "出口网卡发送",
+    "33": "Netfilter Hook",
+    "34": "路由机制",
+    "35": "这张图有三个值得关注的地方。",
+    "36": "第一，路由决策发生在 Netfilter Hook 之间。",
+    "37": "例如，一个从网卡收到的转发数据包会经历：",
+    "38": "7900f75c-1926-5839-9006-dbf31c54479b",
+    "39": null,
+    "40": "因此不能说 Hook 在路由表上面一层。",
+    "41": "第二，并不是每个包都会经过所有 Hook。",
+    "42": "收到的包如果是给本机的，走 ",
+    "43": "INPUT",
+    "44": "，而不是 ",
+    "45": "FORWARD",
+    "46": "；本机主动发送的包走 ",
+    "47": "OUTPUT",
+    "48": "，不走 ",
+    "49": "PREROUTING",
+    "50": "。",
+    "51": "第三，本机发送时有一个容易忽略的细节。",
+    "52": "本机生成的数据包通常先进行初始路由查找，再经过 ",
+    "53": "OUTPUT",
+    "54": " Hook。如果 ",
+    "55": "OUTPUT",
+    "56": " 中的规则修改了影响路由的字段，内核可能重新执行路由查找。",
+    "57": [
+      "turn901100search0",
+      "turn449499search13"
+    ],
+    "58": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "59": "四、Hook 和 iptables Rules 到底是什么关系？",
+    "60": "现在看你的第二个猜想：",
+    "61": "策略规则上面是不是还有所谓的 Hook？",
+    "62": "这里你的理解方向是对的。",
+    "63": "但是中间还差一个重要概念：",
+    "64": "Chain（链）",
+    "65": "。",
+    "66": "以 nftables 为例，可以把组织关系理解成：",
+    "67": "Netfilter Hook: INPUT",
+    "68": "内核网络流程中的执行点",
+    "69": "Chain: input",
+    "70": "Rule 1: 已建立连接 → ACCEPT",
+    "71": "Rule 2: TCP 22 端口 → ACCEPT",
+    "72": "默认策略：DROP",
+    "73": "Hook 可以理解成一个 ",
+    "74": "内核提供的回调执行点（Callback Point）",
+    "75": "。",
+    "76": "当数据包经过这个位置时，内核会调用注册在这里的处理逻辑。",
+    "77": "iptables 或 nftables 可以将规则链注册到相应 Hook 上。内核中的 conntrack 等模块也可以注册自己的处理逻辑。",
+    "78": "再看一段真实的 nftables 配置：",
+    "79": "473c4829-01fa-5af1-a7a3-79be8e9708bf",
+    "80": null,
+    "81": "先不用纠结语法，只注意：",
+    "82": "f851bd0e-b4cf-5e33-b5be-10f2abafcbc4",
+    "83": null,
+    "84": "它就是在声明：把这条基础链注册到 ",
+    "85": "INPUT",
+    "86": " Hook。",
+    "87": "而下面的：",
+    "88": "8a8c33b2-99c0-5045-b48b-d561d9444e6a",
+    "89": null,
+    "90": "则是一条具体的匹配规则。",
+    "91": "这里的 ",
+    "92": "priority 0",
+    "93": " 控制同一个 Hook 上不同处理逻辑的执行顺序。较小的优先级数值先执行。",
+    "94": [
+      "turn901100search2",
+      "turn449499search0"
+    ],
+    "95": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "96": "所以，到这里你可以把它们整理成：",
+    "97": "Hook → Chain → Rule",
+    "98": "但路由表并不属于这条层级关系，而是由网络协议栈在需要路由决策的地方使用。",
+    "99": "五、Connection Tracking 又在哪里？",
+    "100": "这也是很多人学习 Linux 网络时特别容易混乱的地方。",
+    "101": "因为 conntrack 不是一个额外的生命周期阶段，也不仅是一组防火墙规则。",
+    "102": "它本质上是一个 ",
+    "103": "有状态的数据包跟踪子系统",
+    "104": "。",
+    "105": "举个例子：",
+    "106": "0212f2cf-4e6e-5533-921e-241aec67b164",
+    "107": null,
+    "108": "conntrack 可以根据源 IP、目标 IP、传输层协议、端口等信息识别这个网络流，并维护一条连接跟踪记录。",
+    "109": "后续回复：",
+    "110": "03de4ab7-25bb-57dd-a0d7-dd72b0753fb6",
+    "111": null,
+    "112": "conntrack 能识别出：",
+    "113": "这是同一条网络流的回复方向，而不是完全无关的新流量。",
+    "114": "因此防火墙可以写：",
+    "115": "be42c813-5421-5059-98bd-f34eaa29ebcf",
+    "116": null,
+    "117": "意思是：如果数据包属于已建立或相关的连接，就允许它通过。",
+    "118": "conntrack 的状态包括 ",
+    "119": "NEW",
+    "120": "、",
+    "121": "ESTABLISHED",
+    "122": "、",
+    "123": "RELATED",
+    "124": "、",
+    "125": "INVALID",
+    "126": "、",
+    "127": "UNTRACKED",
+    "128": " 等。它不只适用于 TCP，也可以跟踪 UDP 等协议；而且 conntrack 的 ",
+    "129": "ESTABLISHED",
+    "130": " 不等同于 TCP Socket 自身的 ESTABLISHED 状态。",
+    "131": [
+      "turn449499search0",
+      "turn449499search5"
+    ],
+    "132": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "133": "最重要的是理解它与 Hook 的关系：",
+    "134": "conntrack 在 Netfilter 的特定 Hook 上进行数据包跟踪，普通 IPv4 流程中通常在 ",
+    "135": "PREROUTING",
+    "136": " 或 ",
+    "137": "OUTPUT",
+    "138": " 早期处理。",
+    "139": "conntrack 保存动态连接状态。",
+    "140": "iptables/nftables 规则可以读取这些状态，做出放行或丢弃的决定。",
+    "141": "NAT 也依赖 conntrack 记录地址转换关系。",
+    "142": "因此，",
+    "143": "conntrack 提供状态信息，防火墙规则使用这些信息",
+    "144": "，两者并不是同一个东西。",
+    "145": "六、还有一个你必须区分的东西：Policy Routing",
+    "146": "你提到的“策略规则”，在 Linux 中恰好有另一套真正叫做 Policy Routing 的机制。",
+    "147": "假设有：",
+    "148": "b80fb3d6-a9b1-58ad-be3a-20a805b92987",
+    "149": null,
+    "150": "可能输出：",
+    "151": "8ebbad5d-43c0-506c-b13d-c867577b853e",
+    "152": null,
+    "153": "这表示 Linux 默认存在一组路由策略规则，用来选择路由表。",
+    "154": "比如你以后可以配置：",
+    "155": "5fcf10ae-42b8-514a-9266-b60d74be13ce",
+    "156": null,
+    "157": "所以，对于路由系统内部而言，确实存在一层选择关系：",
+    "158": "b8a7e62a-1517-53f5-81bd-15636b9a6a9b",
+    "159": null,
+    "160": "这套机制和 iptables 中的防火墙规则是不同的。",
+    "161": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+    "162": "注意，我们现在已经遇到了三种容易混淆的“表”：",
+    "163": "名称",
+    "164": "例子",
+    "165": "用途",
+    "166": "路由表",
+    "167": "ip route",
+    "168": "查找到目的地的路径",
+    "169": "Netfilter 表",
+    "170": "table inet filter",
+    "171": "组织规则链",
+    "172": "conntrack 表",
+    "173": "连接跟踪记录",
+    "174": "保存网络流状态",
+    "175": "虽然都叫 table，但它们并不是一种通用的表结构，也不属于同一个处理层级。",
+    "176": "七、现代 Linux 里还需要知道 nftables",
+    "177": "你想学现代 Linux 网络栈，所以这里有必要提前说明：",
+    "178": "Netfilter 是内核框架；iptables 是传统的规则管理机制；nftables 是更新的规则管理框架。",
+    "179": "iptables 和 nftables 共享 Netfilter 的 Hook、conntrack、NAT 等底层基础设施，但规则的组织和执行机制不同。",
+    "180": "而且在许多 Linux 发行版中，",
+    "181": "iptables",
+    "182": " 命令实际上可能使用 ",
+    "183": "iptables-nft",
+    "184": " 兼容后端。",
+    "185": "因此现在学习时，建议先理解共同的内核数据包路径，再学习 nftables 的规则模型，最后理解传统 iptables 的表和链如何映射到这些概念。",
+    "186": "4d343fcd-41df-5b74-81df-63c72367c41d",
+    "187": "八、用一次实验把这些概念连接起来",
+    "188": "你可以在 Linux 上执行下面这些只读命令：",
+    "189": "1cabad17-50b8-5542-aa1d-3cedf4dc241c",
+    "190": null,
+    "191": "你可以把这五个命令分别理解成：",
+    "192": "谁决定查哪张路由表？表里有什么？具体选了哪条路？哪些 Netfilter 规则会处理包？内核记住了哪些连接状态？",
+    "193": "这五个问题共同组成了你想理解的 Linux 网络栈的一大部分。",
+    "194": "九、最后帮你建立一个清晰的心智模型",
+    "195": "我建议你以后不要把这套机制想象成一个垂直的三层结构，而是记住两个维度：",
+    "196": "维度 A：数据包在内核中经过哪些位置？",
+    "197": "PREROUTING → Routing → INPUT / FORWARD → POSTROUTING",
+    "198": "或者，本机发送时：",
+    "199": "Routing → OUTPUT → POSTROUTING",
+    "200": "维度 B：内核在这些位置使用哪些机制？",
+    "201": "路由：选择路径、下一跳、出口设备。",
+    "202": "Netfilter：在 Hook 处执行注册的处理逻辑。",
+    "203": "nftables / iptables：提供可配置的数据包处理规则。",
+    "204": "conntrack：保存网络流的状态，供防火墙和 NAT 等机制使用。",
+    "205": "我建议我们下一步不要立刻研究所有 iptables 表和规则，而是专门深入一个问题：",
+    "206": "为什么 DNAT 要在 PREROUTING，而 SNAT 通常在 POSTROUTING？",
+    "207": "这个问题能很好地把你已经理解的路由查找与 Netfilter Hook 联系起来。一旦理解了 NAT 和路由决策的先后关系，再看 ",
+    "208": "iptables",
+    "209": " 的 ",
+    "210": "raw",
+    "211": "、",
+    "212": "mangle",
+    "213": "、",
+    "214": "nat",
+    "215": "、",
+    "216": "filter",
+    "217": "，以及 conntrack 的执行顺序，就会清晰得多。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks",
+                "ref_id": "turn901100search0",
+                "refs": [
+                  {
+                    "turn_index": 901100,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Netfilter hooks",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://documentation.ubuntu.com/security/security-features/network/firewall/nftables/",
+                "ref_id": "turn449499search13",
+                "refs": [
+                  {
+                    "turn_index": 449499,
+                    "ref_type": "search",
+                    "ref_index": 13
+                  }
+                ],
+                "source_label": "Ubuntu security documentation",
+                "title": "nftables",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks",
+            "https://documentation.ubuntu.com/security/security-features/network/firewall/nftables/"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains",
+                "ref_id": "turn901100search2",
+                "refs": [
+                  {
+                    "turn_index": 901100,
+                    "ref_type": "search",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Configuring chains",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation",
+                "ref_id": "turn449499search0",
+                "refs": [
+                  {
+                    "turn_index": 449499,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Matching connection tracking stateful metainformation",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains",
+            "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation",
+                "ref_id": "turn449499search0",
+                "refs": [
+                  {
+                    "turn_index": 449499,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Matching connection tracking stateful metainformation",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://netfilter.org/projects/nftables/manpage.html",
+                "ref_id": "turn449499search5",
+                "refs": [
+                  {
+                    "turn_index": 449499,
+                    "ref_type": "search",
+                    "ref_index": 5
+                  }
+                ],
+                "source_label": "Netfilter",
+                "title": null,
+                "snippet": null,
+                "pub_timestamp": 1782950400,
+                "metadata_label": "七月 2, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation",
+            "https://netfilter.org/projects/nftables/manpage.html"
+          ],
+          "componentName": "Cite"
+        },
+        "f6f56486-f9e8-5487-bada-8d928fdfc15f": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://man7.org/linux/man-pages/man8/ip-rule.8.html",
+                "ref_id": "turn901100search9",
+                "refs": [
+                  {
+                    "turn_index": 901100,
+                    "ref_type": "search",
+                    "ref_index": 9
+                  }
+                ],
+                "source_label": "Linux manual page",
+                "title": "ip-rule(8)",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://man7.org/linux/man-pages/man8/ip-rule.8.html"
+          ],
+          "componentName": "Cite"
+        },
+        "4d343fcd-41df-5b74-81df-63c72367c41d": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks",
+                "ref_id": "turn901100search0",
+                "refs": [
+                  {
+                    "turn_index": 901100,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Netfilter hooks",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 三、最重要的一张图：Linux 数据包处理流程\n\n我们暂时不考虑 XDP、tc、bridge、flow offload 等额外机制，只观察普通 IPv4 数据包进入 Linux 内核后的经典处理路径。\n\nLinux IPv4 数据包处理路径（简化版）\n\n网卡接收 IP 包\n\n**PREROUTING Hook**\n\n可执行 conntrack、DNAT、过滤等处理\n\n**路由决策（Routing Decision）**\n\nPolicy Routing → Routing Table Lookup\n\n判断目标是本机还是其他机器\n\n目标是本机\n\n**INPUT Hook**\n\n本机入站规则\n\n本机 Socket / 应用程序\n\n需要转发\n\n**FORWARD Hook**\n\n转发规则\n\n**POSTROUTING Hook**\n\n可执行 SNAT\n\n出口网卡发送\n\n---\n\n本机主动发起的流量则走另一条路径\n\n本机应用程序 / Socket\n\n初始路由查找\n\nOUTPUT Hook\n\nPOSTROUTING Hook\n\n出口网卡发送\n\nNetfilter Hook\n\n路由机制\n\n这张图有三个值得关注的地方。\n\n**第一，路由决策发生在 Netfilter Hook 之间。**\n\n例如，一个从网卡收到的转发数据包会经历：\n\n```text\nPREROUTING\n    ↓\nRouting Decision\n    ↓\nFORWARD\n    ↓\nPOSTROUTING\n```\n\n因此不能说 Hook 在路由表上面一层。\n\n**第二，并不是每个包都会经过所有 Hook。**\n\n收到的包如果是给本机的，走 `INPUT`，而不是 `FORWARD`；本机主动发送的包走 `OUTPUT`，不走 `PREROUTING`。\n\n**第三，本机发送时有一个容易忽略的细节。**\n\n本机生成的数据包通常先进行初始路由查找，再经过 `OUTPUT` Hook。如果 `OUTPUT` 中的规则修改了影响路由的字段，内核可能重新执行路由查找。citeturn901100search0turn449499search13\n\n## 四、Hook 和 iptables Rules 到底是什么关系？\n\n现在看你的第二个猜想：\n\n> 策略规则上面是不是还有所谓的 Hook？\n\n这里你的理解方向是对的。\n\n但是中间还差一个重要概念：**Chain（链）**。\n\n以 nftables 为例，可以把组织关系理解成：\n\n**Netfilter Hook: INPUT**\n\n内核网络流程中的执行点\n\nChain: input\n\nRule 1: 已建立连接 → ACCEPT\n\nRule 2: TCP 22 端口 → ACCEPT\n\n默认策略：DROP\n\nHook 可以理解成一个 **内核提供的回调执行点（Callback Point）**。\n\n当数据包经过这个位置时，内核会调用注册在这里的处理逻辑。\n\niptables 或 nftables 可以将规则链注册到相应 Hook 上。内核中的 conntrack 等模块也可以注册自己的处理逻辑。\n\n再看一段真实的 nftables 配置：\n\n```nft\ntable inet filter {\n    chain input {\n        type filter hook input priority 0;\n        policy drop;\n\n        ct state established,related accept\n        tcp dport 22 accept\n    }\n}\n```\n\n先不用纠结语法，只注意：\n\n```text\nhook input\n```\n\n它就是在声明：把这条基础链注册到 `INPUT` Hook。\n\n而下面的：\n\n```text\nct state established,related accept\n```\n\n则是一条具体的匹配规则。\n\n这里的 `priority 0` 控制同一个 Hook 上不同处理逻辑的执行顺序。较小的优先级数值先执行。citeturn901100search2turn449499search0\n\n所以，到这里你可以把它们整理成：\n\n**Hook → Chain → Rule**\n\n但路由表并不属于这条层级关系，而是由网络协议栈在需要路由决策的地方使用。\n\n## 五、Connection Tracking 又在哪里？\n\n这也是很多人学习 Linux 网络时特别容易混乱的地方。\n\n因为 conntrack 不是一个额外的生命周期阶段，也不仅是一组防火墙规则。\n\n它本质上是一个 **有状态的数据包跟踪子系统**。\n\n举个例子：\n\n```text\n客户端 10.0.0.10:50000\n        ↓ TCP SYN\n服务器 8.8.8.8:443\n```\n\nconntrack 可以根据源 IP、目标 IP、传输层协议、端口等信息识别这个网络流，并维护一条连接跟踪记录。\n\n后续回复：\n\n```text\n服务器 8.8.8.8:443\n        ↓ TCP SYN-ACK\n客户端 10.0.0.10:50000\n```\n\nconntrack 能识别出：\n\n这是同一条网络流的回复方向，而不是完全无关的新流量。\n\n因此防火墙可以写：\n\n```nft\nct state established,related accept\n```\n\n意思是：如果数据包属于已建立或相关的连接，就允许它通过。\n\nconntrack 的状态包括 `NEW`、`ESTABLISHED`、`RELATED`、`INVALID`、`UNTRACKED` 等。它不只适用于 TCP，也可以跟踪 UDP 等协议；而且 conntrack 的 `ESTABLISHED` 不等同于 TCP Socket 自身的 ESTABLISHED 状态。citeturn449499search0turn449499search5\n\n最重要的是理解它与 Hook 的关系：\n\n- conntrack 在 Netfilter 的特定 Hook 上进行数据包跟踪，普通 IPv4 流程中通常在 `PREROUTING` 或 `OUTPUT` 早期处理。\n- conntrack 保存动态连接状态。\n- iptables/nftables 规则可以读取这些状态，做出放行或丢弃的决定。\n- NAT 也依赖 conntrack 记录地址转换关系。\n\n因此，**conntrack 提供状态信息，防火墙规则使用这些信息**，两者并不是同一个东西。\n\n## 六、还有一个你必须区分的东西：Policy Routing\n\n你提到的“策略规则”，在 Linux 中恰好有另一套真正叫做 Policy Routing 的机制。\n\n假设有：\n\n```bash\nip rule show\n```\n\n可能输出：\n\n```text\n0:      from all lookup local\n32766:  from all lookup main\n32767:  from all lookup default\n```\n\n这表示 Linux 默认存在一组路由策略规则，用来选择路由表。\n\n比如你以后可以配置：\n\n```text\n来自 10.0.0.0/8 的流量\n    ↓\n查询路由表 100\n\n其他流量\n    ↓\n查询 main 路由表\n```\n\n所以，对于路由系统内部而言，确实存在一层选择关系：\n\n```text\nRouting Policy Database（ip rule）\n             ↓\n       Routing Table\n             ↓\n        选择具体路由\n             ↓\n      下一跳 + 出口接口\n```\n\n这套机制和 iptables 中的防火墙规则是不同的。citeturn901100search9\n\n注意，我们现在已经遇到了三种容易混淆的“表”：\n\n| 名称 | 例子 | 用途 |\n|--------|--------|--------|\n| 路由表 | `ip route` | 查找到目的地的路径 |\n| Netfilter 表 | `table inet filter` | 组织规则链 |\n| conntrack 表 | 连接跟踪记录 | 保存网络流状态 |\n\n虽然都叫 table，但它们并不是一种通用的表结构，也不属于同一个处理层级。\n\n## 七、现代 Linux 里还需要知道 nftables\n\n你想学现代 Linux 网络栈，所以这里有必要提前说明：\n\n**Netfilter 是内核框架；iptables 是传统的规则管理机制；nftables 是更新的规则管理框架。**\n\niptables 和 nftables 共享 Netfilter 的 Hook、conntrack、NAT 等底层基础设施，但规则的组织和执行机制不同。\n\n而且在许多 Linux 发行版中，`iptables` 命令实际上可能使用 `iptables-nft` 兼容后端。\n\n因此现在学习时，建议先理解共同的内核数据包路径，再学习 nftables 的规则模型，最后理解传统 iptables 的表和链如何映射到这些概念。citeturn901100search0\n\n---\n\n## 八、用一次实验把这些概念连接起来\n\n你可以在 Linux 上执行下面这些只读命令：\n\n```bash\n# 1. 查看路由策略规则\nip rule show\n\n# 2. 查看主路由表\nip route show table main\n\n# 3. 查询到某个目标地址时内核会怎样选路\nip route get 8.8.8.8\n\n# 4. 查看 nftables 规则\nsudo nft list ruleset\n\n# 5. 查看 conntrack 记录（需安装 conntrack 工具）\nsudo conntrack -L\n```\n\n你可以把这五个命令分别理解成：\n\n**谁决定查哪张路由表？表里有什么？具体选了哪条路？哪些 Netfilter 规则会处理包？内核记住了哪些连接状态？**\n\n这五个问题共同组成了你想理解的 Linux 网络栈的一大部分。\n\n## 九、最后帮你建立一个清晰的心智模型\n\n我建议你以后不要把这套机制想象成一个垂直的三层结构，而是记住两个维度：\n\n**维度 A：数据包在内核中经过哪些位置？**\n\n`PREROUTING → Routing → INPUT / FORWARD → POSTROUTING`\n\n或者，本机发送时：\n\n`Routing → OUTPUT → POSTROUTING`\n\n**维度 B：内核在这些位置使用哪些机制？**\n\n- 路由：选择路径、下一跳、出口设备。\n- Netfilter：在 Hook 处执行注册的处理逻辑。\n- nftables / iptables：提供可配置的数据包处理规则。\n- conntrack：保存网络流的状态，供防火墙和 NAT 等机制使用。\n\n我建议我们下一步不要立刻研究所有 iptables 表和规则，而是专门深入一个问题：\n\n**为什么 DNAT 要在 PREROUTING，而 SNAT 通常在 POSTROUTING？**\n\n这个问题能很好地把你已经理解的路由查找与 Netfilter Hook 联系起来。一旦理解了 NAT 和路由决策的先后关系，再看 `iptables` 的 `raw`、`mangle`、`nat`、`filter`，以及 conntrack 的执行顺序，就会清晰得多。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        93,
+        94
+      ],
+      "start_index": 4574,
+      "end_index": 4631,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks"
+        },
+        {
+          "url": "https://documentation.ubuntu.com/security/security-features/network/firewall/nftables/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn901100search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn449499search13"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        129,
+        130
+      ],
+      "start_index": 6138,
+      "end_index": 6194,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains"
+        },
+        {
+          "url": "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn901100search2"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn449499search0"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        156,
+        157
+      ],
+      "start_index": 6910,
+      "end_index": 6966,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation"
+        },
+        {
+          "url": "https://netfilter.org/projects/nftables/manpage.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn449499search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn449499search5"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        183,
+        184
+      ],
+      "start_index": 7764,
+      "end_index": 7795,
+      "component_resolution_id": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+      "safe_urls": [
+        {
+          "url": "https://man7.org/linux/man-pages/man8/ip-rule.8.html"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn901100search9"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        222,
+        223
+      ],
+      "start_index": 8342,
+      "end_index": 8373,
+      "component_resolution_id": "4d343fcd-41df-5b74-81df-63c72367c41d",
+      "safe_urls": [
+        {
+          "url": "https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn901100search0"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

@@ -1,0 +1,15 @@
+{
+  "constants": {
+    "0": "你这个切入点很对：先分清“路由决定往哪里发”和“Netfilter 决定如何处理包”，再看 conntrack，就不会把它们混成一套规则系统。我会结合 Linux 内核文档，把这些机制放进真实的数据包处理路径里。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {},
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "你这个切入点很对：先分清“路由决定往哪里发”和“Netfilter 决定如何处理包”，再看 conntrack，就不会把它们混成一套规则系统。我会结合 Linux 内核文档，把这些机制放进真实的数据包处理路径里。",
+  "fallbackMarkdownVersion": 1,
+  "view_state": {}
+}

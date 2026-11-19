@@ -1,0 +1,135 @@
+{
+  "constants": {
+    "0": "举个例子",
+    "1": "假设让 LLM 生成一个包含文字和按钮的界面。",
+    "2": "JSX 的写法：",
+    "3": "346cb03e-78f3-5903-b408-ea2f6cfd774c",
+    "4": null,
+    "5": "A2UI 的写法（v0.9，简化示例）：",
+    "6": "e938d70a-25b1-5c29-b415-a086da01fb73",
+    "7": null,
+    "8": "这只是 ",
+    "9": "updateComponents",
+    "10": " 消息；实际使用时还需要先通过 ",
+    "11": "createSurface",
+    "12": " 创建 UI 区域。",
+    "13": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "14": "核心架构",
+    "15": "LLM / Agent",
+    "16": "生成 UI 描述",
+    "17": {
+      "size": 1,
+      "color": "rgba(32,140,90,0.35)"
+    },
+    "18": "A2UI JSON",
+    "19": "组件、属性、数据绑定",
+    "20": "Renderer",
+    "21": "React / Flutter / 其他客户端",
+    "22": "Hello!",
+    "23": "Continue",
+    "24": "关键区别：A2UI 不是禁止 JSX，而是不要求 LLM 输出 JSX。",
+    "25": "你完全可以用 React + JSX 实现 A2UI Renderer，把 LLM 生成的 JSON 映射到自己写好的 React 组件上。",
+    "26": "如果你是在选技术方案：",
+    "27": "A2UI",
+    "28": "：适合跨平台、组件受控、安全性要求较高的 Agent UI。",
+    "29": "LLM → JSX",
+    "30": "：适合以 React 为中心、希望模型灵活控制布局和组件组合的场景。",
+    "31": "官方文档：",
+    "32": "A2UI Protocol",
+    "33": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+    "34": "。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "25bfac6e-fbcd-5e68-a028-1e13eb99de53": {
+          "status": "resolved",
+          "state": {
+            "url": "https://a2ui.org/",
+            "title": "A2UI Protocol",
+            "source_label": "a2ui.org",
+            "domain": "a2ui.org",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "A2UI",
+            "title_last_word": "Protocol"
+          },
+          "safe_urls": [
+            "https://a2ui.org/"
+          ],
+          "componentName": "Link"
+        },
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://a2ui.org/reference/messages/",
+                "ref_id": "turn652208view0",
+                "refs": [
+                  {
+                    "turn_index": 652208,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "A2UI",
+                "title": "Message Reference",
+                "snippet": "Total lines: 765",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://a2ui.org/reference/messages/"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "### 举个例子\n\n假设让 LLM 生成一个包含文字和按钮的界面。\n\n**JSX 的写法：**\n\n```jsx\n<Column>\n  <Text>Hello!</Text>\n  <Button>Continue</Button>\n</Column>\n```\n\n**A2UI 的写法（v0.9，简化示例）：**\n\n```json\n{\n  \"version\": \"v0.9\",\n  \"updateComponents\": {\n    \"surfaceId\": \"main\",\n    \"components\": [\n      {\n        \"id\": \"root\",\n        \"component\": \"Column\",\n        \"children\": [\"title\", \"button\"]\n      },\n      {\n        \"id\": \"title\",\n        \"component\": \"Text\",\n        \"text\": \"Hello!\"\n      },\n      {\n        \"id\": \"button\",\n        \"component\": \"Button\",\n        \"child\": \"buttonLabel\"\n      },\n      {\n        \"id\": \"buttonLabel\",\n        \"component\": \"Text\",\n        \"text\": \"Continue\"\n      }\n    ]\n  }\n}\n```\n\n这只是 `updateComponents` 消息；实际使用时还需要先通过 `createSurface` 创建 UI 区域。citeturn652208view0\n\n### 核心架构\n\n**LLM / Agent**\n\n生成 UI 描述\n\n**A2UI JSON**\n\n组件、属性、数据绑定\n\n**Renderer**\n\nReact / Flutter / 其他客户端\n\nHello\\!\n\n[Continue]\n\n**关键区别：A2UI 不是禁止 JSX，而是不要求 LLM 输出 JSX。**\n\n你完全可以用 React + JSX 实现 A2UI Renderer，把 LLM 生成的 JSON 映射到自己写好的 React 组件上。\n\n如果你是在选技术方案：\n\n- **A2UI**：适合跨平台、组件受控、安全性要求较高的 Agent UI。\n- **LLM → JSX**：适合以 React 为中心、希望模型灵活控制布局和组件组合的场景。\n\n官方文档：urlA2UI Protocolhttps://a2ui.org/。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite",
+    "Link"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        11,
+        12
+      ],
+      "start_index": 744,
+      "end_index": 773,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://a2ui.org/reference/messages/"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        42,
+        43
+      ],
+      "start_index": 1986,
+      "end_index": 2039,
+      "component_resolution_id": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+      "safe_urls": [
+        {
+          "url": "https://a2ui.org/"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

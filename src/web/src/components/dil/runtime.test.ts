@@ -45,9 +45,8 @@ function render(
 ): { scope: DilScope; nodes: ResolvedNode[] } {
   const document = parseDocument(source, { isStreaming });
   const scope = evaluateStatements(collectStatements(document.raw), runtime.seed(), {
-    useState: runtime.useState,
+    useState: runtime.stateSlot,
   });
-  runtime.bindState(scope, document.state);
   return { scope, nodes: resolveNodes(document.tree, scope) };
 }
 
@@ -92,17 +91,18 @@ test("setting the current value again does not re-render", () => {
   assert.equal(bumps(), 0);
 });
 
-test("a getter keeps a handler's later reads live, not snapshotted", () => {
-  const { runtime } = harness();
+test("a handler reads the value of the render that created it", () => {
+  const { runtime, sent } = harness();
   const source = [
     "{@body const [n, setN] = DIL.useState(1)}",
-    "<button onClick={() => { setN(2); last = n }}>go</button>",
+    "<button onClick={() => { setN(7); GenUI.issueNewTurn(`n=${n}`) }}>go</button>",
   ].join("\n");
-  const { scope } = render(source, runtime);
-  // `const last` would be snapshotted; the slot is read through a getter, so the same
-  // handler sees its own write — `onChange={v => { setX(v); log(x) }}` depends on it.
-  runtime.invoke(scope.setN, [7]);
-  assert.equal(scope.n, 7);
+  const { nodes } = render(source, runtime);
+  // The reference compiles `const [n, setN] = DIL.useState(1)`, so a handler created by this
+  // render reads this render's `n` and does not see its own write. `conformance/derived.test.ts`
+  // pins the same case against the reference runtime.
+  runtime.invoke(propsOf(nodes, "button").onClick);
+  assert.deepEqual(sent, ["n=1"]);
 });
 
 test("an array-pattern state without a setter still binds its value", () => {
@@ -221,7 +221,8 @@ test("a functional setter derives from the previous value", () => {
   const { scope } = render("{@body const [n, setN] = DIL.useState(1)}", runtime);
   // `setN(prev => prev + 1)`: an arrow argument is an updater, as in the reference runtime.
   runtime.invoke(scope.setN, [safeEvaluate("(prev) => prev + 1", {}, undefined)]);
-  assert.equal(scope.n, 2);
+  assert.equal(scope.n, 1, "this render's binding is a value, not a live view");
+  assert.equal(render("{@body const [n, setN] = DIL.useState(1)}", runtime).scope.n, 2);
 });
 
 test("issueNewTurn rejects a non-string or empty prompt", () => {
@@ -265,12 +266,11 @@ test("a declaration that is still streaming does not pin its slot to undefined",
   assert.equal(complete.scope.n, 5);
 });
 
-test("a handler inside an {#each} still reads live state", () => {
+test("a handler inside an {#each} reads the same value as one outside it", () => {
   const { runtime, sent } = harness();
   const source = [
     '{@body const [choice, setChoice] = DIL.useState("B")}',
     "{#each [1, 2] as i}",
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: `${…}`-free; `choice` is DIL, not JS
     '<button onClick={() => { setChoice("C"); GenUI.issueNewTurn(choice) }}>send</button>',
     "{/each}",
   ].join("\n");
@@ -278,7 +278,9 @@ test("a handler inside an {#each} still reads live state", () => {
   // An iteration scope must share the state getters: a spread would snapshot them and the
   // same handler would submit the value from *this* render instead of what it just wrote.
   runtime.invoke(propsOf(nodes, "button").onClick);
-  assert.deepEqual(sent, ["C"]);
+  // Inside a loop and outside it, a handler reads the same render's value — the property the
+  // reference gets from JavaScript closures, and the one a spread scope must preserve.
+  assert.deepEqual(sent, ["B"]);
 });
 
 test("rendering cannot write state either", () => {

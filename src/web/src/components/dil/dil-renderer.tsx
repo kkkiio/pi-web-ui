@@ -7,8 +7,8 @@
  *                 stream ends, publish the final text immediately (no trailing wait).
  *   2. parse      `parseDocument(text)` — a pure function of the string, ~1 ms, so there
  *                 is no incremental parse and no cached block to invalidate.
- *   3. resolve    `evaluateStatements` for the `{@body}` scope, `DilRuntime.bindState` so
- *                 `DIL.useState` names are live, then `resolveNodes` to expand
+ *   3. resolve    `evaluateStatements` for the `{@body}` scope, with `DilRuntime.useState`
+ *                 supplying each slot's current value, then `resolveNodes` to expand
  *                 `{#each}` / `{#if}` / `{expr}` before React sees anything.
  *
  * Then React renders plain elements: layout and typography primitives for the #46
@@ -97,9 +97,8 @@ export function DilRenderer({
   const resolved = useMemo(() => {
     const statements = collectStatements(document.raw);
     const scope = statements.length
-      ? evaluateStatements(statements, runtime.seed(), { useState: runtime.useState })
+      ? evaluateStatements(statements, runtime.seed(), { useState: runtime.stateSlot })
       : runtime.seed();
-    runtime.bindState(scope, document.state);
     return resolveNodes(document.tree, scope);
   }, [document, runtime, version]);
 

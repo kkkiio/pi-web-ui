@@ -1,0 +1,101 @@
+{
+  "constants": {
+    "0": "会的，但不一定会立即从你的银行卡额外扣款。",
+    "1": "根据你提供的 Devin Pro 截图，你已经开始消耗额外的付费额度（On-demand usage）。",
+    "2": "你目前的账户情况是：",
+    "3": "项目",
+    "4": "当前状态",
+    "5": "Pro 订阅费",
+    "6": "$20/月",
+    "7": "每日免费包含额度",
+    "8": "100% 已用完",
+    "9": "每周免费包含额度",
+    "10": "已使用 50%",
+    "11": "额外付费额度已消耗",
+    "12": "$7.96",
+    "13": "额外付费额度剩余",
+    "14": "$2.04",
+    "15": "每日额度重置",
+    "16": "约 2 小时后",
+    "17": "你看到的提示：",
+    "18": "Your included daily usage quota is exhausted. Using your extra usage.",
+    "19": "意思就是：",
+    "20": "“你今天套餐内的使用额度已经用完，现在正在消耗额外付费额度。”",
+    "21": "也就是说，虽然你的每周额度还剩 50%，但是每日额度已经耗尽，所以 Devin 开始使用 On-demand 额度。",
+    "22": "怎样避免继续扣钱？",
+    "23": "建议你现在检查一下：",
+    "24": "点击截图中的 ",
+    "25": "Configure auto-reload settings",
+    "26": "（配置自动充值）。",
+    "27": "检查 ",
+    "28": "Auto-reload",
+    "29": " 是否开启。",
+    "30": "如果不想继续花钱，关闭自动充值。",
+    "31": "等大约 2 小时，让每日额度恢复后再继续使用。",
+    "32": "根据 ",
+    "33": "Devin 官方计费文档",
+    "34": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+    "35": "，On-demand credits 是",
+    "36": "预付费额度",
+    "37": "。如果自动充值关闭，通常不会因为继续使用而无限扣款；余额用尽后，需要充值才能继续使用超额服务。",
+    "38": "另外，截图底部的 ",
+    "39": "Message usage limit: $20",
+    "40": " 是每条消息允许消耗的额外额度上限，",
+    "41": "不是每个月最多额外扣 $20",
+    "42": "，不要把它当成总消费保护。",
+    "43": "我的建议：",
+    "44": " 你现在只剩 $2.04 额外额度，可以先停止使用，等每日额度恢复。如果你希望 Devin Pro 每个月严格只花 $20，就不要开启自动充值，也不要再手动购买 On-demand credits。",
+    "45": "不过，截图无法判断你目前的 $10 额外额度是什么时候购买的，也无法确认自动充值是否开启。你可以把 ",
+    "46": "Configure auto-reload settings",
+    "47": " 点开后截图给我，我帮你判断是否还有自动扣费风险。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "25bfac6e-fbcd-5e68-a028-1e13eb99de53": {
+          "status": "resolved",
+          "state": {
+            "url": "https://docs.devin.ai/admin/billing/self-serve",
+            "title": "Devin 官方计费文档",
+            "source_label": "docs.devin.ai",
+            "domain": "docs.devin.ai",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "Devin",
+            "title_last_word": "官方计费文档"
+          },
+          "safe_urls": [
+            "https://docs.devin.ai/admin/billing/self-serve"
+          ],
+          "componentName": "Link"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "**会的，但不一定会立即从你的银行卡额外扣款。**\n\n根据你提供的 Devin Pro 截图，你已经开始消耗额外的付费额度（On-demand usage）。\n\n你目前的账户情况是：\n\n| 项目 | 当前状态 |\n|--------|--------|\n| Pro 订阅费 | \\$20/月 |\n| 每日免费包含额度 | 100% 已用完 |\n| 每周免费包含额度 | 已使用 50% |\n| 额外付费额度已消耗 | **\\$7.96** |\n| 额外付费额度剩余 | **\\$2.04** |\n| 每日额度重置 | 约 2 小时后 |\n\n你看到的提示：\n\n> Your included daily usage quota is exhausted. Using your extra usage.\n\n意思就是：\n\n**“你今天套餐内的使用额度已经用完，现在正在消耗额外付费额度。”**\n\n也就是说，虽然你的每周额度还剩 50%，但是每日额度已经耗尽，所以 Devin 开始使用 On-demand 额度。\n\n## 怎样避免继续扣钱？\n\n建议你现在检查一下：\n\n1. 点击截图中的 **Configure auto-reload settings**（配置自动充值）。\n2. 检查 **Auto-reload** 是否开启。\n3. 如果不想继续花钱，关闭自动充值。\n4. 等大约 2 小时，让每日额度恢复后再继续使用。\n\n根据 urlDevin 官方计费文档https://docs.devin.ai/admin/billing/self-serve，On-demand credits 是**预付费额度**。如果自动充值关闭，通常不会因为继续使用而无限扣款；余额用尽后，需要充值才能继续使用超额服务。\n\n另外，截图底部的 **Message usage limit: \\$20** 是每条消息允许消耗的额外额度上限，**不是每个月最多额外扣 \\$20**，不要把它当成总消费保护。\n\n**我的建议：** 你现在只剩 \\$2.04 额外额度，可以先停止使用，等每日额度恢复。如果你希望 Devin Pro 每个月严格只花 \\$20，就不要开启自动充值，也不要再手动购买 On-demand credits。\n\n不过，截图无法判断你目前的 \\$10 额外额度是什么时候购买的，也无法确认自动充值是否开启。你可以把 **Configure auto-reload settings** 点开后截图给我，我帮你判断是否还有自动扣费风险。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Link"
+  ],
+  "genui_components": [
+    {
+      "type": "link",
+      "tree_range": [
+        57,
+        58
+      ],
+      "start_index": 602,
+      "end_index": 683,
+      "component_resolution_id": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+      "safe_urls": [
+        {
+          "url": "https://docs.devin.ai/admin/billing/self-serve"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

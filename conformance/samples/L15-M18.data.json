@@ -1,0 +1,22 @@
+{
+  "constants": {
+    "0": "🔬 ",
+    "1": "深度研究已启动！",
+    "2": "这次会重点调查社区里真正采用 ",
+    "3": "JSX / TSX、Vue、Svelte 等前端代码生成 UI",
+    "4": " 的 Agent Generative UI 项目，而不只是基于 JSON 的组件映射方案。",
+    "5": "研究还会重点验证你的核心假设：",
+    "6": "LLM 直接生成前端代码，是否比生成 A2UI JSON 更简洁、更高效、更容易实现复杂交互？",
+    "7": "我也特别加入了 OpenAI DIL、流式渲染、代码安全隔离、GitHub 开源实现和可落地架构的对比。",
+    "8": "深度研究会先展示研究计划，完成后提供带来源链接的完整报告。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {},
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "🔬 **深度研究已启动！**\n\n这次会重点调查社区里真正采用 **JSX / TSX、Vue、Svelte 等前端代码生成 UI** 的 Agent Generative UI 项目，而不只是基于 JSON 的组件映射方案。\n\n研究还会重点验证你的核心假设：**LLM 直接生成前端代码，是否比生成 A2UI JSON 更简洁、更高效、更容易实现复杂交互？**\n\n我也特别加入了 OpenAI DIL、流式渲染、代码安全隔离、GitHub 开源实现和可落地架构的对比。\n\n深度研究会先展示研究计划，完成后提供带来源链接的完整报告。",
+  "fallbackMarkdownVersion": 1,
+  "view_state": {}
+}

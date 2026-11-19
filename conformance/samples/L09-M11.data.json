@@ -1,0 +1,260 @@
+{
+  "constants": {
+    "0": "关键是：微软和普通 API 用户不一样",
+    "1": "我查了 OpenAI 和微软的官方协议公告，有三个重要事实。",
+    "2": "① OpenAI 确实限制利用模型输出训练竞争模型。",
+    "3": "OpenAI 现行的个人服务条款明确禁止使用模型输出开发与 OpenAI 竞争的模型。商业服务协议也有类似限制，但存在特定例外。",
+    "4": [
+      "turn963100search0",
+      "turn963100search54"
+    ],
+    "5": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "6": "② 微软拥有特殊的知识产权授权。",
+    "7": "2025 年 10 月，双方宣布微软可以独立研发 AGI，而且继续拥有 OpenAI 模型的知识产权使用权。",
+    "8": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "9": "③ 2026 年 4 月，双方又修改了协议。",
+    "10": "最新版公开公告确认，微软对 OpenAI 模型及产品的知识产权授权延续至 2032 年，并改为非独占授权。",
+    "11": [
+      "turn963100search2",
+      "turn828484search0"
+    ],
+    "12": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "13": "因此，微软可能拥有普通开发者没有的使用权限。但",
+    "14": "授权使用模型，不必然等于授权通过任何方式蒸馏模型",
+    "15": "。具体还取决于未公开的合同条款。",
+    "16": "如果微软真的蒸馏 GPT，会怎么样？",
+    "17": "情况",
+    "18": "法律判断",
+    "19": "微软获得明确授权后蒸馏",
+    "20": "通常合法",
+    "21": "微软用 GPT 输出训练自己的竞争模型，但合同禁止",
+    "22": "可能违约",
+    "23": "微软直接使用协议授权的模型权重进行训练",
+    "24": "取决于授权范围",
+    "25": "微软完全独立训练自己的模型",
+    "26": "原则上不构成对 OpenAI 的侵权或违约",
+    "27": "关于你截图中的说法",
+    "28": "截图称 OpenAI 不敢发布某个模型，是因为害怕微软蒸馏。",
+    "29": "这个因果关系目前没有足够的公开证据支持。",
+    "30": " 官方协议公告并未披露微软是否有权蒸馏 OpenAI 的全部前沿模型，也没有证明 OpenAI 因担心蒸馏而推迟发布。",
+    "31": "不过，截图触及了一个真实的商业问题：",
+    "32": "OpenAI 一方面需要微软的资金、算力和渠道，另一方面又要防止微软利用合作获得的技术优势，培养出能够替代自己的模型。",
+    "33": "这也是为什么双方的知识产权授权范围和期限如此重要。",
+    "34": "所以，对你的问题最准确的回答是：",
+    "35": "微软蒸馏 OpenAI 模型是否违法，核心不是蒸馏技术本身，而是微软与 OpenAI 签署的特殊授权协议究竟允许做到哪一步。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://openai.com/policies/terms-of-use/",
+                "ref_id": "turn963100search0",
+                "refs": [
+                  {
+                    "turn_index": 963100,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "OpenAI",
+                "title": "Terms of Use",
+                "snippet": null,
+                "pub_timestamp": 1767225600,
+                "metadata_label": "一月 1, 2026"
+              },
+              {
+                "url": "https://cdn.openai.com/osa/openai-services-agreement.pdf",
+                "ref_id": "turn963100search54",
+                "refs": [
+                  {
+                    "turn_index": 963100,
+                    "ref_type": "search",
+                    "ref_index": 54
+                  }
+                ],
+                "source_label": "OpenAI CDN",
+                "title": "OpenAI Services Agreement Online v.050125.docx",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://openai.com/policies/terms-of-use/",
+            "https://cdn.openai.com/osa/openai-services-agreement.pdf"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://openai.com/zh-Hans-CN/index/next-chapter-of-microsoft-openai-partnership/",
+                "ref_id": "turn828484search3",
+                "refs": [
+                  {
+                    "turn_index": 828484,
+                    "ref_type": "search",
+                    "ref_index": 3
+                  }
+                ],
+                "source_label": "OpenAI",
+                "title": "微软与 OpenAI 合作关系的全新篇章",
+                "snippet": null,
+                "pub_timestamp": 1761609600,
+                "metadata_label": "十月 28, 2025"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://openai.com/zh-Hans-CN/index/next-chapter-of-microsoft-openai-partnership/"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://openai.com/zh-Hans-CN/index/next-phase-of-microsoft-partnership/",
+                "ref_id": "turn963100search2",
+                "refs": [
+                  {
+                    "turn_index": 963100,
+                    "ref_type": "search",
+                    "ref_index": 2
+                  }
+                ],
+                "source_label": "OpenAI",
+                "title": "微软与 OpenAI 的合作伙伴关系进入新阶段",
+                "snippet": null,
+                "pub_timestamp": 1777248000,
+                "metadata_label": "四月 27, 2026"
+              },
+              {
+                "url": "https://blogs.microsoft.com/blog/2026/04/27/the-next-phase-of-the-microsoft-openai-partnership/?trk=public_post_comment-text",
+                "ref_id": "turn828484search0",
+                "refs": [
+                  {
+                    "turn_index": 828484,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "The Official Microsoft Blog",
+                "title": "The next phase of the Microsoft-OpenAI partnership",
+                "snippet": null,
+                "pub_timestamp": 1777248000,
+                "metadata_label": "四月 27, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://openai.com/zh-Hans-CN/index/next-phase-of-microsoft-partnership/",
+            "https://blogs.microsoft.com/blog/2026/04/27/the-next-phase-of-the-microsoft-openai-partnership/?trk=public_post_comment-text"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 关键是：微软和普通 API 用户不一样\n\n我查了 OpenAI 和微软的官方协议公告，有三个重要事实。\n\n**① OpenAI 确实限制利用模型输出训练竞争模型。**\n\nOpenAI 现行的个人服务条款明确禁止使用模型输出开发与 OpenAI 竞争的模型。商业服务协议也有类似限制，但存在特定例外。citeturn963100search0turn963100search54\n\n**② 微软拥有特殊的知识产权授权。**\n\n2025 年 10 月，双方宣布微软可以独立研发 AGI，而且继续拥有 OpenAI 模型的知识产权使用权。citeturn828484search3\n\n**③ 2026 年 4 月，双方又修改了协议。**\n\n最新版公开公告确认，微软对 OpenAI 模型及产品的知识产权授权延续至 2032 年，并改为非独占授权。citeturn963100search2turn828484search0\n\n因此，微软可能拥有普通开发者没有的使用权限。但**授权使用模型，不必然等于授权通过任何方式蒸馏模型**。具体还取决于未公开的合同条款。\n\n## 如果微软真的蒸馏 GPT，会怎么样？\n\n| 情况 | 法律判断 |\n|--------|--------|\n| 微软获得明确授权后蒸馏 | 通常合法 |\n| 微软用 GPT 输出训练自己的竞争模型，但合同禁止 | 可能违约 |\n| 微软直接使用协议授权的模型权重进行训练 | 取决于授权范围 |\n| 微软完全独立训练自己的模型 | 原则上不构成对 OpenAI 的侵权或违约 |\n\n## 关于你截图中的说法\n\n截图称 OpenAI 不敢发布某个模型，是因为害怕微软蒸馏。\n\n**这个因果关系目前没有足够的公开证据支持。** 官方协议公告并未披露微软是否有权蒸馏 OpenAI 的全部前沿模型，也没有证明 OpenAI 因担心蒸馏而推迟发布。\n\n不过，截图触及了一个真实的商业问题：\n\n**OpenAI 一方面需要微软的资金、算力和渠道，另一方面又要防止微软利用合作获得的技术优势，培养出能够替代自己的模型。**\n\n这也是为什么双方的知识产权授权范围和期限如此重要。\n\n所以，对你的问题最准确的回答是：**微软蒸馏 OpenAI 模型是否违法，核心不是蒸馏技术本身，而是微软与 OpenAI 签署的特殊授权协议究竟允许做到哪一步。**",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        4,
+        5
+      ],
+      "start_index": 152,
+      "end_index": 209,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://openai.com/policies/terms-of-use/"
+        },
+        {
+          "url": "https://cdn.openai.com/osa/openai-services-agreement.pdf"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn963100search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn963100search54"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        8,
+        9
+      ],
+      "start_index": 287,
+      "end_index": 318,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://openai.com/zh-Hans-CN/index/next-chapter-of-microsoft-openai-partnership/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn828484search3"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        12,
+        13
+      ],
+      "start_index": 401,
+      "end_index": 457,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://openai.com/zh-Hans-CN/index/next-phase-of-microsoft-partnership/"
+        },
+        {
+          "url": "https://blogs.microsoft.com/blog/2026/04/27/the-next-phase-of-the-microsoft-openai-partnership/?trk=public_post_comment-text"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn963100search2"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn828484search0"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

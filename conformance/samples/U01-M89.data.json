@@ -1,0 +1,950 @@
+{
+  "constants": {
+    "0": "一、社区有没有真正截获 ChatGPT 的 UI 输出？",
+    "1": "这一轮我重点搜索了 GitHub、Reddit、Hacker News、中英文技术文章，以及 ChatGPT 的相关逆向工程项目。",
+    "2": "结果如下：",
+    "3": "证据",
+    "4": "找到了什么",
+    "5": "可信度",
+    "6": "OpenAI 官方",
+    "7": "原生组件库、流式编译器、UI 专项训练",
+    "8": "高",
+    "9": "Reddit 用户实验",
+    "10": "有人通过提示词测试出不同的交互界面行为",
+    "11": "中低",
+    "12": "ChatGPT 原始网络响应",
+    "13": "没有找到可公开复核的 Intelligent UI HAR/SSE 样本",
+    "14": "尚无证据",
+    "15": "解码后的完整组件 Schema",
+    "16": "没找到",
+    "17": "尚无证据",
+    "18": "ChatGPT 前端渲染器逆向",
+    "19": "没找到针对新版 Intelligent UI 的可靠完整分析",
+    "20": "尚无证据",
+    "21": "第三方类似渲染器",
+    "22": "找到了开源项目，但不是 OpenAI 原始实现",
+    "23": "高",
+    "24": "最值得追踪的 Reddit 线索",
+    "25": "2026 年 9 月 23 日，一位用户发帖称，ChatGPT 在某些 Thinking 配置下突然开始输出复杂的交互式 UI。",
+    "26": "他测试过注意力矩阵、细胞结构图等，还提供了两段公开共享对话：",
+    "27": "Reddit 原帖与评论",
+    "28": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+    "29": "交互式细胞解释示例",
+    "30": "dedf923e-efb9-5796-821d-1bd07d4a9183",
+    "31": "传统文本版本",
+    "32": "4ddbf0e3-3cd8-5180-91fb-b24f383fd167",
+    "33": "他还声称模型把这种交互界面与一个叫 ",
+    "34": "DIL（Dynamic Interface Language）",
+    "35": " 的名称关联起来。",
+    "36": "但这里需要谨慎：这属于用户通过模型回复获得的名称，",
+    "37": "并不是网络抓包发现的协议标识",
+    "38": "。模型可能把提示词理解成某种内部功能，也可能只是顺着上下文生成解释。",
+    "39": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "40": "10 月 8 日，Hacker News 的 GPT-6 发布讨论中，也有开发者直接询问流式 UI 库和输出格式的细节，但我没有找到提供原始协议内容的可靠回答。",
+    "41": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+    "42": "因此，现在不能负责任地给出一份所谓「OpenAI Intelligent UI 完整 DSL 语法」。",
+    "43": "另一个 GitHub 线索",
+    "44": "Gan-Tu / Widgets",
+    "45": "3e979f04-30fe-57ef-933b-57fafb04a40e",
+    "46": "这是一个独立的开源 Widget Renderer，提供大量预定义组件、受限模板语言、数据绑定、局部状态和声明式 Action，并支持使用 GPT-6 系列生成 Widget。",
+    "47": "它的架构与我们讨论的目标很接近：",
+    "48": "模型生成组件描述。",
+    "49": "Renderer 解析和校验。",
+    "50": "宿主控制组件实现及交互行为。",
+    "51": "不过，作者明确把它定位为 OpenAI ChatKit Widgets 的开源替代品，而不是 OpenAI Intelligent UI 的原始协议实现。因此，",
+    "52": "不能把它的组件表当作 GPT-6 的训练组件表",
+    "53": "。",
+    "54": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+    "55": "二、目前能确认 Intelligent UI 有哪些组件？",
+    "56": "我们需要区分「用户看到了哪种界面」与「模型实际输出了哪种组件标识」。",
+    "57": "OpenAI 公开确认的能力范围如下：",
+    "58": "UI 能力",
+    "59": "公开证据",
+    "60": "A2UI 复刻难度",
+    "61": "文本、图片、卡片式布局",
+    "62": "官方示例",
+    "63": "低",
+    "64": "按钮、表单与参数输入",
+    "65": "官方说明",
+    "66": "低",
+    "67": "多项对比与步骤展示",
+    "68": "官方说明",
+    "69": "低",
+    "70": "可调整参数的计算器",
+    "71": "官方演示",
+    "72": "中",
+    "73": "动态图表",
+    "74": "官方演示",
+    "75": "中",
+    "76": "交互式结构图",
+    "77": "官方演示",
+    "78": "中高",
+    "79": "地图与路线信息",
+    "80": "官方演示",
+    "81": "高",
+    "82": "对话中的小游戏",
+    "83": "官方演示",
+    "84": "高",
+    "85": "以上是",
+    "86": "功能级别的能力清单，不是底层组件注册表",
+    "87": "。例如，地图可能由某个原生地图组件生成，也可能来自单独的工具结果，不能仅凭视觉效果确定。",
+    "88": "来源：",
+    "89": "OpenAI 官方发布说明",
+    "90": "a517026a-f527-57b2-baac-bce3110104a1",
+    "91": "，以及 ",
+    "92": "WIRED 的实际体验",
+    "93": "9585d04c-d99c-5f6a-b2c6-bf3666979b46",
+    "94": "。",
+    "95": [
+      "turn646274search0",
+      "turn549741news43"
+    ],
+    "96": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+    "97": "目前仍然缺少精确组件名称、参数 Schema、数据绑定方式、客户端状态管理方式，以及 Action 能调用哪些宿主功能的公开完整资料。",
+    "98": "这恰恰是复刻工作最大的技术不确定性。",
+    "99": "三、A2UI 能否定义一组接近 Intelligent UI 的组件？",
+    "100": "可以，而且 A2UI 的官方协议就是这么设计的。",
+    "101": "我直接查看了 A2UI 的协议文档、Basic Catalog 和 React Renderer。",
+    "102": "A2UI v0.9 的 18 个基础组件",
+    "103": "布局组件 · 7 个",
+    "104": {
+      "x": 2,
+      "y": 1
+    },
+    "105": "内容组件 · 5 个",
+    "106": {
+      "x": 2,
+      "y": 1
+    },
+    "107": "交互组件 · 6 个",
+    "108": {
+      "x": 2,
+      "y": 1
+    },
+    "109": [
+      "turn837849search5",
+      "turn837849search6"
+    ],
+    "110": "4d343fcd-41df-5b74-81df-63c72367c41d",
+    "111": "注意这里没有单独的 Chart、Map、Table、InteractiveDiagram 等复杂组件。",
+    "112": "但 A2UI 的 Custom Catalog 可以定义这些组件以及对应的函数。官方也建议生产环境使用自己的 Catalog 来表达产品的设计系统。",
+    "113": [
+      "turn837849search0",
+      "turn837849search7"
+    ],
+    "114": "567c4e78-901e-511d-a9d6-a65480f3d154",
+    "115": "因此，完全可以设计一个 ChatGPT-like Catalog",
+    "116": "以下是我建议定义的业务组件类型，而不是声称 OpenAI 内部就是这些名称：",
+    "117": "自定义 A2UI 组件",
+    "118": "主要能力",
+    "119": "InteractiveChart",
+    "120": "折线、柱状、散点以及图表联动",
+    "121": "GeoMap",
+    "122": "地图、地点、路线",
+    "123": "DataTable",
+    "124": "表格、排序、筛选",
+    "125": "InteractiveDiagram",
+    "126": "节点关系、部件选择、动态标注",
+    "127": "ParameterPanel",
+    "128": "输入控件与计算结果联动",
+    "129": "MediaExplorer",
+    "130": "图片、视频与内容选择",
+    "131": "MiniApp",
+    "132": "受限的局部状态和自定义交互",
+    "133": "其中比较简单的只是包装现有组件；比较复杂的还需要你自己实现对应的客户端组件、状态系统与 Action 处理。",
+    "134": "光在 Catalog 里注册一个 ",
+    "135": "InteractiveChart",
+    "136": " 名称，并不意味着模型自动知道如何正确生成它，更不意味着客户端自动有图表渲染能力。",
+    "137": "四、我认为最值得测试的架构",
+    "138": "GPT-6 API",
+    "139": "理解需求与设计交互体验",
+    "140": {
+      "size": 1,
+      "color": "rgba(40,128,200,0.25)"
+    },
+    "141": "中间 UI 描述层",
+    "142": "采用适合模型生成的组件树表达方式",
+    "143": "Schema 校验 + 转换器",
+    "144": "组件映射、状态绑定、Action 转换",
+    "145": "A2UI v0.9 + Custom Catalog",
+    "146": "标准化消息、增量更新、跨客户端渲染",
+    "147": "A2UI 现有协议支持 ",
+    "148": "createSurface",
+    "149": "、",
+    "150": "updateComponents",
+    "151": "、",
+    "152": "updateDataModel",
+    "153": "、",
+    "154": "deleteSurface",
+    "155": " 等流式消息类型，并使用组件 ID 引用、数据模型和 Action 来维护界面。",
+    "156": "77220593-0372-59ec-91ea-c8522e0f86d0",
+    "157": "这个架构中可以比较两种方案：",
+    "158": "方案 A：直接生成 A2UI。",
+    "159": " 给 GPT-6 Custom Catalog、Schema、组件示例，让模型直接生成 A2UI 消息。这最容易落地，也应该作为基线。",
+    "160": "方案 B：先生成适合模型的 UI 中间表示，再转换成 A2UI。",
+    "161": " 这种方式允许模型更自然地组织嵌套布局，转换器负责展平组件树、分配 ID、生成状态绑定和流式更新。",
+    "162": "B 是否真正优于 A，目前没有证据。它只是基于你的训练分布假设提出的工程实验。",
+    "163": "另外，有一个非常重要的限制：",
+    "164": "OpenAI 这次的 Intelligent UI 属于 ChatGPT Chat 产品。官方没有把它作为独立的 UI API 发布。",
+    "165": " 即使通过 API 使用 GPT-6 Sol，也不能假定会获得与 ChatGPT 内相同的训练版本、提示上下文、组件约束和编译器能力。",
+    "166": [
+      "turn646274search0",
+      "turn359167search4"
+    ],
+    "167": "0ee4d5fd-1bff-5946-adc9-da984efdc759",
+    "168": "这可能比两个 DSL 本身的差异影响更大。",
+    "169": "五、要验证这个假设，应该怎样抓包和实验？",
+    "170": "我建议把研究拆成两个阶段。",
+    "171": "阶段 1：确认 ChatGPT 真正发送什么",
+    "172": "在自己的 ChatGPT Web 会话中，可以使用浏览器开发者工具进行授权范围内的检查。",
+    "173": "建议测试三类请求：",
+    "174": "纯布局：",
+    "175": "「比较三种相机，生成交互式对比界面」",
+    "176": "状态交互：",
+    "177": "「生成一个可调整本金、利率和期限的储蓄计算器」",
+    "178": "复杂渲染：",
+    "179": "「生成一张可点击身体器官的交互式结构图」",
+    "180": "重点同时记录：",
+    "181": "浏览器 Network 面板中的响应内容和增量消息。",
+    "182": "UI 在页面中逐步出现的顺序。",
+    "183": "用户改变输入值时，是否发生新的网络请求。",
+    "184": "按钮 Action 是本地执行，还是触发服务器事件。",
+    "185": "同一任务在普通文本和 Intelligent UI 下的网络差异。",
+    "186": "如果浏览器使用流式 Fetch，普通 Network 面板可能不方便逐事件阅读。可以使用支持 Fetch Stream 的调试工具辅助观察，但应先审核扩展权限。",
+    "187": "注意：抓到浏览器网络格式，不一定等于抓到了模型原始 token 输出。",
+    "188": " 服务端可能已经进行了协议转换或组件编译。",
+    "189": "分享 HAR 时要删除 Cookie、Authorization、会话标识和私人对话内容。",
+    "190": "阶段 2：验证训练优势能否迁移",
+    "191": "用完全相同的任务比较三种路径：",
+    "192": "实验组",
+    "193": "输出方式",
+    "194": "验证目的",
+    "195": "A",
+    "196": "GPT-6 直接生成 A2UI",
+    "197": "基础能力",
+    "198": "B",
+    "199": "GPT-6 生成自定义中间 UI，再编译成 A2UI",
+    "200": "中间层是否提升成功率",
+    "201": "C",
+    "202": "ChatGPT Intelligent UI 作为参考",
+    "203": "原生体验差距",
+    "204": "这里不要只看 JSON Schema 通过率。",
+    "205": "更重要的是：模型是否选择合适组件、生成的交互是否真的可用、多轮修改能否保持状态，以及端到端渲染延迟和 Token 成本。",
+    "206": "如果 B 组持续优于 A 组，而且在相同任务里接近 ChatGPT 的组件选择和交互设计，那就能初步支持你的假设。",
+    "207": "六、最终判断",
+    "208": "目前可以明确区分三个结论：",
+    "209": "A2UI 技术上支持定义一套类似 Intelligent UI 的组件集合。",
+    "210": "Custom Catalog、数据模型与客户端 Action 已经提供了实现基础。",
+    "211": "没有证据证明 GPT-6 API 对原生 UI 表示的熟悉程度能够直接迁移。",
+    "212": "ChatGPT 产品侧的训练、上下文和渲染机制可能都是能力的一部分。",
+    "213": "还缺少最关键的原始证据：可复核的 ChatGPT Intelligent UI 网络响应与完整组件格式。",
+    "214": "目前无法声称已经完成协议逆向，也不能据此实现精确转换器。",
+    "215": "所以我的建议不是马上实现一个「OpenAI 协议兼容层」，而是",
+    "216": "先用 A2UI Custom Catalog 做一个小型生成实验，同时对 ChatGPT 的实际 UI 响应开展采样研究",
+    "217": "。",
+    "218": "这样就能直接验证你真正关心的问题：",
+    "219": "GPT-6 的 Intelligent UI 优势，到底主要来自模型学会了设计界面，还是来自它熟悉一套特定的 UI 表达语言和组件环境？",
+    "220": "这个区别会决定我们应该投资于模型提示与评测、自己的中间 DSL，还是协议适配器。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "25bfac6e-fbcd-5e68-a028-1e13eb99de53": {
+          "status": "resolved",
+          "state": {
+            "url": "https://www.reddit.com/r/ChatGPT/comments/1woem9i/chatgpt_is_suddenly_generating_interactive_uis/",
+            "title": "Reddit 原帖与评论",
+            "source_label": "reddit.com",
+            "domain": "reddit.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "Reddit",
+            "title_last_word": "原帖与评论"
+          },
+          "safe_urls": [
+            "https://www.reddit.com/r/ChatGPT/comments/1woem9i/chatgpt_is_suddenly_generating_interactive_uis/"
+          ],
+          "componentName": "Link"
+        },
+        "dedf923e-efb9-5796-821d-1bd07d4a9183": {
+          "status": "resolved",
+          "state": {
+            "url": "https://chatgpt.com/share/6ab422ab-10e4-83ed-b515-a954ac82e74c",
+            "title": "交互式细胞解释示例",
+            "source_label": "chatgpt.com",
+            "domain": "chatgpt.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "",
+            "title_last_word": "交互式细胞解释示例"
+          },
+          "safe_urls": [
+            "https://chatgpt.com/share/6ab422ab-10e4-83ed-b515-a954ac82e74c"
+          ],
+          "componentName": "Link"
+        },
+        "4ddbf0e3-3cd8-5180-91fb-b24f383fd167": {
+          "status": "resolved",
+          "state": {
+            "url": "https://chatgpt.com/share/6ab42304-3834-83eb-b065-6fc39a302198",
+            "title": "传统文本版本",
+            "source_label": "chatgpt.com",
+            "domain": "chatgpt.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "",
+            "title_last_word": "传统文本版本"
+          },
+          "safe_urls": [
+            "https://chatgpt.com/share/6ab42304-3834-83eb-b065-6fc39a302198"
+          ],
+          "componentName": "Link"
+        },
+        "3e979f04-30fe-57ef-933b-57fafb04a40e": {
+          "status": "resolved",
+          "state": {
+            "url": "https://github.com/Gan-Tu/Widgets",
+            "title": "Gan-Tu / Widgets",
+            "source_label": "github.com",
+            "domain": "github.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "Gan-Tu /",
+            "title_last_word": "Widgets"
+          },
+          "safe_urls": [
+            "https://github.com/Gan-Tu/Widgets"
+          ],
+          "componentName": "Link"
+        },
+        "a517026a-f527-57b2-baac-bce3110104a1": {
+          "status": "resolved",
+          "state": {
+            "url": "https://openai.com/index/gpt-6-for-everyone/",
+            "title": "OpenAI 官方发布说明",
+            "source_label": "openai.com",
+            "domain": "openai.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "OpenAI",
+            "title_last_word": "官方发布说明"
+          },
+          "safe_urls": [
+            "https://openai.com/index/gpt-6-for-everyone/"
+          ],
+          "componentName": "Link"
+        },
+        "9585d04c-d99c-5f6a-b2c6-bf3666979b46": {
+          "status": "resolved",
+          "state": {
+            "url": "https://www.wired.com/story/openai-chatgpt-intelligent-ui-is-more-show-than-tell",
+            "title": "WIRED 的实际体验",
+            "source_label": "wired.com",
+            "domain": "wired.com",
+            "snippet": null,
+            "metadata_label": null,
+            "refid": null,
+            "title_before_last_word": "WIRED",
+            "title_last_word": "的实际体验"
+          },
+          "safe_urls": [
+            "https://www.wired.com/story/openai-chatgpt-intelligent-ui-is-more-show-than-tell"
+          ],
+          "componentName": "Link"
+        },
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://www.reddit.com/r/ChatGPT/comments/1woem9i/chatgpt_is_suddenly_generating_interactive_uis/",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/Ftx_vjTHfNuGCEwRv_mKF9nn0Y87Q_zCFxYnzNJw_cbcFg9vVlmYtih480-FR7YPO-68wfX1oRvsM5oREQsTNVbYkSQx014Hv7SPY_Q15bF3AD1LTmYc_QSBvGpC4AZZlxxmDANbOb2-hQCbCiXYtDfXo7lutpJQExGP3mHDonzMz_U13ZMiVFatDQ7JOwXQ4KT_MRfNZlE2dmL3VxdQCNI5Owm4_IsP5SShwa6Cn8_1K2hO4yo9A4yjjhcNBwfI",
+                "ref_id": "turn368884view0",
+                "refs": [
+                  {
+                    "turn_index": 368884,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "Reddit",
+                "title": "ChatGPT is suddenly generating interactive UIs, but \"Try Again\" brings back the old style : r/ChatGPT",
+                "snippet": "Total lines: 389",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://www.reddit.com/r/ChatGPT/comments/1woem9i/chatgpt_is_suddenly_generating_interactive_uis/",
+            "https://images.openai.com/static-rsc-1/Ftx_vjTHfNuGCEwRv_mKF9nn0Y87Q_zCFxYnzNJw_cbcFg9vVlmYtih480-FR7YPO-68wfX1oRvsM5oREQsTNVbYkSQx014Hv7SPY_Q15bF3AD1LTmYc_QSBvGpC4AZZlxxmDANbOb2-hQCbCiXYtDfXo7lutpJQExGP3mHDonzMz_U13ZMiVFatDQ7JOwXQ4KT_MRfNZlE2dmL3VxdQCNI5Owm4_IsP5SShwa6Cn8_1K2hO4yo9A4yjjhcNBwfI"
+          ],
+          "componentName": "Cite"
+        },
+        "942d2c4a-6ecd-545a-a687-b8420b25b9e3": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://news.ycombinator.com/item?id=49996425",
+                "ref_id": "turn173163view4",
+                "refs": [
+                  {
+                    "turn_index": 173163,
+                    "ref_type": "view",
+                    "ref_index": 4
+                  }
+                ],
+                "source_label": "Hacker News",
+                "title": "GPT‑6 and Intelligent UI for everyone",
+                "snippet": "Total lines: 825",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://news.ycombinator.com/item?id=49996425"
+          ],
+          "componentName": "Cite"
+        },
+        "965e8727-dd6e-5984-99ee-d31eb3b63259": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://github.com/Gan-Tu/Widgets",
+                "ref_id": "turn712455view0",
+                "refs": [
+                  {
+                    "turn_index": 712455,
+                    "ref_type": "view",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "GitHub - Gan-Tu/Widgets: A compact, schema-driven open source alternative to OpenAI ChatKit widgets.",
+                "snippet": "Total lines: 442",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://github.com/Gan-Tu/Widgets"
+          ],
+          "componentName": "Cite"
+        },
+        "f6f56486-f9e8-5487-bada-8d928fdfc15f": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://openai.com/index/gpt-6-for-everyone/",
+                "ref_id": "turn646274search0",
+                "refs": [
+                  {
+                    "turn_index": 646274,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "OpenAI",
+                "title": "GPT-6 and Intelligent UI for everyone",
+                "snippet": null,
+                "pub_timestamp": 1791331200,
+                "metadata_label": "十月 7, 2026"
+              },
+              {
+                "url": "https://www.wired.com/story/openai-chatgpt-intelligent-ui-is-more-show-than-tell",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/COuwAz_HcJBjkKCJL9vkO0WPfZahOykqMHT8nvfY7ICSa5hghhcTAKmKN5zgIQ9bjwgY26NBCvFUNRURj4BW0oGRHB8Row6zUtbgFhxTPprETYpu7Jise_8-tNrRsaZy3eyQN-XRxPLrEQHawIguVwSmlpxLMGLpLS5Nc03Vfgo",
+                "ref_id": "turn549741news43",
+                "refs": [
+                  {
+                    "turn_index": 549741,
+                    "ref_type": "news",
+                    "ref_index": 43
+                  }
+                ],
+                "source_label": "WIRED",
+                "title": "The New ChatGPT Is More Show Than Tell",
+                "snippet": "OpenAI has introduced a significant update to ChatGPT called \"Intelligent UI,\" enhancing how the chatbot presents answers by integrating custom, interactive visuals alongside text. Powered by the new…",
+                "pub_timestamp": 1791396000,
+                "metadata_label": "十月 7, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://openai.com/index/gpt-6-for-everyone/",
+            "https://www.wired.com/story/openai-chatgpt-intelligent-ui-is-more-show-than-tell",
+            "https://images.openai.com/static-rsc-1/COuwAz_HcJBjkKCJL9vkO0WPfZahOykqMHT8nvfY7ICSa5hghhcTAKmKN5zgIQ9bjwgY26NBCvFUNRURj4BW0oGRHB8Row6zUtbgFhxTPprETYpu7Jise_8-tNrRsaZy3eyQN-XRxPLrEQHawIguVwSmlpxLMGLpLS5Nc03Vfgo"
+          ],
+          "componentName": "Cite"
+        },
+        "4d343fcd-41df-5b74-81df-63c72367c41d": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://github.com/a2ui-project/a2ui/blob/main/renderers/angular/README.md",
+                "ref_id": "turn837849search5",
+                "refs": [
+                  {
+                    "turn_index": 837849,
+                    "ref_type": "search",
+                    "ref_index": 5
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "a2ui/renderers/angular/README.md at main · a2ui-project/a2ui",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://github.com/a2ui-project/a2ui/blob/main/renderers/react/src/v0_9/catalog/basic/index.ts",
+                "ref_id": "turn837849search6",
+                "refs": [
+                  {
+                    "turn_index": 837849,
+                    "ref_type": "search",
+                    "ref_index": 6
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "a2ui/renderers/react/src/v0_9/catalog/basic/index.ts at main · a2ui-project/a2ui",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://github.com/a2ui-project/a2ui/blob/main/renderers/angular/README.md",
+            "https://github.com/a2ui-project/a2ui/blob/main/renderers/react/src/v0_9/catalog/basic/index.ts"
+          ],
+          "componentName": "Cite"
+        },
+        "567c4e78-901e-511d-a9d6-a65480f3d154": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9_1/docs/a2ui_protocol.md",
+                "ref_id": "turn837849search0",
+                "refs": [
+                  {
+                    "turn_index": 837849,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "a2ui/specification/v0_9_1/docs/a2ui_protocol.md at main · a2ui-project/a2ui",
+                "snippet": null,
+                "pub_timestamp": 1763596800,
+                "metadata_label": "十一月 20, 2025"
+              },
+              {
+                "url": "https://github.com/a2ui-project/a2ui/blob/main/renderers/react/README.md?plain=1",
+                "ref_id": "turn837849search7",
+                "refs": [
+                  {
+                    "turn_index": 837849,
+                    "ref_type": "search",
+                    "ref_index": 7
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "a2ui/renderers/react/README.md at main · a2ui-project/a2ui",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9_1/docs/a2ui_protocol.md",
+            "https://github.com/a2ui-project/a2ui/blob/main/renderers/react/README.md?plain=1"
+          ],
+          "componentName": "Cite"
+        },
+        "77220593-0372-59ec-91ea-c8522e0f86d0": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9/docs/a2ui_protocol.md",
+                "thumbnail_url": "https://images.openai.com/static-rsc-1/yCu64s2LilE7ejtafzCik3W0_WKQolvB1vk8LwDD3wGU8DErt_TOO6uR7Lnn1lgaM8Q3Y9oAK1-OK4UfirZ3Hkmz7EvHCi8-UUW23qf73jHODNURR1P7LCEjtujKWQP_tCFPEKlx1000TFd3JiZLWfV4yDqKgKkDJr_ceg4PBxhvYpuR-gKAyI6yxz5Md92y",
+                "ref_id": "turn487587view4",
+                "refs": [
+                  {
+                    "turn_index": 487587,
+                    "ref_type": "view",
+                    "ref_index": 4
+                  }
+                ],
+                "source_label": "GitHub",
+                "title": "a2ui/specification/v0_9/docs/a2ui_protocol.md at main · a2ui-project/a2ui",
+                "snippet": "Total lines: 914",
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "1 个Source"
+          },
+          "safe_urls": [
+            "https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9/docs/a2ui_protocol.md",
+            "https://images.openai.com/static-rsc-1/yCu64s2LilE7ejtafzCik3W0_WKQolvB1vk8LwDD3wGU8DErt_TOO6uR7Lnn1lgaM8Q3Y9oAK1-OK4UfirZ3Hkmz7EvHCi8-UUW23qf73jHODNURR1P7LCEjtujKWQP_tCFPEKlx1000TFd3JiZLWfV4yDqKgKkDJr_ceg4PBxhvYpuR-gKAyI6yxz5Md92y"
+          ],
+          "componentName": "Cite"
+        },
+        "0ee4d5fd-1bff-5946-adc9-da984efdc759": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://openai.com/index/gpt-6-for-everyone/",
+                "ref_id": "turn646274search0",
+                "refs": [
+                  {
+                    "turn_index": 646274,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "OpenAI",
+                "title": "GPT-6 and Intelligent UI for everyone",
+                "snippet": null,
+                "pub_timestamp": 1791331200,
+                "metadata_label": "十月 7, 2026"
+              },
+              {
+                "url": "https://aireiter.com/blog/gpt-6-intelligent-ui-guide",
+                "ref_id": "turn359167search4",
+                "refs": [
+                  {
+                    "turn_index": 359167,
+                    "ref_type": "search",
+                    "ref_index": 4
+                  }
+                ],
+                "source_label": "Aireiter",
+                "title": "GPT-6 Intelligent UI Guide: Access, Prompts, Limits",
+                "snippet": null,
+                "pub_timestamp": 1791418241,
+                "metadata_label": "十月 8, 2026"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://openai.com/index/gpt-6-for-everyone/",
+            "https://aireiter.com/blog/gpt-6-intelligent-ui-guide"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 一、社区有没有真正截获 ChatGPT 的 UI 输出？\n\n这一轮我重点搜索了 GitHub、Reddit、Hacker News、中英文技术文章，以及 ChatGPT 的相关逆向工程项目。\n\n结果如下：\n\n| 证据 | 找到了什么 | 可信度 |\n|--------|--------|--------|\n| OpenAI 官方 | 原生组件库、流式编译器、UI 专项训练 | 高 |\n| Reddit 用户实验 | 有人通过提示词测试出不同的交互界面行为 | 中低 |\n| ChatGPT 原始网络响应 | **没有找到可公开复核的 Intelligent UI HAR/SSE 样本** | 尚无证据 |\n| 解码后的完整组件 Schema | 没找到 | 尚无证据 |\n| ChatGPT 前端渲染器逆向 | 没找到针对新版 Intelligent UI 的可靠完整分析 | 尚无证据 |\n| 第三方类似渲染器 | 找到了开源项目，但不是 OpenAI 原始实现 | 高 |\n\n### 最值得追踪的 Reddit 线索\n\n2026 年 9 月 23 日，一位用户发帖称，ChatGPT 在某些 Thinking 配置下突然开始输出复杂的交互式 UI。\n\n他测试过注意力矩阵、细胞结构图等，还提供了两段公开共享对话：\n\n- urlReddit 原帖与评论https://www.reddit.com/r/ChatGPT/comments/1woem9i/chatgpt_is_suddenly_generating_interactive_uis/\n- url交互式细胞解释示例https://chatgpt.com/share/6ab422ab-10e4-83ed-b515-a954ac82e74c\n- url传统文本版本https://chatgpt.com/share/6ab42304-3834-83eb-b065-6fc39a302198\n\n他还声称模型把这种交互界面与一个叫 **DIL（Dynamic Interface Language）** 的名称关联起来。\n\n但这里需要谨慎：这属于用户通过模型回复获得的名称，**并不是网络抓包发现的协议标识**。模型可能把提示词理解成某种内部功能，也可能只是顺着上下文生成解释。citeturn368884view0\n\n10 月 8 日，Hacker News 的 GPT-6 发布讨论中，也有开发者直接询问流式 UI 库和输出格式的细节，但我没有找到提供原始协议内容的可靠回答。citeturn173163view4\n\n因此，现在不能负责任地给出一份所谓「OpenAI Intelligent UI 完整 DSL 语法」。\n\n### 另一个 GitHub 线索\n\nurlGan-Tu / Widgetshttps://github.com/Gan-Tu/Widgets\n\n这是一个独立的开源 Widget Renderer，提供大量预定义组件、受限模板语言、数据绑定、局部状态和声明式 Action，并支持使用 GPT-6 系列生成 Widget。\n\n它的架构与我们讨论的目标很接近：\n\n- 模型生成组件描述。\n- Renderer 解析和校验。\n- 宿主控制组件实现及交互行为。\n\n不过，作者明确把它定位为 OpenAI ChatKit Widgets 的开源替代品，而不是 OpenAI Intelligent UI 的原始协议实现。因此，**不能把它的组件表当作 GPT-6 的训练组件表**。citeturn712455view0\n\n---\n\n## 二、目前能确认 Intelligent UI 有哪些组件？\n\n我们需要区分「用户看到了哪种界面」与「模型实际输出了哪种组件标识」。\n\nOpenAI 公开确认的能力范围如下：\n\n| UI 能力 | 公开证据 | A2UI 复刻难度 |\n|--------|--------|--------|\n| 文本、图片、卡片式布局 | 官方示例 | 低 |\n| 按钮、表单与参数输入 | 官方说明 | 低 |\n| 多项对比与步骤展示 | 官方说明 | 低 |\n| 可调整参数的计算器 | 官方演示 | 中 |\n| 动态图表 | 官方演示 | 中 |\n| 交互式结构图 | 官方演示 | 中高 |\n| 地图与路线信息 | 官方演示 | 高 |\n| 对话中的小游戏 | 官方演示 | 高 |\n\n以上是**功能级别的能力清单，不是底层组件注册表**。例如，地图可能由某个原生地图组件生成，也可能来自单独的工具结果，不能仅凭视觉效果确定。\n\n来源：urlOpenAI 官方发布说明https://openai.com/index/gpt-6-for-everyone/，以及 urlWIRED 的实际体验https://www.wired.com/story/openai-chatgpt-intelligent-ui-is-more-show-than-tell。citeturn646274search0turn549741news43\n\n目前仍然缺少精确组件名称、参数 Schema、数据绑定方式、客户端状态管理方式，以及 Action 能调用哪些宿主功能的公开完整资料。\n\n这恰恰是复刻工作最大的技术不确定性。\n\n---\n\n## 三、A2UI 能否定义一组接近 Intelligent UI 的组件？\n\n**可以，而且 A2UI 的官方协议就是这么设计的。**\n\n我直接查看了 A2UI 的协议文档、Basic Catalog 和 React Renderer。\n\n### A2UI v0.9 的 18 个基础组件\n\n**布局组件 · 7 个**\n\n---\n\n**内容组件 · 5 个**\n\n---\n\n**交互组件 · 6 个**\n\nciteturn837849search5turn837849search6\n\n注意这里没有单独的 Chart、Map、Table、InteractiveDiagram 等复杂组件。\n\n但 A2UI 的 Custom Catalog 可以定义这些组件以及对应的函数。官方也建议生产环境使用自己的 Catalog 来表达产品的设计系统。citeturn837849search0turn837849search7\n\n### 因此，完全可以设计一个 ChatGPT-like Catalog\n\n以下是我建议定义的业务组件类型，而不是声称 OpenAI 内部就是这些名称：\n\n| 自定义 A2UI 组件 | 主要能力 |\n|--------|--------|\n| `InteractiveChart` | 折线、柱状、散点以及图表联动 |\n| `GeoMap` | 地图、地点、路线 |\n| `DataTable` | 表格、排序、筛选 |\n| `InteractiveDiagram` | 节点关系、部件选择、动态标注 |\n| `ParameterPanel` | 输入控件与计算结果联动 |\n| `MediaExplorer` | 图片、视频与内容选择 |\n| `MiniApp` | 受限的局部状态和自定义交互 |\n\n其中比较简单的只是包装现有组件；比较复杂的还需要你自己实现对应的客户端组件、状态系统与 Action 处理。\n\n**光在 Catalog 里注册一个 `InteractiveChart` 名称，并不意味着模型自动知道如何正确生成它，更不意味着客户端自动有图表渲染能力。**\n\n---\n\n## 四、我认为最值得测试的架构\n\n**GPT-6 API**\n\n理解需求与设计交互体验\n\n**中间 UI 描述层**\n\n采用适合模型生成的组件树表达方式\n\n**Schema 校验 + 转换器**\n\n组件映射、状态绑定、Action 转换\n\n**A2UI v0.9 + Custom Catalog**\n\n标准化消息、增量更新、跨客户端渲染\n\nA2UI 现有协议支持 `createSurface`、`updateComponents`、`updateDataModel`、`deleteSurface` 等流式消息类型，并使用组件 ID 引用、数据模型和 Action 来维护界面。citeturn487587view4\n\n这个架构中可以比较两种方案：\n\n**方案 A：直接生成 A2UI。** 给 GPT-6 Custom Catalog、Schema、组件示例，让模型直接生成 A2UI 消息。这最容易落地，也应该作为基线。\n\n**方案 B：先生成适合模型的 UI 中间表示，再转换成 A2UI。** 这种方式允许模型更自然地组织嵌套布局，转换器负责展平组件树、分配 ID、生成状态绑定和流式更新。\n\nB 是否真正优于 A，目前没有证据。它只是基于你的训练分布假设提出的工程实验。\n\n另外，有一个非常重要的限制：**OpenAI 这次的 Intelligent UI 属于 ChatGPT Chat 产品。官方没有把它作为独立的 UI API 发布。** 即使通过 API 使用 GPT-6 Sol，也不能假定会获得与 ChatGPT 内相同的训练版本、提示上下文、组件约束和编译器能力。citeturn646274search0turn359167search4\n\n这可能比两个 DSL 本身的差异影响更大。\n\n---\n\n## 五、要验证这个假设，应该怎样抓包和实验？\n\n我建议把研究拆成两个阶段。\n\n### 阶段 1：确认 ChatGPT 真正发送什么\n\n在自己的 ChatGPT Web 会话中，可以使用浏览器开发者工具进行授权范围内的检查。\n\n建议测试三类请求：\n\n1. **纯布局：**「比较三种相机，生成交互式对比界面」\n2. **状态交互：**「生成一个可调整本金、利率和期限的储蓄计算器」\n3. **复杂渲染：**「生成一张可点击身体器官的交互式结构图」\n\n重点同时记录：\n\n- 浏览器 Network 面板中的响应内容和增量消息。\n- UI 在页面中逐步出现的顺序。\n- 用户改变输入值时，是否发生新的网络请求。\n- 按钮 Action 是本地执行，还是触发服务器事件。\n- 同一任务在普通文本和 Intelligent UI 下的网络差异。\n\n如果浏览器使用流式 Fetch，普通 Network 面板可能不方便逐事件阅读。可以使用支持 Fetch Stream 的调试工具辅助观察，但应先审核扩展权限。\n\n**注意：抓到浏览器网络格式，不一定等于抓到了模型原始 token 输出。** 服务端可能已经进行了协议转换或组件编译。\n\n分享 HAR 时要删除 Cookie、Authorization、会话标识和私人对话内容。\n\n### 阶段 2：验证训练优势能否迁移\n\n用完全相同的任务比较三种路径：\n\n| 实验组 | 输出方式 | 验证目的 |\n|--------|--------|--------|\n| A | GPT-6 直接生成 A2UI | 基础能力 |\n| B | GPT-6 生成自定义中间 UI，再编译成 A2UI | 中间层是否提升成功率 |\n| C | ChatGPT Intelligent UI 作为参考 | 原生体验差距 |\n\n这里不要只看 JSON Schema 通过率。\n\n更重要的是：模型是否选择合适组件、生成的交互是否真的可用、多轮修改能否保持状态，以及端到端渲染延迟和 Token 成本。\n\n如果 B 组持续优于 A 组，而且在相同任务里接近 ChatGPT 的组件选择和交互设计，那就能初步支持你的假设。\n\n---\n\n## 六、最终判断\n\n目前可以明确区分三个结论：\n\n**A2UI 技术上支持定义一套类似 Intelligent UI 的组件集合。**\n\nCustom Catalog、数据模型与客户端 Action 已经提供了实现基础。\n\n**没有证据证明 GPT-6 API 对原生 UI 表示的熟悉程度能够直接迁移。**\n\nChatGPT 产品侧的训练、上下文和渲染机制可能都是能力的一部分。\n\n**还缺少最关键的原始证据：可复核的 ChatGPT Intelligent UI 网络响应与完整组件格式。**\n\n目前无法声称已经完成协议逆向，也不能据此实现精确转换器。\n\n所以我的建议不是马上实现一个「OpenAI 协议兼容层」，而是**先用 A2UI Custom Catalog 做一个小型生成实验，同时对 ChatGPT 的实际 UI 响应开展采样研究**。\n\n这样就能直接验证你真正关心的问题：\n\n**GPT-6 的 Intelligent UI 优势，到底主要来自模型学会了设计界面，还是来自它熟悉一套特定的 UI 表达语言和组件环境？**\n\n这个区别会决定我们应该投资于模型提示与评测、自己的中间 DSL，还是协议适配器。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite",
+    "Link"
+  ],
+  "genui_components": [
+    {
+      "type": "link",
+      "tree_range": [
+        60,
+        61
+      ],
+      "start_index": 553,
+      "end_index": 685,
+      "component_resolution_id": "25bfac6e-fbcd-5e68-a028-1e13eb99de53",
+      "safe_urls": [
+        {
+          "url": "https://www.reddit.com/r/ChatGPT/comments/1woem9i/chatgpt_is_suddenly_generating_interactive_uis/"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        63,
+        64
+      ],
+      "start_index": 688,
+      "end_index": 782,
+      "component_resolution_id": "dedf923e-efb9-5796-821d-1bd07d4a9183",
+      "safe_urls": [
+        {
+          "url": "https://chatgpt.com/share/6ab422ab-10e4-83ed-b515-a954ac82e74c"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        66,
+        67
+      ],
+      "start_index": 785,
+      "end_index": 876,
+      "component_resolution_id": "4ddbf0e3-3cd8-5180-91fb-b24f383fd167",
+      "safe_urls": [
+        {
+          "url": "https://chatgpt.com/share/6ab42304-3834-83eb-b065-6fc39a302198"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        71,
+        72
+      ],
+      "start_index": 1019,
+      "end_index": 1048,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://www.reddit.com/r/ChatGPT/comments/1woem9i/chatgpt_is_suddenly_generating_interactive_uis/"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/Ftx_vjTHfNuGCEwRv_mKF9nn0Y87Q_zCFxYnzNJw_cbcFg9vVlmYtih480-FR7YPO-68wfX1oRvsM5oREQsTNVbYkSQx014Hv7SPY_Q15bF3AD1LTmYc_QSBvGpC4AZZlxxmDANbOb2-hQCbCiXYtDfXo7lutpJQExGP3mHDonzMz_U13ZMiVFatDQ7JOwXQ4KT_MRfNZlE2dmL3VxdQCNI5Owm4_IsP5SShwa6Cn8_1K2hO4yo9A4yjjhcNBwfI"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        73,
+        74
+      ],
+      "start_index": 1130,
+      "end_index": 1159,
+      "component_resolution_id": "942d2c4a-6ecd-545a-a687-b8420b25b9e3",
+      "safe_urls": [
+        {
+          "url": "https://news.ycombinator.com/item?id=49996425"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        77,
+        78
+      ],
+      "start_index": 1255,
+      "end_index": 1327,
+      "component_resolution_id": "3e979f04-30fe-57ef-933b-57fafb04a40e",
+      "safe_urls": [
+        {
+          "url": "https://github.com/Gan-Tu/Widgets"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        89,
+        90
+      ],
+      "start_index": 1600,
+      "end_index": 1629,
+      "component_resolution_id": "965e8727-dd6e-5984-99ee-d31eb3b63259",
+      "safe_urls": [
+        {
+          "url": "https://github.com/Gan-Tu/Widgets"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        161,
+        162
+      ],
+      "start_index": 2038,
+      "end_index": 2118,
+      "component_resolution_id": "a517026a-f527-57b2-baac-bce3110104a1",
+      "safe_urls": [
+        {
+          "url": "https://openai.com/index/gpt-6-for-everyone/"
+        }
+      ]
+    },
+    {
+      "type": "link",
+      "tree_range": [
+        162,
+        163
+      ],
+      "start_index": 2122,
+      "end_index": 2236,
+      "component_resolution_id": "9585d04c-d99c-5f6a-b2c6-bf3666979b46",
+      "safe_urls": [
+        {
+          "url": "https://www.wired.com/story/openai-chatgpt-intelligent-ui-is-more-show-than-tell"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        163,
+        164
+      ],
+      "start_index": 2237,
+      "end_index": 2292,
+      "component_resolution_id": "f6f56486-f9e8-5487-bada-8d928fdfc15f",
+      "safe_urls": [
+        {
+          "url": "https://openai.com/index/gpt-6-for-everyone/"
+        },
+        {
+          "url": "https://www.wired.com/story/openai-chatgpt-intelligent-ui-is-more-show-than-tell"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/COuwAz_HcJBjkKCJL9vkO0WPfZahOykqMHT8nvfY7ICSa5hghhcTAKmKN5zgIQ9bjwgY26NBCvFUNRURj4BW0oGRHB8Row6zUtbgFhxTPprETYpu7Jise_8-tNrRsaZy3eyQN-XRxPLrEQHawIguVwSmlpxLMGLpLS5Nc03Vfgo"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn646274search0"
+        },
+        {
+          "entity_type": "news",
+          "ref": "turn549741news43"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        199,
+        200
+      ],
+      "start_index": 3904,
+      "end_index": 3960,
+      "component_resolution_id": "4d343fcd-41df-5b74-81df-63c72367c41d",
+      "safe_urls": [
+        {
+          "url": "https://github.com/a2ui-project/a2ui/blob/main/renderers/angular/README.md"
+        },
+        {
+          "url": "https://github.com/a2ui-project/a2ui/blob/main/renderers/react/src/v0_9/catalog/basic/index.ts"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn837849search5"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn837849search6"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        202,
+        203
+      ],
+      "start_index": 4089,
+      "end_index": 4145,
+      "component_resolution_id": "567c4e78-901e-511d-a9d6-a65480f3d154",
+      "safe_urls": [
+        {
+          "url": "https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9_1/docs/a2ui_protocol.md"
+        },
+        {
+          "url": "https://github.com/a2ui-project/a2ui/blob/main/renderers/react/README.md?plain=1"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn837849search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn837849search7"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        289,
+        290
+      ],
+      "start_index": 6111,
+      "end_index": 6140,
+      "component_resolution_id": "77220593-0372-59ec-91ea-c8522e0f86d0",
+      "safe_urls": [
+        {
+          "url": "https://github.com/a2ui-project/a2ui/blob/main/specification/v0_9/docs/a2ui_protocol.md"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-1/yCu64s2LilE7ejtafzCik3W0_WKQolvB1vk8LwDD3wGU8DErt_TOO6uR7Lnn1lgaM8Q3Y9oAK1-OK4UfirZ3Hkmz7EvHCi8-UUW23qf73jHODNURR1P7LCEjtujKWQP_tCFPEKlx1000TFd3JiZLWfV4yDqKgKkDJr_ceg4PBxhvYpuR-gKAyI6yxz5Md92y"
+        }
+      ]
+    },
+    {
+      "type": "cite",
+      "tree_range": [
+        298,
+        299
+      ],
+      "start_index": 6526,
+      "end_index": 6582,
+      "component_resolution_id": "0ee4d5fd-1bff-5946-adc9-da984efdc759",
+      "safe_urls": [
+        {
+          "url": "https://openai.com/index/gpt-6-for-everyone/"
+        },
+        {
+          "url": "https://aireiter.com/blog/gpt-6-intelligent-ui-guide"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn646274search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn359167search4"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

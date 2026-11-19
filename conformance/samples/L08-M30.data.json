@@ -1,0 +1,35 @@
+{
+  "constants": {
+    "0": "对，你理解得基本正确！",
+    "1": " 👍",
+    "2": "是的，刚才那张 ",
+    "3": "Policy Routing → Routing Table → Next Hop / Network Interface",
+    "4": " 图，就是之前大图中 ",
+    "5": "Routing Decision（路由决策）",
+    "6": " 的放大版。",
+    "7": "不过有一个小地方需要修正：",
+    "8": "路由决策不一定会产生下一跳网络接口。它首先要判断这个 IP 包是发给本机的，还是需要转发给其他机器。",
+    "9": "对于从外部网络接口收到的 IPv4 包，流程可以简化为：",
+    "10": "76cc0a4b-e431-53bf-a9e8-88d60b3cd970",
+    "11": null,
+    "12": "这里：",
+    "13": "发给本机",
+    "14": "：路由查找得到本地交付的结果，数据包进入 ",
+    "15": "INPUT",
+    "16": " Hook，不需要计算下一跳网关。",
+    "17": "需要转发",
+    "18": "：路由查找确定出口接口和下一跳（如果需要网关），数据包进入 ",
+    "19": "FORWARD",
+    "20": " Hook。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {},
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "**对，你理解得基本正确！** 👍\n\n是的，刚才那张 `Policy Routing → Routing Table → Next Hop / Network Interface` 图，就是之前大图中 **Routing Decision（路由决策）** 的放大版。\n\n不过有一个小地方需要修正：**路由决策不一定会产生下一跳网络接口。它首先要判断这个 IP 包是发给本机的，还是需要转发给其他机器。**\n\n对于从外部网络接口收到的 IPv4 包，流程可以简化为：\n\n```text\n            收到 IP 包\n                │\n                ▼\n         PREROUTING Hook\n                │\n                ▼\n         Routing Decision\n          (路由决策)\n                │\n        ┌───────┴───────┐\n        │               │\n    目标是本机       目标是其他机器\n        │               │\n        ▼               ▼\n    INPUT Hook      FORWARD Hook\n        │               │\n        ▼               ▼\n    本机协议栈      POSTROUTING Hook\n    / Socket            │\n                        ▼\n                    出口网卡\n```\n\n这里：\n\n- **发给本机**：路由查找得到本地交付的结果，数据包进入 `INPUT` Hook，不需要计算下一跳网关。\n- **需要转发**：路由查找确定出口接口和下一跳（如果需要网关），数据包进入 `FORWARD` Hook。",
+  "fallbackMarkdownVersion": 1,
+  "view_state": {}
+}

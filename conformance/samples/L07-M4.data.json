@@ -1,0 +1,204 @@
+{
+  "constants": {
+    "0": "这里的 ",
+    "1": "WFC",
+    "2": " 指的是 ",
+    "3": "Wave Function Collapse（波函数坍缩）算法",
+    "4": "。",
+    "5": "它是一种用于游戏开发的",
+    "6": "程序化内容生成（Procedural Content Generation）算法",
+    "7": "，特别适合自动生成游戏地图、地形、迷宫和建筑布局。",
+    "8": "虽然名字来自量子物理，但它在游戏开发中并不涉及真正的量子计算。",
+    "9": "🎮 WFC 是怎么工作的？",
+    "10": "核心思想是：",
+    "11": "根据一组局部规则，自动生成整体合理的地图。",
+    "12": "例如，你要生成一张游戏地图：",
+    "13": "🌊 水域旁边可以是沙滩",
+    "14": "🟨 沙滩旁边可以是草地",
+    "15": "🌳 树木只能长在草地上",
+    "16": "🏠 房屋必须建在平坦地形上",
+    "17": "WFC 会反复选择地图中的位置，确定可放置的地块，并把约束传播到周围位置，直到生成符合规则的地图。",
+    "18": "a588d0a9-b3f2-5d84-b96a-e7dbc7573701",
+    "19": "先定义地块及相邻规则",
+    "20": "339f3929-b005-5464-9db1-8a1b00da4b7e",
+    "21": "再自动生成复杂地图",
+    "22": "为什么这条推文特别提到 WFC？",
+    "23": "Armin Ronacher 在推文中说：",
+    "24": "you can have it try to do things you wanted for a long time (eg: using WFC for worldgen).",
+    "25": "意思是：",
+    "26": "“你可以让 AI 尝试实现那些你一直想做、却迟迟没动手的功能，比如使用 WFC 来生成游戏世界。”",
+    "27": "其中 ",
+    "28": "worldgen = world generation（世界生成）",
+    "29": "。",
+    "30": "他想表达的是：现在 AI 编程模型已经强大到可以帮助他和孩子在周末快速开发小游戏，甚至尝试以前实现起来比较麻烦的算法。",
+    "31": "值得注意的是：",
+    "32": " WFC 本身并不是 AI 大模型，而是一种已有多年的约束驱动生成算法。AI 的作用是帮助编写、实现和调试 WFC。",
+    "33": "如果你对 AI 游戏开发感兴趣，WFC 是一个很值得了解的算法，因为它能够把",
+    "34": "少量人工设计的规则，转化成大量丰富且有规律的游戏世界",
+    "35": "。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "a588d0a9-b3f2-5d84-b96a-e7dbc7573701": {
+          "status": "resolved",
+          "state": {
+            "frame_aspect_ratio": "5:4",
+            "frame_width": "100%",
+            "frame_max_width": "100%",
+            "frame_height": "auto",
+            "max_height": null,
+            "presentation": {
+              "min_width": "0px",
+              "min_height": null,
+              "radius": "xl",
+              "frame": true
+            },
+            "has_fallback": false,
+            "image_fit": "cover",
+            "is_loading": false,
+            "images": [
+              {
+                "url": "https://robertheaton.com/2018/12/17/wavefunction-collapse-algorithm/",
+                "content_url": "https://images.openai.com/static-rsc-4/j8VR7R8xhixsEDaiFeUAKD5RRK6aobU62oEWLwPKcCdNfXs9XBA3QE_6pJdvn0bJ3j6-zTo_x2oe6mqeBLZsADTqPIFGPUR5SxbBOvqNXVE8xxUX7_iftmi0YIShpMy2u3aPGvHrt_g9y6AnHetasF7xwMgLEBJ6oHwMEQFtc7wJVSLdk6gIcjpwqBH7EwwI?purpose=fullsize",
+                "thumbnail_url": "https://images.openai.com/static-rsc-4/E83KTIyVMt9qrMt4CZLru6di4rHSKfKl-Xaqb687PTesXpCAobhNJidizmndW1sXNqxLhf6l7-mVhPXdHY79d8dt_x21hFfT9I550TO8nQXMRbnOrhHeyuHile4FA0I06LDREbTgx5aasF3S-7UB5c2thKI47QzOINQS2RJ7ZQA?purpose=inline",
+                "original_content_url": "https://robertheaton.com/images/wfc-entropy.png",
+                "save_target": "image",
+                "title": "The Wavefunction Collapse Algorithm explained very clearly | Robert Heaton",
+                "show_url": true,
+                "content_size": {
+                  "width": 1200,
+                  "height": 813
+                },
+                "thumbnail_size": {
+                  "width": 1200,
+                  "height": 813
+                },
+                "thumbnail_crop_info": {
+                  "center_x_percent": 0.1025,
+                  "center_y_percent": 0.24723247232472326
+                },
+                "shop_eligible": false
+              }
+            ],
+            "default_on_click_action": null
+          },
+          "safe_urls": [
+            "https://robertheaton.com/2018/12/17/wavefunction-collapse-algorithm/",
+            "https://images.openai.com/static-rsc-4/j8VR7R8xhixsEDaiFeUAKD5RRK6aobU62oEWLwPKcCdNfXs9XBA3QE_6pJdvn0bJ3j6-zTo_x2oe6mqeBLZsADTqPIFGPUR5SxbBOvqNXVE8xxUX7_iftmi0YIShpMy2u3aPGvHrt_g9y6AnHetasF7xwMgLEBJ6oHwMEQFtc7wJVSLdk6gIcjpwqBH7EwwI?purpose=fullsize",
+            "https://images.openai.com/static-rsc-4/E83KTIyVMt9qrMt4CZLru6di4rHSKfKl-Xaqb687PTesXpCAobhNJidizmndW1sXNqxLhf6l7-mVhPXdHY79d8dt_x21hFfT9I550TO8nQXMRbnOrhHeyuHile4FA0I06LDREbTgx5aasF3S-7UB5c2thKI47QzOINQS2RJ7ZQA?purpose=inline"
+          ],
+          "componentName": "AsyncImage"
+        },
+        "339f3929-b005-5464-9db1-8a1b00da4b7e": {
+          "status": "resolved",
+          "state": {
+            "frame_aspect_ratio": "5:4",
+            "frame_width": "100%",
+            "frame_max_width": "100%",
+            "frame_height": "auto",
+            "max_height": null,
+            "presentation": {
+              "min_width": "0px",
+              "min_height": null,
+              "radius": "xl",
+              "frame": true
+            },
+            "has_fallback": false,
+            "image_fit": "cover",
+            "is_loading": false,
+            "images": [
+              {
+                "url": "https://commutemochabread.tistory.com/70",
+                "content_url": "https://images.openai.com/static-rsc-4/QVn8YpFf9inT-bVmX7UJjuczD9ePpfe1krv_VhmFsB8ZWDIY2ZlArOgU9JoJ8x1gLBdEZi_2Hf1gqN6iMIlQGNq1TMJ_IhqkDzL-4XUeHxnl9ybdjmdTsg2Glu2nSpHgtNEKylQZpwBkgk63cGRqQd04ad4T788qCZS_H8-4Z8tIwoFyeQmuPeIdauzkqWKZ?purpose=fullsize",
+                "thumbnail_url": "https://images.openai.com/static-rsc-4/mLB7_8YK4fRClVc4tEyAWsNH0YMGUJm5pEDaGiw3ngrqYFaFwtLjICczqqAKezbt4tdaErsZO1QVl_xO-ptMtHSLM_UU5fH9gBtjCUXRxwMeXQNLrHtsIjYT3DO3U4RNTFvZdku1VEFytrnn2rYy_h0gf6tr5L9_26_eKZzN5Uc?purpose=inline",
+                "original_content_url": "https://blog.kakaocdn.net/dna/mxpgY/btsNROZeQFi/AAAAAAAAAAAAAAAAAAAAAMZXHcMD_JsWfZW8Wv4Kst3THhuoqTw8aabYjfRhJ7PV/img.png?allow_ip=&allow_referer=&credential=yqXZFxpELC7KVnFOS48ylbz2pIh7yKj8&expires=1777561199&signature=BsyacEuuRuHV%2BODDOMRWXSdLt0Y%3D",
+                "save_target": "image",
+                "title": "절차적 콘텐츠 생성(PCG)의 숨겨진 보석, 웨이브 함수 붕괴(Wave Function Collapse) 알고리즘 완전 정복",
+                "show_url": true,
+                "content_size": {
+                  "width": 800,
+                  "height": 533
+                },
+                "thumbnail_size": {
+                  "width": 800,
+                  "height": 533
+                },
+                "thumbnail_crop_info": {
+                  "center_x_percent": 0.6575,
+                  "center_y_percent": 0.699812382739212
+                },
+                "shop_eligible": false
+              }
+            ],
+            "default_on_click_action": null
+          },
+          "safe_urls": [
+            "https://commutemochabread.tistory.com/70",
+            "https://images.openai.com/static-rsc-4/QVn8YpFf9inT-bVmX7UJjuczD9ePpfe1krv_VhmFsB8ZWDIY2ZlArOgU9JoJ8x1gLBdEZi_2Hf1gqN6iMIlQGNq1TMJ_IhqkDzL-4XUeHxnl9ybdjmdTsg2Glu2nSpHgtNEKylQZpwBkgk63cGRqQd04ad4T788qCZS_H8-4Z8tIwoFyeQmuPeIdauzkqWKZ?purpose=fullsize",
+            "https://images.openai.com/static-rsc-4/mLB7_8YK4fRClVc4tEyAWsNH0YMGUJm5pEDaGiw3ngrqYFaFwtLjICczqqAKezbt4tdaErsZO1QVl_xO-ptMtHSLM_UU5fH9gBtjCUXRxwMeXQNLrHtsIjYT3DO3U4RNTFvZdku1VEFytrnn2rYy_h0gf6tr5L9_26_eKZzN5Uc?purpose=inline"
+          ],
+          "componentName": "AsyncImage"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "这里的 **WFC** 指的是 **Wave Function Collapse（波函数坍缩）算法**。\n\n它是一种用于游戏开发的**程序化内容生成（Procedural Content Generation）算法**，特别适合自动生成游戏地图、地形、迷宫和建筑布局。\n\n虽然名字来自量子物理，但它在游戏开发中并不涉及真正的量子计算。\n\n### 🎮 WFC 是怎么工作的？\n\n核心思想是：**根据一组局部规则，自动生成整体合理的地图。**\n\n例如，你要生成一张游戏地图：\n\n- 🌊 水域旁边可以是沙滩\n- 🟨 沙滩旁边可以是草地\n- 🌳 树木只能长在草地上\n- 🏠 房屋必须建在平坦地形上\n\nWFC 会反复选择地图中的位置，确定可放置的地块，并把约束传播到周围位置，直到生成符合规则的地图。\n\nimage_group{\"query\":[\"wave function collapse algorithm tile constraints simple pixel art tiles example\"],\"aspect_ratio\":\"5:4\",\"layout\":\"carousel\",\"num_per_query\":1}\n\n先定义地块及相邻规则\n\nimage_group{\"query\":[\"wave function collapse procedural generation isometric terrain low poly floating island tiles game environment\"],\"aspect_ratio\":\"5:4\",\"layout\":\"carousel\",\"num_per_query\":1}\n\n再自动生成复杂地图\n\n### 为什么这条推文特别提到 WFC？\n\nArmin Ronacher 在推文中说：\n\n> you can have it try to do things you wanted for a long time (eg: using WFC for worldgen).\n\n意思是：\n\n“你可以让 AI 尝试实现那些你一直想做、却迟迟没动手的功能，比如使用 WFC 来生成游戏世界。”\n\n其中 **worldgen = world generation（世界生成）**。\n\n他想表达的是：现在 AI 编程模型已经强大到可以帮助他和孩子在周末快速开发小游戏，甚至尝试以前实现起来比较麻烦的算法。\n\n**值得注意的是：** WFC 本身并不是 AI 大模型，而是一种已有多年的约束驱动生成算法。AI 的作用是帮助编写、实现和调试 WFC。\n\n如果你对 AI 游戏开发感兴趣，WFC 是一个很值得了解的算法，因为它能够把**少量人工设计的规则，转化成大量丰富且有规律的游戏世界**。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "AsyncImage"
+  ],
+  "genui_components": [
+    {
+      "type": "async_image",
+      "tree_range": [
+        19,
+        20
+      ],
+      "start_index": 392,
+      "end_index": 512,
+      "component_resolution_id": "a588d0a9-b3f2-5d84-b96a-e7dbc7573701",
+      "genui_attributes": {
+        "aspectRatio": "5:4"
+      },
+      "safe_urls": [
+        {
+          "url": "https://robertheaton.com/2018/12/17/wavefunction-collapse-algorithm/"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-4/j8VR7R8xhixsEDaiFeUAKD5RRK6aobU62oEWLwPKcCdNfXs9XBA3QE_6pJdvn0bJ3j6-zTo_x2oe6mqeBLZsADTqPIFGPUR5SxbBOvqNXVE8xxUX7_iftmi0YIShpMy2u3aPGvHrt_g9y6AnHetasF7xwMgLEBJ6oHwMEQFtc7wJVSLdk6gIcjpwqBH7EwwI?purpose=fullsize"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-4/E83KTIyVMt9qrMt4CZLru6di4rHSKfKl-Xaqb687PTesXpCAobhNJidizmndW1sXNqxLhf6l7-mVhPXdHY79d8dt_x21hFfT9I550TO8nQXMRbnOrhHeyuHile4FA0I06LDREbTgx5aasF3S-7UB5c2thKI47QzOINQS2RJ7ZQA?purpose=inline"
+        }
+      ]
+    },
+    {
+      "type": "async_image",
+      "tree_range": [
+        22,
+        23
+      ],
+      "start_index": 580,
+      "end_index": 730,
+      "component_resolution_id": "339f3929-b005-5464-9db1-8a1b00da4b7e",
+      "genui_attributes": {
+        "aspectRatio": "5:4"
+      },
+      "safe_urls": [
+        {
+          "url": "https://commutemochabread.tistory.com/70"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-4/QVn8YpFf9inT-bVmX7UJjuczD9ePpfe1krv_VhmFsB8ZWDIY2ZlArOgU9JoJ8x1gLBdEZi_2Hf1gqN6iMIlQGNq1TMJ_IhqkDzL-4XUeHxnl9ybdjmdTsg2Glu2nSpHgtNEKylQZpwBkgk63cGRqQd04ad4T788qCZS_H8-4Z8tIwoFyeQmuPeIdauzkqWKZ?purpose=fullsize"
+        },
+        {
+          "url": "https://images.openai.com/static-rsc-4/mLB7_8YK4fRClVc4tEyAWsNH0YMGUJm5pEDaGiw3ngrqYFaFwtLjICczqqAKezbt4tdaErsZO1QVl_xO-ptMtHSLM_UU5fH9gBtjCUXRxwMeXQNLrHtsIjYT3DO3U4RNTFvZdku1VEFytrnn2rYy_h0gf6tr5L9_26_eKZzN5Uc?purpose=inline"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

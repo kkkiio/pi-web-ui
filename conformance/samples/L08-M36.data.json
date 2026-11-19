@@ -1,0 +1,109 @@
+{
+  "constants": {
+    "0": "再补充两个精确之处：",
+    "1": "不是把“网络接口结果”交给 Hook",
+    "2": "，而是 IP 包继续沿内核的处理路径前进。内核会保留相关路由信息，后续处理可以使用。",
+    "3": "进入 FORWARD 的前提是允许 IP 转发",
+    "4": "。例如 IPv4 需要启用 ",
+    "5": "net.ipv4.ip_forward",
+    "6": "，否则不能正常转发。",
+    "7": [
+      "turn845099search0",
+      "turn845099search1"
+    ],
+    "8": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "9": "所以你现在建立的模型是正确的。接下来可以直接把 ",
+    "10": "Routing Decision 理解成一个分岔点：本地交付，或者转发出去",
+    "11": "。这就是最核心的概念。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://wiki.iptables.org/wiki-nftables/index.php/Netfilter_hooks",
+                "ref_id": "turn845099search0",
+                "refs": [
+                  {
+                    "turn_index": 845099,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Netfilter hooks",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains",
+                "ref_id": "turn845099search1",
+                "refs": [
+                  {
+                    "turn_index": 845099,
+                    "ref_type": "search",
+                    "ref_index": 1
+                  }
+                ],
+                "source_label": "nftables wiki",
+                "title": "Configuring chains",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://wiki.iptables.org/wiki-nftables/index.php/Netfilter_hooks",
+            "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "再补充两个精确之处：\n\n1. **不是把“网络接口结果”交给 Hook**，而是 IP 包继续沿内核的处理路径前进。内核会保留相关路由信息，后续处理可以使用。\n2. **进入 FORWARD 的前提是允许 IP 转发**。例如 IPv4 需要启用 `net.ipv4.ip_forward`，否则不能正常转发。citeturn845099search0turn845099search1\n\n所以你现在建立的模型是正确的。接下来可以直接把 **Routing Decision 理解成一个分岔点：本地交付，或者转发出去**。这就是最核心的概念。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        8,
+        9
+      ],
+      "start_index": 155,
+      "end_index": 211,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://wiki.iptables.org/wiki-nftables/index.php/Netfilter_hooks"
+        },
+        {
+          "url": "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn845099search0"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn845099search1"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

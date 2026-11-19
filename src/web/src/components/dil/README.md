@@ -164,14 +164,17 @@ A `mermaid` fence renders a diagram and keeps its source visible if rendering fa
 `DIL.useState(init, { key })` is hoisted by the parser (`core/dil/statements.ts`) and bound
 by `runtime.ts`:
 
-- the value lives in a slot keyed by `{ key }`, or by the variable name when the model
-  names none, so it survives every re-resolve of the same message;
-- the variable is bound as a **getter** on the scope, so a handler created by an earlier
-  render still reads the current value (`onChange={v => { setChoice(v); setRevealed(false) }}`);
+- the value lives in a slot keyed by `{ key }` (the corpus always names one), or by the
+  variable name when it does not, so it survives every re-resolve of the same message;
+- each render binds the slot's **value**: `{@body const [x, setX] = DIL.useState(…) }` obeys
+  the same rule as the compiled reference, where `x` is a `const` of that render. A handler
+  that writes a slot and then reads it therefore sees the value from *its* render — use
+  `setX(prev => next)` to derive from the current one;
 - the setter writes the slot and asks the renderer to re-resolve — that counter is the
-  only thing a state change touches;
-- `setX(prev => next)` is supported, because DIL has no other way to derive from the
-  current value.
+  only thing a state change touches.
+
+That rule is not a preference: `conformance/` runs the reference's compiled artifacts and
+fails when our rendering, our emitted `GenUI` arguments, or our state slots disagree.
 
 A button's intent is decided by **running its handler**, not by reading its source text:
 `DilRuntime.probe` executes `onClick` with a `probing` flag that turns setters into no-ops
@@ -179,5 +182,8 @@ and `GenUI` into a recorder. `{#if}` branches, lookups and template literals the
 decide correctly, and the probe yields the exact prompt the click would send.
 
 `GenUI.issueNewTurn(text)` sends `text` as the next user message. It does not draft,
-prefill or read the composer: the click is the send, and the host (`app.tsx`) owns the
-busy state that disables every card action while Pi is working.
+prefill or read the composer: the click is the send, and the host
+(`chat-item-view.tsx` → `sendPrompt`) owns the busy state that disables every card action
+while Pi is working. Dispatch is restricted to a control interaction, so a document that
+calls the action from a `{@body}` initialiser or an interpolation cannot send while it is
+being drawn.

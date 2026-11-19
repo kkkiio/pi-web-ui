@@ -1,0 +1,167 @@
+{
+  "constants": {
+    "0": "四、Agent 的权限问题，其实可以不用一步到位做完整沙箱",
+    "1": "你提到把 Agent 放进容器，但会限制它能做的事情。这个担心很实际。",
+    "2": "我反而更推荐你先采用 ",
+    "3": "权限分层，而不是全功能隔离",
+    "4": "。",
+    "5": "防护手段",
+    "6": "成本",
+    "7": "防范的风险",
+    "8": "独立 macOS 普通用户运行 Agent",
+    "9": "低",
+    "10": "避免直接拥有主账号的全部权限",
+    "11": "只开放需要操作的项目目录",
+    "12": "低",
+    "13": "限制误删、读取私密文件",
+    "14": "不给 sudo、SSH 私钥等高权限凭据",
+    "15": "低至中",
+    "16": "降低主机被全面接管的风险",
+    "17": "删除文件、推送代码、执行危险操作需要人工确认",
+    "18": "中",
+    "19": "防止 Agent 被诱导做高风险操作",
+    "20": "独立容器或虚拟机",
+    "21": "中至高",
+    "22": "进一步隔离进程、文件系统和运行环境",
+    "23": "普通用户隔离并不是完整沙箱，但已经可以显著降低一些风险。",
+    "24": "更重要的是，",
+    "25": "即使只有你能登录，Agent 也可能受到 Prompt Injection（提示词注入）攻击",
+    "26": "。比如 Agent 读取了恶意网页、仓库 README 或工具返回内容，就被诱导执行危险指令。",
+    "27": "因此，身份认证只能保证谁可以直接发起请求，不能保证 Agent 执行的每个动作都是安全的。这也是 OWASP 的 AI Agent 安全指南强调最小权限和高风险动作审批的原因。",
+    "28": [
+      "turn631532search12",
+      "turn631532search0"
+    ],
+    "29": "624eac0f-78cb-533b-95ff-98c4c916401a",
+    "30": "对于你这种希望 Agent 真正帮你工作的用户，我觉得",
+    "31": "专用运行账号 + 必要目录权限 + 危险操作确认",
+    "32": "是比一开始构建复杂容器系统更合理的折中。",
+    "33": "五、你现在依赖 AMP Code，真的比自建 Cloudflare 更不安全吗？",
+    "34": "不一定。它们的区别主要在于信任边界。",
+    "35": "AMP Code 托管远程方案",
+    "36": "Cloudflare Tunnel + Access + 自建 Agent",
+    "37": "身份认证",
+    "38": "由 AMP 平台管理",
+    "39": "Cloudflare + 你自选的本地认证",
+    "40": "远程访问基础设施",
+    "41": "AMP 平台",
+    "42": "Cloudflare",
+    "43": "Agent 的执行权限",
+    "44": "取决于本地客户端的配置",
+    "45": "由你直接控制",
+    "46": "对第三方的信任",
+    "47": "信任平台的认证和命令中继机制",
+    "48": "信任 Cloudflare 的认证、TLS 终止和转发机制",
+    "49": "出现安全问题时的可控性",
+    "50": "取决于平台提供的功能",
+    "51": "可自行关闭入口、撤销凭据和限制 Agent 权限",
+    "52": "还有一点容易忽略：",
+    "53": "Cloudflare Access + Tunnel 并不是从 iPhone 到 Mac 的严格端到端加密。",
+    "54": " Cloudflare 需要在边缘处理 HTTPS 请求，因此它处于能够接触解密后流量的信任位置。",
+    "55": "相比之下，Tailscale 使用 WireGuard 端到端加密，即使流量通过 DERP，DERP 也无法直接读取隧道内的明文数据。",
+    "56": "所以如果你的要求是「任何第三方平台都不能看到 Agent 的指令和响应内容」，那么私有 VPN + 应用层认证的设计更符合这个目标，但你仍然需要解决之前的网络稳定性问题。",
+    "57": "至于 AMP 平台是否能看到具体指令或会话内容，必须看它的真实加密与服务架构，不能单凭它使用中心化服务器就断定。",
+    "58": "六、最终怎么选？",
+    "59": "你的优先方案：Cloudflare Tunnel + Access + 独立本地认证",
+    "60": "不要求 iPhone 运行 VPN，适合随时通过 Safari 操作。Cloudflare 提供身份验证，本地认证则作为防止配置错误的第二道防线。",
+    "61": "这是我最建议你先实施并验证网络稳定性的方案。",
+    "62": "更强调端到端保密：私有 WireGuard / Tailscale + 应用认证",
+    "63": "通过设备密钥控制接入，同时验证 Web UI 登录，尽可能不让第三方接触应用明文。",
+    "64": "但你遇到过 Tailscale 连接不稳定，需要单独优化网络路径。",
+    "65": "我觉得你不需要追求「一个绝对安全的 Tunnel」。你真正需要的是：即使 Tunnel 被错误公开，Agent 仍然要求独立认证；即使 Agent 被控制，也不自动获得整台 Mac 的最高权限。",
+    "66": "这两道防线比单纯更换 Tailscale、Ponte 或 Cloudflare 的价值大得多。",
+    "67": "最后有一个非常关键的细节想确认：",
+    "68": "你打算远程访问的 Agent Web UI，是自己开发的，还是 Claude Code、OpenCode、OpenClaw 等现成工具提供的？",
+    "69": "因为如果你能修改 Web UI 后端，就可以直接实现基于 Passkey / WebAuthn 的认证；如果不能修改，那么在前面放一个独立认证反向代理会更合适。这会直接决定最简洁、最安全的落地方式。"
+  },
+  "appData": {
+    "opGenui": {
+      "componentResults": {
+        "624eac0f-78cb-533b-95ff-98c4c916401a": {
+          "status": "resolved",
+          "state": {
+            "items": [
+              {
+                "url": "https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html?trk=article-ssr-frontend-pulse_x-social-details_comments-action_comment-text",
+                "ref_id": "turn631532search12",
+                "refs": [
+                  {
+                    "turn_index": 631532,
+                    "ref_type": "search",
+                    "ref_index": 12
+                  }
+                ],
+                "source_label": "OWASP Cheat Sheet Series",
+                "title": "AI Agent Security",
+                "snippet": null,
+                "pub_timestamp": null,
+                "metadata_label": null
+              },
+              {
+                "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/",
+                "ref_id": "turn631532search0",
+                "refs": [
+                  {
+                    "turn_index": 631532,
+                    "ref_type": "search",
+                    "ref_index": 0
+                  }
+                ],
+                "source_label": "OWASP Gen AI Security Project",
+                "title": "OWASP Top 10 for Agentic Applications for 2026",
+                "snippet": null,
+                "pub_timestamp": 1765238400,
+                "metadata_label": "十二月 9, 2025"
+              }
+            ],
+            "active_index": 0,
+            "sources_title": "2 个Sources"
+          },
+          "safe_urls": [
+            "https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html?trk=article-ssr-frontend-pulse_x-social-details_comments-action_comment-text",
+            "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+          ],
+          "componentName": "Cite"
+        }
+      },
+      "interactionSurface": "mainline",
+      "modelDataBindings": {}
+    }
+  },
+  "fallbackMarkdown": "## 四、Agent 的权限问题，其实可以不用一步到位做完整沙箱\n\n你提到把 Agent 放进容器，但会限制它能做的事情。这个担心很实际。\n\n我反而更推荐你先采用 **权限分层，而不是全功能隔离**。\n\n| 防护手段 | 成本 | 防范的风险 |\n|--------|--------|--------|\n| 独立 macOS 普通用户运行 Agent | 低 | 避免直接拥有主账号的全部权限 |\n| 只开放需要操作的项目目录 | 低 | 限制误删、读取私密文件 |\n| 不给 sudo、SSH 私钥等高权限凭据 | 低至中 | 降低主机被全面接管的风险 |\n| 删除文件、推送代码、执行危险操作需要人工确认 | 中 | 防止 Agent 被诱导做高风险操作 |\n| 独立容器或虚拟机 | 中至高 | 进一步隔离进程、文件系统和运行环境 |\n\n普通用户隔离并不是完整沙箱，但已经可以显著降低一些风险。\n\n更重要的是，**即使只有你能登录，Agent 也可能受到 Prompt Injection（提示词注入）攻击**。比如 Agent 读取了恶意网页、仓库 README 或工具返回内容，就被诱导执行危险指令。\n\n因此，身份认证只能保证谁可以直接发起请求，不能保证 Agent 执行的每个动作都是安全的。这也是 OWASP 的 AI Agent 安全指南强调最小权限和高风险动作审批的原因。citeturn631532search12turn631532search0\n\n对于你这种希望 Agent 真正帮你工作的用户，我觉得**专用运行账号 + 必要目录权限 + 危险操作确认**是比一开始构建复杂容器系统更合理的折中。\n\n## 五、你现在依赖 AMP Code，真的比自建 Cloudflare 更不安全吗？\n\n不一定。它们的区别主要在于信任边界。\n\n|  | AMP Code 托管远程方案 | Cloudflare Tunnel + Access + 自建 Agent |\n|--------|--------|--------|\n| 身份认证 | 由 AMP 平台管理 | Cloudflare + 你自选的本地认证 |\n| 远程访问基础设施 | AMP 平台 | Cloudflare |\n| Agent 的执行权限 | 取决于本地客户端的配置 | 由你直接控制 |\n| 对第三方的信任 | 信任平台的认证和命令中继机制 | 信任 Cloudflare 的认证、TLS 终止和转发机制 |\n| 出现安全问题时的可控性 | 取决于平台提供的功能 | 可自行关闭入口、撤销凭据和限制 Agent 权限 |\n\n还有一点容易忽略：**Cloudflare Access + Tunnel 并不是从 iPhone 到 Mac 的严格端到端加密。** Cloudflare 需要在边缘处理 HTTPS 请求，因此它处于能够接触解密后流量的信任位置。\n\n相比之下，Tailscale 使用 WireGuard 端到端加密，即使流量通过 DERP，DERP 也无法直接读取隧道内的明文数据。\n\n所以如果你的要求是「任何第三方平台都不能看到 Agent 的指令和响应内容」，那么私有 VPN + 应用层认证的设计更符合这个目标，但你仍然需要解决之前的网络稳定性问题。\n\n至于 AMP 平台是否能看到具体指令或会话内容，必须看它的真实加密与服务架构，不能单凭它使用中心化服务器就断定。\n\n## 六、最终怎么选？\n\n**你的优先方案：Cloudflare Tunnel + Access + 独立本地认证**\n\n不要求 iPhone 运行 VPN，适合随时通过 Safari 操作。Cloudflare 提供身份验证，本地认证则作为防止配置错误的第二道防线。\n\n这是我最建议你先实施并验证网络稳定性的方案。\n\n**更强调端到端保密：私有 WireGuard / Tailscale + 应用认证**\n\n通过设备密钥控制接入，同时验证 Web UI 登录，尽可能不让第三方接触应用明文。\n\n但你遇到过 Tailscale 连接不稳定，需要单独优化网络路径。\n\n**我觉得你不需要追求「一个绝对安全的 Tunnel」。你真正需要的是：即使 Tunnel 被错误公开，Agent 仍然要求独立认证；即使 Agent 被控制，也不自动获得整台 Mac 的最高权限。**\n\n这两道防线比单纯更换 Tailscale、Ponte 或 Cloudflare 的价值大得多。\n\n最后有一个非常关键的细节想确认：\n\n**你打算远程访问的 Agent Web UI，是自己开发的，还是 Claude Code、OpenCode、OpenClaw 等现成工具提供的？**\n\n因为如果你能修改 Web UI 后端，就可以直接实现基于 Passkey / WebAuthn 的认证；如果不能修改，那么在前面放一个独立认证反向代理会更合适。这会直接决定最简洁、最安全的落地方式。",
+  "fallbackMarkdownVersion": 1,
+  "requiredComponents": [
+    "Cite"
+  ],
+  "genui_components": [
+    {
+      "type": "cite",
+      "tree_range": [
+        49,
+        50
+      ],
+      "start_index": 581,
+      "end_index": 638,
+      "component_resolution_id": "624eac0f-78cb-533b-95ff-98c4c916401a",
+      "safe_urls": [
+        {
+          "url": "https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html?trk=article-ssr-frontend-pulse_x-social-details_comments-action_comment-text"
+        },
+        {
+          "url": "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+        }
+      ],
+      "entities": [
+        {
+          "entity_type": "search",
+          "ref": "turn631532search12"
+        },
+        {
+          "entity_type": "search",
+          "ref": "turn631532search0"
+        }
+      ]
+    }
+  ],
+  "view_state": {}
+}

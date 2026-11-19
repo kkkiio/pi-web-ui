@@ -95,7 +95,8 @@ function resolveNode(node: DilNode, scope: DilScope, budget: Budget): ResolvedNo
       const out: ResolvedNode[] = [];
       items.forEach((item, index) => {
         if (budget.remaining <= 0) return;
-        const frame = iterationFrame(scope, node.item, item, node.index ?? null, index);
+        const frame: Record<string, unknown> = { ...scope, [node.item]: item };
+        if (node.index) frame[node.index] = index;
         for (const resolved of resolveNodes(node.body, frame, budget)) out.push(resolved);
       });
       return out;
@@ -147,29 +148,6 @@ export function resolveAttributes(node: DilElementNode, scope: DilScope): Resolv
     }
   }
   return props;
-}
-
-/**
- * One `{#each}` iteration's scope: the parent scope's **property descriptors**, not its
- * values.
- *
- * A spread would materialize the state getters (`DilRuntime.bindState`) into snapshots, so
- * a handler created inside a loop would read the value from this render instead of the
- * slot — `() => { setChoice("C"); GenUI.issueNewTurn(choice) }` would submit the old
- * choice inside an iteration and the new one outside it.
- */
-function iterationFrame(
-  scope: DilScope,
-  item: string,
-  value: unknown,
-  indexName: string | null,
-  index: number,
-): Record<string, unknown> {
-  const frame: Record<string, unknown> = {};
-  Object.defineProperties(frame, Object.getOwnPropertyDescriptors(scope));
-  frame[item] = value;
-  if (indexName) frame[indexName] = index;
-  return frame;
 }
 
 /** A fenced block is already an element; #49 will give `code-block` a real renderer. */
