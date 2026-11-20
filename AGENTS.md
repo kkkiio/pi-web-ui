@@ -29,8 +29,7 @@
 │   ├── configuration.md         # Environment variables, settings.json, and security reference
 │   └── images/                  # Screenshots for README
 ├── extensions/
-│   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
-│   └── imessage-bridge.ts
+│   └── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
 ├── e2e/
 │   ├── features/                # Playwright-BDD feature files
 │   ├── steps/                   # Step definitions
@@ -163,7 +162,7 @@ When asked to open or update a PR (e.g. after aligning on a design/spec):
 
 ### Release
 
-When asked to release a new version, prepare a **draft** GitHub Release and stop so the maintainer can review and publish (see `RELEASING.md` for package media and tarball checks):
+When asked to release a new version, prepare a **draft** GitHub Release and stop so the maintainer can review and publish:
 
 1. Bump the version in `package.json` and `package-lock.json`:
    ```bash
@@ -184,3 +183,5 @@ When asked to release a new version, prepare a **draft** GitHub Release and stop
    git push origin v<version>
    ```
 4. Create a **draft** GitHub Release on that tag (`gh release create v<version> --draft --generate-notes`), share the draft URL with the maintainer, and stop without publishing. When the maintainer clicks **Publish**, [`.github/workflows/release.yml`](.github/workflows/release.yml) verifies `v<version>` matches `package.json`, runs checks + `npm run build:web`, and publishes `@kkkiio/pi-web-ui` to npm via OIDC Trusted Publishing.
+
+Note: `pi.dev/packages` discovers packages via the `pi-package` keyword in `package.json` and renders gallery previews from `pi.image` (and optional `pi.video`). Ensure `pi.image` remains reachable and any local `README.md` images stay included in `package.json` `files`.
