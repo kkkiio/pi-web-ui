@@ -1,6 +1,5 @@
 {
   "diagnosticSummary": "clean",
-  "state": [{"name": "window", "setter": "setWindow", "initial": "\"5m\""}],
   "diagnostics": [],
   "tree": [
     {"stmt": "const [window,setWindow] = DIL.useState(\"5m\")"},

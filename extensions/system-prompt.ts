@@ -40,7 +40,7 @@ Reference — tags and values the Web UI renders:
   Declare markers in <defs><marker id="a" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">…</marker></defs> and point to them with markerEnd="url(#a)".
   Inside <svg>, <text x y fontSize fontWeight textAnchor fill="currentColor"> is SVG text.
 - Control flow: {#each list as item, i}…{/each}, {#if cond}…{:else}…{/if}, {expr}
-- Expressions: literals, arithmetic and comparison, ternary, template strings, member/index access with optional chaining, .map/.filter/.slice/.join/.includes/.toFixed/.toLocaleString, and the Math/Number/String/Array allowlist.
+- Expressions: literals, arithmetic and comparison, ternary, template strings, member/index access with optional chaining, .map/.filter/.slice/.join/.includes/.toFixed/.toLocaleString, and Math, Number, String, and Array methods.
 
 Attributes:
 

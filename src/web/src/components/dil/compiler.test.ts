@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { DilScope } from "../../core/dil/evaluator.ts";
-import { collectStatements, evaluateStatements, parseDocument } from "../../core/dil/index.ts";
-import { type ResolvedNode, type ResolvedProps, resolveNodes } from "./resolve.ts";
+import { parseDocument } from "../../core/dil/index.ts";
+import { compileDil } from "./compiler.ts";
+import { type ResolvedNode, type ResolvedProps, readTree } from "./render-tree.ts";
+import { createProgram } from "./sandbox-worker.js";
 
 function count(nodes: readonly ResolvedNode[]): number {
   let total = 0;
@@ -16,24 +17,23 @@ function count(nodes: readonly ResolvedNode[]): number {
 test("nested loops cannot expand without bound", () => {
   const source =
     "{#each Array.from({ length: 400 }) as r}{#each Array.from({ length: 400 }) as c}<text>x</text>{/each}{/each}";
-  const resolved = resolveNodes(parseDocument(source).tree, {});
+  const tree = resolved(source);
   // 400 × 400 = 160k would overflow the stack while pushing; the pass is capped instead.
-  assert.ok(count(resolved) <= 5_000, `resolved ${count(resolved)} nodes`);
+  assert.ok(count(tree) <= 5_000, `resolved ${count(tree)} nodes`);
 });
 
 test("a large but legitimate loop still renders", () => {
-  const source = "{#each Array.from({ length: 300 }) as i}<text>{i}</text>{/each}";
-  const resolved = resolveNodes(parseDocument(source).tree, {});
+  const source = "{#each Array.from({ length: 300 }, (_, i) => i) as i}<text>{i}</text>{/each}";
+  const tree = resolved(source);
   // One `<text>` element plus its interpolated text node per item.
-  assert.equal(count(resolved), 600);
+  assert.equal(count(tree), 600);
 });
 
-function scopeOf(source: string): DilScope {
-  return evaluateStatements(collectStatements(parseDocument(source).raw));
-}
-
-function resolved(source: string, scope: DilScope = {}): ResolvedNode[] {
-  return resolveNodes(parseDocument(source).tree, scope);
+function resolved(source: string): readonly ResolvedNode[] {
+  const compiled = compileDil(parseDocument(source));
+  return compiled.program
+    ? readTree(createProgram().load(compiled.program).tree, compiled.program.data)
+    : compiled.tree;
 }
 
 function text(nodes: readonly ResolvedNode[]): string {
@@ -57,14 +57,16 @@ test("each repeats its body with item and index bound", () => {
 });
 
 test("each reads its list from the statement scope and supports expressions", () => {
-  const scope = scopeOf("{@body const items = [{ n: 1 }, { n: 2 }, { n: 3 }]}");
-  const filtered = resolved("{#each items.filter(m => m.n > 1) as m}<text>{m.n}</text>{/each}", scope);
+  const filtered = resolved(
+    "{@body const items = [{ n: 1 }, { n: 2 }, { n: 3 }]}{#each items.filter(m => m.n > 1) as m}<text>{m.n}</text>{/each}",
+  );
   assert.equal(text(filtered), "23");
 });
 
 test("nested each sees both frames", () => {
-  const scope = scopeOf("{@body const groups = [{ xs: [1, 2] }, { xs: [3] }]}");
-  const nodes = resolved("{#each groups as group, g}{#each group.xs as x}<text>{g}.{x};</text>{/each}{/each}", scope);
+  const nodes = resolved(
+    "{@body const groups = [{ xs: [1, 2] }, { xs: [3] }]}{#each groups as group, g}{#each group.xs as x}<text>{g}.{x};</text>{/each}{/each}",
+  );
   assert.equal(text(nodes), "0.1;0.2;1.3;");
 });
 
@@ -73,26 +75,26 @@ test("if/else picks the first true branch and falls back to false on failure", (
   assert.equal(text(shown), "yes");
   const hidden = resolved("{#if 1 > 2}yes{:else}no{/if}");
   assert.equal(text(hidden), "no");
-  const broken = resolved("{#if items.missing.deep}yes{/if}", {});
+  const broken = resolved("{#if items.missing.deep}yes{/if}");
   assert.equal(text(broken), "");
 });
 
 test("interpolation formats values and drops the empty ones", () => {
-  const nodes = resolved("<text>共 {n} 项，{missing}, 完成</text>", { n: 3 });
+  const nodes = resolved("{@body const n = 3}<text>共 {n} 项，{missing}, 完成</text>");
   assert.equal(text(nodes), "共 3 项，, 完成");
-  const broken = resolved("<text>a{m.p.toFixed(}b</text>", {});
+  const broken = resolved("<text>a{m.p.toFixed(}b</text>");
   assert.equal(text(broken), "ab");
 });
 
 test("attributes resolve in all four forms, with undefined on failure", () => {
-  const [box] = find(resolved("<box padding={2} radius='lg' border gap={n}>x</box>", { n: 3 }), "box");
+  const [box] = find(resolved("{@body const n = 3}<box padding={2} radius='lg' border gap={n}>x</box>"), "box");
   assert.ok(box && box.kind === "element");
   assert.equal(box.props.padding, 2);
   assert.equal(box.props.radius, "lg");
   assert.equal(box.props.border, true);
   assert.equal(box.props.gap, 3);
 
-  const [broken] = find(resolved("<box gap={oops.missing.x}>y</box>", {}), "box");
+  const [broken] = find(resolved("<box gap={oops.missing.x}>y</box>"), "box");
   assert.ok(broken && broken.kind === "element");
   assert.equal(broken.props.gap, undefined);
 });
@@ -118,15 +120,13 @@ test("fences become code-block and math elements", () => {
 
 test("statements are hoisted, never rendered", () => {
   const source = "{@body const n = 2}<text>{n}</text>";
-  const nodes = resolved(source, scopeOf(source));
+  const nodes = resolved(source);
   assert.equal(text(nodes), "2");
   assert.equal(find(nodes, "stmt").length, 0);
 });
 
 test("DIL.useState initials join the scope; the runtime supplies the real setters", () => {
-  const scope = scopeOf("{@body const [open, setOpen] = DIL.useState(true)}");
-  assert.equal(scope.open, true);
-  const nodes = resolved("{#if open}<text>shown</text>{/if}", scope);
+  const nodes = resolved("{@body const [open, setOpen] = DIL.useState(true)}{#if open}<text>shown</text>{/if}");
   assert.equal(text(nodes), "shown");
 });
 
@@ -152,8 +152,7 @@ test("a real DIL sample renders its each over inline data", () => {
 test("a streaming fence reaches the renderer with closed: false", () => {
   // The heavy leaves skip KaTeX/Shiki until the construct closes. `closed` is structural —
   // lowering keeps it on the node — so the element path has to forward it into props.
-  const resolveFirst = (source: string) =>
-    (resolveNodes(parseDocument(source).tree, {})[0] as { props: ResolvedProps }).props;
+  const resolveFirst = (source: string) => (resolved(source)[0] as { props: ResolvedProps }).props;
 
   assert.equal(resolveFirst("```js\nconst a = 1").closed, false);
   assert.equal(resolveFirst("```js\nconst a = 1;\n```").closed, true);

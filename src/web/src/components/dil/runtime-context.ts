@@ -1,9 +1,9 @@
 import { createContext, useContext } from "react";
-import type { DilHost, DilRuntime } from "./runtime";
+import type { DilHost, DilSandbox } from "./runtime";
 
 /** What a control needs from the renderer above it: the document's runtime, and the host. */
 export interface DilRuntimeValue {
-  readonly runtime: DilRuntime;
+  readonly runtime: DilSandbox;
   readonly host: DilHost | null;
 }
 

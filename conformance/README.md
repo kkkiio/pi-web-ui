@@ -32,8 +32,12 @@ three files together are an executable oracle:
 ```
 reference: run raw.js        ──┐
                                ├─ canonical projection (canonical.ts) ── diff ── pass/fail
-ours:      parse + resolve   ──┘
+ours:      compile + run DIL  ──┘
 ```
+
+The compiled-artifact check runs both JS programs and their data in the same reference
+environment. It compares the rendered card, state, and host actions before and after
+each recorded user event.
 
 ## What is compared
 

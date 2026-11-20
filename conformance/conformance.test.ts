@@ -24,6 +24,9 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { compileDil } from "../src/web/src/components/dil/compiler.ts";
+import { assembleProgram } from "../src/web/src/components/dil/sandbox-worker.js";
+import { parseDocument } from "../src/web/src/core/dil/index.ts";
 import { canonicalizeReference, canonicalizeResolved, firstDifference, signatures } from "./canonical.ts";
 import { createOurProgram, type OurProgram } from "./ours.ts";
 import { createReferenceProgram, type ReferenceProgram, type SampleData } from "./reference.ts";
@@ -192,15 +195,44 @@ for (const [name, events] of Object.entries(SCRIPTS)) {
   });
 }
 
-test("the captured view_state is a restore the renderer does not do yet", () => {
-  // The quiz sample was captured *after* the user answered: the reference reopens it answered.
-  // Our renderer starts from the declared initial values, so this asserts the gap exists
-  // rather than pretending it does not. Delete this test when restore lands.
+test("both compiled artifacts produce the same card on the reference runtime", () => {
+  for (const sample of samples()) {
+    const { program } = compileDil(parseDocument(sample.source, { isStreaming: false }));
+    assert.ok(program, `${sample.name}: expected a dynamic artifact`);
+    const captured = createReferenceProgram(sample.code, sample.data);
+    const compiled = createReferenceProgram(assembleProgram(program), sample.data);
+    const events = SCRIPTS[sample.name];
+    assert.ok(events?.length, `${sample.name}: missing recorded interactions`);
+    const assertCard = (stage: string) => {
+      assert.equal(
+        firstDifference(
+          signatures(canonicalizeReference(captured.render())),
+          signatures(canonicalizeReference(compiled.render())),
+        ),
+        null,
+        `${sample.name} ${stage}: compiled trees differ`,
+      );
+      assert.deepEqual(compiled.state(), captured.state(), `${sample.name} ${stage}: compiled state differs`);
+      assert.deepEqual(compiled.effects(), captured.effects(), `${sample.name} ${stage}: compiled host actions differ`);
+    };
+    assertCard("initial");
+    for (const [index, event] of events.entries()) {
+      if (event.kind === "click") {
+        assert.equal(compiled.click(event.tag), captured.click(event.tag));
+      } else {
+        assert.equal(compiled.change(event.tag, event.value), captured.change(event.tag, event.value));
+      }
+      assertCard(`after event ${index + 1}`);
+    }
+  }
+});
+
+test("a fresh Pi Web UI page uses the declared quiz values", () => {
   const sample = samples().find((candidate) => candidate.name === "quiz-radio-reveal");
   assert.ok(sample);
   const restored = createReferenceProgram(sample.code, sample.data, { seedViewState: true });
   assert.deepEqual(restored.state(), { choice: "B", revealed: true });
 
   const fresh = createOurProgram(sample.source);
-  assert.notDeepEqual(fresh.state(), restored.state());
+  assert.deepEqual(fresh.state(), { choice: "B", revealed: false });
 });

@@ -22,46 +22,34 @@ function dilCase(id: string): DilCase {
 }
 
 test("every case is satisfied by a hand-written ideal answer", () => {
-  for (const [id, answer] of Object.entries(IDEAL_ANSWERS)) {
-    const result = scoreCase(dilCase(id), answer);
+  for (const scenario of DIL_CASES) {
+    const { id } = scenario;
+    const answer = IDEAL_ANSWERS[id];
+    assert.ok(answer, `missing example for ${id}`);
+    const result = scoreCase(scenario, answer);
     const failed = result.checks.filter((check) => !check.pass).map((check) => `${check.id}: ${check.label}`);
     assert.deepEqual(failed, [], `${id} missed checks: ${failed.join("\n")}`);
     assert.equal(result.score, 100, `${id} scored ${result.score}%`);
   }
 });
 
-test("the negative control rejects DIL and accepts plain Markdown", () => {
-  const negative = dilCase("restraint-refactor");
-  const prose = scoreCase(negative, PROSE);
-  assert.equal(prose.checks.find((check) => check.id === "no-dil")?.pass, true);
-  assert.equal(prose.checks.find((check) => check.id === "fence")?.pass, false);
-
-  const overTriggered = `${PROSE}\n\n<box padding={2}><text>结论</text></box>`;
-  const result = scoreCase(negative, overTriggered);
-  assert.equal(result.checks.find((check) => check.id === "no-dil")?.pass, false);
-
-  // The two-sentence control has no fence requirement — a short answer is the pass.
-  const closure = scoreCase(dilCase("restraint-closure"), IDEAL_ANSWERS["restraint-closure"]);
-  assert.equal(closure.score, 100);
-});
-
 test("positive cases fail on plain prose", () => {
-  for (const id of ["flow", "comparison", "proportions", "states"]) {
-    const result = scoreCase(dilCase(id), PROSE);
-    assert.ok(result.score < 50, `${id} should not pass on prose, scored ${result.score}%`);
+  for (const scenario of DIL_CASES) {
+    const result = scoreCase(scenario, PROSE);
+    assert.ok(result.score < 50, `${scenario.id} should not pass on prose, scored ${result.score}%`);
     assert.equal(result.dilNodes, 0);
   }
 });
 
 test("a streamed prefix is parsed, not crashed", () => {
-  const result = scoreCase(dilCase("flow"), "<box gap={2}>\n  <row>\n    <badge color=");
+  const result = scoreCase(dilCase("codemode-sandbox"), "<box gap={2}>\n  <row>\n    <badge color=");
   assert.equal(result.diagnostics.length > 0, true);
   assert.ok(result.score >= 0);
 });
 
 test("fenced DIL does not count as DIL", () => {
   const fenced = `\`\`\`jsx\n<box padding={2}><row><badge>边界</badge></row></box>\n\`\`\``;
-  const result = scoreCase(dilCase("flow"), fenced);
+  const result = scoreCase(dilCase("codemode-sandbox"), fenced);
   assert.equal(result.dilNodes, 0);
   assert.ok(result.score < 50);
 });

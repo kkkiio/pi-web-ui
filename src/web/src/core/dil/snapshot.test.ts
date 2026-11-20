@@ -55,7 +55,6 @@ for (const file of readdirSync(fixtureDir)
 function snapshotOf(document: DilDocument): unknown {
   return {
     diagnosticSummary: document.diagnosticSummary,
-    state: document.state,
     diagnostics: document.diagnostics.map(diagnosticSnapshot),
     tree: snapshotTree(document.tree),
   };

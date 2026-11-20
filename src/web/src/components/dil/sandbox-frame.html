@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; worker-src blob:; script-src 'sha256-Mud1bxE6BjydVPPUoDGxIfhPB2rBBF5Po7WNwiGOOK4=' 'unsafe-eval'; base-uri 'none'; form-action 'none'">
+<script>
+const BOOT_TIMEOUT = 5000;
+const RUN_TIMEOUT = 500;
+addEventListener("message", (event) => {
+  const host = event.ports[0];
+  if (event.source !== parent || !host || typeof event.data?.source !== "string") return;
+  const url = URL.createObjectURL(new Blob([event.data.source], { type: "text/javascript" }));
+  const worker = new Worker(url, { name: "dil" });
+  const channel = new MessageChannel();
+  let timer = setTimeout(stop, BOOT_TIMEOUT);
+  function stop() {
+    clearTimeout(timer);
+    worker.terminate();
+    URL.revokeObjectURL(url);
+    channel.port1.close();
+    host.postMessage({ stopped: true });
+    host.close();
+  }
+  worker.addEventListener("error", stop, { once: true });
+  channel.port1.onmessage = ({ data }) => {
+    clearTimeout(timer);
+    if (data.ready) URL.revokeObjectURL(url);
+    host.postMessage(data);
+  };
+  host.onmessage = ({ data }) => {
+    clearTimeout(timer);
+    timer = setTimeout(stop, RUN_TIMEOUT);
+    channel.port1.postMessage(data);
+  };
+  worker.postMessage(event.data.state, [channel.port2]);
+}, { once: true });
+</script>
