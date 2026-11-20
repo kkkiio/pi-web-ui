@@ -1,5 +1,80 @@
 # AGENTS.md
 
+## Project Structure Guide
+
+### Repo Structure & Important Files
+
+```
+.
+├── docs/
+│   ├── adr/
+│   │   ├── 0001-pi-extension-output-policy.md          # Extension output rules (no stdout/stderr)
+│   │   ├── 0002-web-ui-extension-event-protocol.md     # Web UI event forwarding protocol
+│   │   ├── 0003-navigate-tree-via-captured-command-context.md # latestCtx vs latestExecuteCtx workaround
+│   │   ├── 0004-web-ui-access-bind-address.md          # Server bind address policy
+│   │   ├── 0005-intercepted-command-ui-lifecycle.md    # Intercepted command UI state handling
+│   │   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
+│   │   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
+│   │   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
+│   │   ├── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
+│   │   ├── 0010-real-pi-web-ui-e2e.md                  # Real Pi agent Web UI E2E tests
+│   │   ├── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
+│   │   ├── 0012-interactive-agent-ui-positioning.md    # Interactive Agent UI positioning & feature cuts
+│   │   ├── 0013-explicit-webui-session-activation.md   # Activation boundary before/after /webui
+│   │   └── 0014-web-ui-test-storyboard.md              # Storyboard previews for web E2E scenarios (local)
+│   ├── prd/
+│   │   ├── columns-layout.md        # Single-column default + on-demand two-column layout
+│   │   ├── edit-message.md          # Inline edit user message + Save & Send
+│   │   └── right-panel.md           # Right panel (Git Diff + line Comment, Side Chat)
+│   ├── configuration.md         # Environment variables, settings.json, and security reference
+│   └── images/                  # Screenshots for README
+├── extensions/
+│   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
+│   └── imessage-bridge.ts
+├── e2e/
+│   ├── features/                # Playwright-BDD feature files
+│   ├── steps/                   # Step definitions
+│   ├── fixtures/                # Faux provider extension and response fixtures
+│   └── harness/                 # pi --mode rpc process/session launcher
+├── src/web/                     # React frontend source
+│   ├── index.html
+│   ├── index.css
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── app.tsx
+│   │   ├── core/
+│   │   │   ├── pi-client.ts     # WebSocket transport, reconnect, req/res queue
+│   │   │   ├── ws.ts
+│   │   │   ├── types.ts
+│   │   │   ├── chat-conversion.ts # Converts raw events → UI message models
+│   │   │   ├── format.ts        # Display formatting utilities
+│   │   │   ├── tool-summary.ts
+│   │   │   ├── constants.ts
+│   │   │   ├── dil/             # Dynamic Interface Language
+│   │   │   └── store/           # Zustand slices + event dispatcher
+│   │   └── components/
+│   │       ├── pi-web-ui/       # Pi Web UI components
+│   │       │   ├── chat-item-view.tsx
+│   │       │   ├── model-picker.tsx
+│   │       │   ├── settings-panel.tsx
+│   │       │   ├── context-popover.tsx
+│   │       │   ├── right-panel.tsx
+│   │       │   └── ...
+│   ├── components/
+│   │   ├── ai-elements/         # AI Elements components (conversation, message, tool, reasoning, etc.)
+│   │   └── ui/                  # shadcn/ui primitives (button, dialog, input, etc.)
+│   └── lib/
+│       └── utils.ts             # shadcn/ui utility (cn helper)
+├── public/
+├── dist/
+├── MOBILE.md
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+├── biome.json
+└── justfile
+```
+
 ## Policies & Mandatory Rules
 
 ### `latestCtx` — Never capture `ctx` in long-lived closures
@@ -38,6 +113,17 @@ up resources and restore affected tool activation without rolling back history
 or LLM context. New, switched, or forked sessions and `/reload` require explicit
 activation again. Recommend continuing activated sessions in Web UI.
 
+### No Implementation Comments
+
+When writing or modifying code, do not write comments that explain implementation details inside function bodies or internal logic.
+
+Write API doc comments on public interfaces from a user-facing perspective, covering:
+
+1. One-line summary.
+2. Important parameters and return value.
+3. Errors or exceptions that may be thrown.
+4. Non-obvious edge cases.
+
 ## Domain Language
 
 - **Interactive Agent UI** — Browser interface designed to interrogate, clarify, and steer high-agency coding models rather than passively mirroring terminal text.
@@ -48,90 +134,6 @@ activation again. Recommend continuing activated sessions in Web UI.
 - **Generative UI** — Task-specific interactive visual views rendered in place of dense prose explanations.
 - **Process Group** — A collapsible transcript section for a contiguous sequence of assistant reasoning and tool calls within a turn.
 - **Row** — A transcript line representing one reasoning block or tool call, with expandable details when available.
-
-## Project Structure Guide
-
-### Repo Structure & Important Files
-
-```
-.
-├── docs/
-│   ├── adr/                     # Architecture Decision Records (必读)
-│   │   ├── 0001-pi-extension-output-policy.md          # Extension output rules (no stdout/stderr)
-│   │   ├── 0002-web-ui-extension-event-protocol.md     # Web UI event forwarding protocol
-│   │   ├── 0003-navigate-tree-via-captured-command-context.md # latestCtx vs latestExecuteCtx workaround
-│   │   ├── 0004-web-ui-access-bind-address.md          # Server bind address policy
-│   │   ├── 0005-intercepted-command-ui-lifecycle.md    # Intercepted command UI state handling
-│   │   ├── 0006-project-scope-single-session-web-ui.md # Single-session scope definition
-│   │   ├── 0007-npm-publish-distribution-strategy.md   # npm publish + dist/ strategy
-│   │   ├── 0008-unified-websocket-protocol.md          # WebSocket req/res/event protocol
-│   │   ├── 0009-frontend-state-management-hybrid-zustand.md # Zustand + local state hybrid
-│   │   ├── 0010-real-pi-web-ui-e2e.md                  # Real Pi agent Web UI E2E tests
-│   │   ├── 0011-web-ui-visual-validation.md            # Browser screenshot visual validation
-│   │   ├── 0012-interactive-agent-ui-positioning.md    # Interactive Agent UI positioning & feature cuts
-│   │   ├── 0013-explicit-webui-session-activation.md   # Activation boundary before/after /webui
-│   │   └── 0014-web-ui-test-storyboard.md              # Storyboard previews for web E2E scenarios (local)
-│   ├── prd/                     # Product Requirement Documents (功能设计)
-│   │   ├── columns-layout.md        # Single-column default + on-demand two-column layout
-│   │   ├── edit-message.md          # Inline edit user message + Save & Send
-│   │   └── right-panel.md           # Right panel (Git Diff + line Comment, Side Chat)
-│   ├── configuration.md         # Environment variables, settings.json, and security reference
-│   └── images/                  # Screenshots for README
-├── extensions/
-│   ├── mirror-server.ts         # Main extension: HTTP + WS server + all event handling
-│   └── imessage-bridge.ts       # iMessage integration extension
-├── e2e/                         # Real Pi agent E2E tests
-│   ├── features/                # Playwright-BDD feature files
-│   ├── steps/                   # Step definitions
-│   ├── fixtures/                # Faux provider extension and response fixtures
-│   └── harness/                 # pi --mode rpc process/session launcher
-├── src/web/                     # React frontend source
-│   ├── index.html               # Vite entry HTML
-│   ├── index.css                # Global styles (Tailwind)
-│   ├── src/
-│   │   ├── main.tsx             # React entry point
-│   │   ├── app.tsx              # Root layout + local UI state
-│   │   ├── core/
-│   │   │   ├── pi-client.ts     # WebSocket transport, reconnect, req/res queue
-│   │   │   ├── ws.ts            # WebSocket URL helper
-│   │   │   ├── types.ts         # TypeScript types for WebSocket protocol
-│   │   │   ├── chat-conversion.ts # Converts raw events → UI message models
-│   │   │   ├── format.ts        # Display formatting utilities
-│   │   │   ├── workspace-artifacts.ts # Markdown artifact recovery from tool events/session entries
-│   │   │   ├── tool-summary.ts  # Tool call summary rendering
-│   │   │   ├── constants.ts     # Shared constants
-│   │   │   ├── dil/             # DIL + Markdown parser (grammar, recovery, lowering, evaluator; node --test)
-│   │   │   └── store/           # Zustand slices + event dispatcher
-│   │   └── components/
-│   │       ├── pi-web-ui/       # Pi Web UI components
-│   │       │   ├── chat-item-view.tsx    # Main chat message renderer
-│   │       │   ├── conversation-sidebar.tsx     # Session tree sidebar
-│   │       │   ├── conversation-sidebar-tree.tsx # Tree view component
-│   │       │   ├── command-palette.tsx   # Command palette
-│   │       │   ├── model-picker.tsx
-│   │       │   ├── settings-panel.tsx
-│   │       │   ├── context-popover.tsx
-│   │       │   ├── right-panel.tsx
-│   │       │   ├── workspace-status-float.tsx
-│   │       │   ├── user-message-view.tsx # User message with Branch button
-│   │       │   └── ...
-│   ├── components/
-│   │   ├── ai-elements/         # AI Elements components (conversation, message, tool, reasoning, etc.)
-│   │   └── ui/                  # shadcn/ui primitives (button, dialog, input, etc.)
-│   └── lib/
-│       └── utils.ts             # shadcn/ui utility (cn helper)
-├── public/                      # Static assets copied by Vite (icons, manifest, sw.js)
-├── dist/                        # Vite build output (gitignored)
-
-├── MOBILE.md                    # Mobile access guide
-├── RELEASING.md                 # npm publish and pi.dev verification checklist
-
-├── package.json                 # npm package config + pi extension manifest
-├── tsconfig.json                # TypeScript config (only src/web + vite.config.ts)
-├── vite.config.ts               # Vite config (dev proxy to :3001, build to dist/)
-├── biome.json                   # Biome formatter/linter config
-└── justfile                     # just tasks (fmt, check, build, readme-images)
-```
 
 ## Operation Guide
 
