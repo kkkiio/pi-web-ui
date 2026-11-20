@@ -151,10 +151,11 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
 
     // A blockquote line is prose: a fence inside it (`> ~~~js`) has its prefix between the
     // line start and the marker, so DIL scanning must not read its braces as expressions.
-    const quoted = isQuoteLine(src, ctx.i);
+    const lineStart = ctx.i === 0 || src[ctx.i - 1] === "\n";
+    const quoted = (lineStart || c === "<" || c === "{") && isQuoteLine(src, ctx.i);
 
     // 1. FencedBlock — only ever at a line start, so inline backticks stay prose.
-    if (!quoted && (ctx.i === 0 || src[ctx.i - 1] === "\n")) {
+    if (!quoted && lineStart) {
       const fence = readFenceOpen(src, ctx.i);
       // An indented fence at document level belongs to a Markdown container (a list
       // item's example), so it is prose that the Markdown lexer must see: taking it as a

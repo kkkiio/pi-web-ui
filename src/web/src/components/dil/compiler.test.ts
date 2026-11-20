@@ -14,6 +14,13 @@ function count(nodes: readonly ResolvedNode[]): number {
   return total;
 }
 
+test("large plain Markdown retains all its text", () => {
+  const source = "a".repeat(1_000_001);
+  const rendered = text(resolved(source));
+  assert.equal(rendered.length, source.length);
+  assert.equal(rendered, source);
+});
+
 test("nested loops cannot expand without bound", () => {
   const source =
     "{#each Array.from({ length: 400 }) as r}{#each Array.from({ length: 400 }) as c}<text>x</text>{/each}{/each}";

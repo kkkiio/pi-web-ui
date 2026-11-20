@@ -1,15 +1,7 @@
 import { collectStatements, toFallbackMarkdown } from "../../core/dil/index.ts";
 import { stateStatement } from "../../core/dil/statements.ts";
 import type { DilDocument, DilNode } from "../../core/dil/types.ts";
-import {
-  type DilData,
-  type DilSite,
-  MAX_DIL_DEPTH,
-  MAX_DIL_NODES,
-  type ResolvedNode,
-  readTree,
-  type WireNode,
-} from "./render-tree.ts";
+import { type DilData, type DilSite, MAX_DIL_DEPTH, MAX_DIL_NODES, type ResolvedNode } from "./render-tree.ts";
 
 export type ScriptPart =
   | string
@@ -35,8 +27,8 @@ export function compileDil(document: DilDocument): CompiledDil {
     script.push("(__dil.safe(()=>(", { kind: "expr", code, fallback }, "\n)))");
   };
 
-  const emitNodes = (nodes: readonly DilNode[], depth = 0): WireNode[] => {
-    const tree: WireNode[] = [];
+  const emitNodes = (nodes: readonly DilNode[], depth = 0): ResolvedNode[] => {
+    const tree: ResolvedNode[] = [];
     script.push("__dil.flatten([");
     for (const node of nodes) {
       if (depth >= MAX_DIL_DEPTH || nodesLeft <= 0) break;
@@ -45,7 +37,7 @@ export function compileDil(document: DilDocument): CompiledDil {
       if (node.type === "text") {
         const index = data.push(node.value) - 1;
         script.push(`__dil.text(__dilData[${index}]),`);
-        tree.push(node.value);
+        if (node.value) tree.push({ kind: "text", value: node.value });
         continue;
       }
       if (node.type === "expr") {
@@ -117,11 +109,12 @@ export function compileDil(document: DilDocument): CompiledDil {
       }
       props.closed = node.closed;
       const name = node.type === "element" ? node.name : node.kind === "math" ? "math" : "code-block";
+      const synthetic = node.type === "element" && node.synthetic ? true : undefined;
       const site =
         data.push({
           name,
           offset: node.pos,
-          synthetic: node.type === "element" && node.synthetic ? true : undefined,
+          synthetic,
           props,
           dynamic: [...dynamicProps.keys()],
         }) - 1;
@@ -141,7 +134,7 @@ export function compileDil(document: DilDocument): CompiledDil {
         depth + 1,
       );
       script.push("),");
-      tree.push([site, {}, children]);
+      tree.push({ kind: "element", name, synthetic, props, children });
     }
     script.push("])");
     return tree;
@@ -153,7 +146,7 @@ export function compileDil(document: DilDocument): CompiledDil {
   }
   script.push("return ");
   const tree = emitNodes(document.tree);
-  if (!dynamic) return { tree: readTree(tree, data) };
+  if (!dynamic) return { tree };
   const fallback = toFallbackMarkdown(document.tree);
   return {
     tree: [],
