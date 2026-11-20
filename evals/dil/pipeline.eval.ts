@@ -70,15 +70,37 @@ for (const model of MODELS) {
     return agentPromise;
   };
 
-  const harness = createHarness<string, { text: string; systemPrompt: string }>({
+  interface EvalInput {
+    readonly caseId: string;
+    readonly prompt: string;
+    readonly projectRepo?: string;
+  }
+
+  type EvalOutput = {
+    text: string;
+    systemPrompt: string;
+    toolCallCount?: number;
+    toolNames?: string[];
+    assistantTurns?: number;
+    trajectoryFile?: string;
+  };
+
+  const harness = createHarness<EvalInput, EvalOutput>({
     name: label,
     async run({ input }) {
       const agent = await getAgent();
-      const result = await agent.run(input);
+      const result = await agent.run(input.prompt, { projectRepo: input.projectRepo, caseId: input.caseId });
       return {
-        output: result,
+        output: {
+          text: result.text,
+          systemPrompt: result.systemPrompt,
+          ...(result.toolCallCount !== undefined ? { toolCallCount: result.toolCallCount } : {}),
+          ...(result.toolNames !== undefined ? { toolNames: [...result.toolNames] } : {}),
+          ...(result.assistantTurns !== undefined ? { assistantTurns: result.assistantTurns } : {}),
+          ...(result.trajectoryFile ? { trajectoryFile: result.trajectoryFile } : {}),
+        },
         messages: [
-          { role: "user", content: input },
+          { role: "user", content: input.prompt },
           { role: "assistant", content: result.text },
         ],
         usage: { provider: model.provider, model: model.id },
@@ -94,21 +116,16 @@ for (const model of MODELS) {
     });
 
     for (const dilCase of DIL_CASES) {
-      it.skipIf(!configuredFor(model.provider) || Boolean(dilCase.requiresRepo))(
-        `${dilCase.id}: ${dilCase.category}`,
-        async ({ run }) => {
-          const result = await run(dilCase.prompt);
-          const scored = scoreCase(dilCase, result.output.text);
-          results.push(scored);
-          expect(result.output.systemPrompt).toContain("<dil>");
-          const missed = scored.checks.filter((check) => !check.pass).map((check) => check.label);
-          const preview = result.output.text.slice(0, 400);
-          expect(missed, `${scored.score}% — parse: ${scored.diagnostics}\n--- model output ---\n${preview}`).toEqual(
-            [],
-          );
-          expect(scored.diagnostics).toBe("clean");
-        },
-      );
+      it.skipIf(!configuredFor(model.provider))(`${dilCase.id}: ${dilCase.category}`, async ({ run }) => {
+        const result = await run({ caseId: dilCase.id, prompt: dilCase.prompt, projectRepo: dilCase.projectRepo });
+        const scored = scoreCase(dilCase, result.output.text, result.output);
+        results.push(scored);
+        expect(result.output.systemPrompt).toContain("<dil>");
+        const missed = scored.checks.filter((check) => !check.pass).map((check) => check.label);
+        const preview = result.output.text.slice(0, 400);
+        expect(missed, `${scored.score}% — parse: ${scored.diagnostics}\n--- model output ---\n${preview}`).toEqual([]);
+        expect(scored.diagnostics).toBe("clean");
+      });
     }
   });
 }

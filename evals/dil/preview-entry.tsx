@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
 import { DilRenderer } from "../../src/web/src/components/dil/dil-renderer";
+import { parseDocument } from "../../src/web/src/core/dil/index.ts";
+import type { DilDiagnostic } from "../../src/web/src/core/dil/types.ts";
 import { DIL_CASES } from "./cases.ts";
 import { scoreCase } from "./scoring.ts";
 
@@ -29,6 +31,8 @@ interface CaseResult {
   readonly total: number;
   readonly diagnostics: string;
   readonly checks: readonly { readonly label: string; readonly pass: boolean }[];
+  readonly toolCallCount?: number;
+  readonly assistantTurns?: number;
 }
 
 interface Summary {
@@ -54,6 +58,91 @@ function builtCss(): string {
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function normalizeSource(source: string): string {
+  const withoutBom = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
+  return withoutBom.includes("\r") ? withoutBom.replace(/\r\n?/g, "\n") : withoutBom;
+}
+
+function describeDiagnostic(diag: DilDiagnostic): string {
+  const parts: string[] = [];
+  if (diag.expected && diag.found) {
+    parts.push(`expected ${diag.expected}, found ${diag.found}`);
+  } else if (diag.expected) {
+    parts.push(`expected ${diag.expected}`);
+  } else if (diag.found) {
+    parts.push(`found ${diag.found}`);
+  }
+  if (diag.tag && !parts.some((p) => p.includes(diag.tag ?? ""))) parts.push(`<${diag.tag}>`);
+  if (diag.directive) parts.push(`{#${diag.directive}}`);
+  if (diag.name) parts.push(`attr "${diag.name}"`);
+  if (diag.fence) parts.push(`fence ${diag.fence}`);
+  if (diag.action) parts.push(`recovery: ${diag.action}`);
+  return parts.join(" · ");
+}
+
+function renderDiagnosticsPanel(
+  anchor: string,
+  sourceLines: readonly string[],
+  diagnostics: readonly DilDiagnostic[],
+): string {
+  if (diagnostics.length === 0) return "";
+  const items = diagnostics
+    .map((diag) => {
+      const detail = describeDiagnostic(diag);
+      const lineText = sourceLines[diag.line - 1] ?? "";
+      const col = Math.max(1, diag.column);
+      const caret = `${" ".repeat(Math.max(0, col - 1))}^`;
+      const targetId = `${anchor}-L${diag.line}`;
+      return `<li>
+        <div class="diag-head">
+          <a class="diag-loc" href="#${targetId}">L${diag.line}:${col}</a>
+          <code class="diag-code">${escapeHtml(diag.code)}</code>
+          ${detail ? `<span class="diag-detail">${escapeHtml(detail)}</span>` : ""}
+        </div>
+        <pre class="diag-snippet"><code>${escapeHtml(lineText)}\n<span class="diag-caret">${caret}</span></code></pre>
+      </li>`;
+    })
+    .join("");
+  return `<div class="diagnostics-box">
+    <div class="diagnostics-title">Diagnostics (${diagnostics.length})</div>
+    <ul class="diagnostics-list">${items}</ul>
+  </div>`;
+}
+
+function renderNumberedSource(
+  anchor: string,
+  sourceLines: readonly string[],
+  diagnostics: readonly DilDiagnostic[],
+): string {
+  const byLine = new Map<number, DilDiagnostic[]>();
+  for (const diag of diagnostics) {
+    const list = byLine.get(diag.line) ?? [];
+    list.push(diag);
+    byLine.set(diag.line, list);
+  }
+
+  const rows = sourceLines
+    .map((lineText, idx) => {
+      const lineNo = idx + 1;
+      const lineDiags = byLine.get(lineNo);
+      const hasErr = Boolean(lineDiags && lineDiags.length > 0);
+      const note = lineDiags
+        ? lineDiags
+            .map((diag) => {
+              const detail = describeDiagnostic(diag);
+              const col = Math.max(1, diag.column);
+              const caret = `${" ".repeat(Math.max(0, col - 1))}^ ${diag.code}${detail ? `: ${detail}` : ""}`;
+              return `<div class="src-diag-note"><span class="ln"></span><span class="code">${escapeHtml(caret)}</span></div>`;
+            })
+            .join("")
+        : "";
+      return `<div class="src-line${hasErr ? " has-diag" : ""}" id="${anchor}-L${lineNo}"><span class="ln">${lineNo}</span><span class="code">${escapeHtml(lineText) || " "}</span></div>${note}`;
+    })
+    .join("");
+
+  return `<div class="src-view">${rows}</div>`;
 }
 
 /**
@@ -122,6 +211,8 @@ const sections = entries
         const anchor = `case-${reportIndex}-${result.id}`;
         items.push({ anchor, label: result.id, score: result.score });
         const rendered = renderToStaticMarkup(<DilRenderer source={result.text} />);
+        const parsed = parseDocument(result.text);
+        const sourceLines = normalizeSource(result.text).split("\n");
         const checks = result.checks
           .map(
             (check) =>
@@ -129,25 +220,40 @@ const sections = entries
           )
           .join("");
         const definition = DIL_CASES.find((candidate) => candidate.id === result.id);
+        const traceBits: string[] = [];
+        if (result.toolCallCount !== undefined) traceBits.push(`${result.toolCallCount} tools`);
+        if (result.assistantTurns !== undefined) traceBits.push(`${result.assistantTurns} turns`);
+        const traceMeta = traceBits.length > 0 ? `<span class="trace">${escapeHtml(traceBits.join(" · "))}</span>` : "";
         const input = definition
-          ? `<p class="why">${escapeHtml(definition.why)}</p>
-  <pre class="prompt" aria-label="prompt">${escapeHtml(definition.prompt)}</pre>`
+          ? `<blockquote class="prompt-quote">
+    <p class="prompt-text">${escapeHtml(definition.prompt)}</p>
+    <p class="why">${escapeHtml(definition.why)}</p>
+  </blockquote>`
           : "";
+        const diagPanel = renderDiagnosticsPanel(anchor, sourceLines, parsed.diagnostics);
+        const numberedSource = renderNumberedSource(anchor, sourceLines, parsed.diagnostics);
+        const hasDiagnostics = parsed.diagnostics.length > 0;
         return `<section class="case" id="${anchor}">
-  <header>
+  <header class="case-head">
     <h3>${escapeHtml(result.id)} <small>${escapeHtml(result.category)}</small></h3>
-    <span class="score ${result.score === 100 ? "pass" : "fail"}">${result.score}% · ${result.passed}/${result.total}</span>
+    <div class="case-stats">
+      ${traceMeta}
+      <span class="score ${result.score === 100 ? "pass" : "fail"}">${result.score}% · ${result.passed}/${result.total}</span>
+    </div>
   </header>
   ${input}
   <ul class="checks">${checks}</ul>
-  ${result.diagnostics === "clean" ? "" : `<p class="diagnostics">diagnostics: ${escapeHtml(result.diagnostics)}</p>`}
+  ${diagPanel}
   <div class="render">${rendered}</div>
-  <details class="raw"><summary>raw source</summary><pre>${escapeHtml(result.text)}</pre></details>
+  <details class="raw"${hasDiagnostics ? " open" : ""}>
+    <summary>raw source (${sourceLines.length} lines${hasDiagnostics ? ` · ${parsed.diagnostics.length} diagnostics` : ""})</summary>
+    ${numberedSource}
+  </details>
 </section>`;
       })
       .join("");
     toc.push({ ...group, label: model, items });
-    return `<h2 id="model-${reportIndex}">${escapeHtml(model)} — ${summary.score}%</h2>${cases}`;
+    return `<h2 id="model-${reportIndex}">${escapeHtml(model)} <span class="score ${summary.score === 100 ? "pass" : "fail"}">${summary.score}%</span></h2>${cases}`;
   })
   .join("");
 
@@ -178,7 +284,7 @@ const html = `<!doctype html>
      body overflow hidden). This page is a long document, so undo the shell. */
   html, body { height: auto; min-height: 100%; overflow: visible; }
   body { margin: 0; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-  .layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 32px; max-width: 1180px; margin: 0 auto; padding: 32px 20px 96px; }
+  .layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; max-width: 1180px; margin: 0 auto; padding: 32px 24px 96px; }
   main { min-width: 0; }
   .toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; font-size: 12px; }
   .toc .top { display: block; font-weight: 600; margin-bottom: 12px; color: var(--foreground); text-decoration: none; }
@@ -188,37 +294,51 @@ const html = `<!doctype html>
   .toc a { display: flex; justify-content: space-between; gap: 8px; padding: 3px 6px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; }
   .toc a:hover { background: var(--muted); color: var(--foreground); }
   .toc .score { font-variant-numeric: tabular-nums; }
-  .case { scroll-margin-top: 24px; }
   @media (max-width: 900px) {
     .layout { display: block; }
     .toc { position: static; max-height: none; margin-bottom: 20px; }
   }
-  .meta { color: var(--muted-foreground); font-size: 13px; margin-bottom: 24px; }
-  h2 { margin: 40px 0 12px; font-size: 18px; }
-  .case { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
-  .case header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-  h3 { margin: 0; font-size: 15px; } h3 small { color: var(--muted-foreground); font-weight: 400; margin-left: 8px; }
-  .score { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .checks { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 2px; font-size: 12px; }
-  .why { margin: 0 0 8px; font-size: 12px; color: var(--muted-foreground); font-style: italic; }
-  .prompt { margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; background: var(--muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-  .system { margin-bottom: 16px; font-size: 12px; }
-  .system summary { cursor: pointer; color: var(--muted-foreground); }
-  .system pre { margin: 8px 0 0; padding: 10px; border-radius: 8px; background: var(--muted); white-space: pre-wrap; max-height: 320px; overflow: auto; }
-  .checks .pass { color: #15803d; } .checks .fail { color: #b91c1c; }
+  .meta { color: var(--muted-foreground); font-size: 13px; margin: 8px 0 28px; }
+  h2 { margin: 48px 0 8px; font-size: 18px; display: flex; align-items: baseline; gap: 10px; }
+  .case { scroll-margin-top: 24px; border-top: 1px solid var(--border); padding-top: 24px; margin-top: 28px; }
+  .case-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .case-stats { display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; }
+  .trace { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  h3 { margin: 0; font-size: 16px; } h3 small { color: var(--muted-foreground); font-weight: 400; margin-left: 8px; font-size: 12px; }
+  .score { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
   .score.pass { color: #15803d; } .score.fail { color: #b91c1c; }
-  .diagnostics { color: #b45309; font-size: 12px; margin: 0 0 8px; }
-  .render { border-top: 1px dashed var(--border); padding-top: 12px; }
-  details { margin-top: 12px; font-size: 12px; } pre { white-space: pre-wrap; word-break: break-word; }
-  details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
-    border: 1px solid var(--border); border-radius: 8px; background: var(--muted);
-    color: var(--foreground); font-size: 13px; font-weight: 500; list-style: none; }
+  .prompt-quote { margin: 0 0 12px; padding: 2px 0 2px 12px; border-left: 2px solid var(--border); }
+  .prompt-text { margin: 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .why { margin: 4px 0 0; font-size: 12px; color: var(--muted-foreground); }
+  .checks { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
+  .checks .pass { color: #15803d; } .checks .fail { color: #b91c1c; font-weight: 500; }
+  .system { margin-bottom: 16px; font-size: 12px; }
+  .system pre { margin: 8px 0 0; padding: 12px; border-radius: 8px; background: var(--muted); white-space: pre-wrap; max-height: 320px; overflow: auto; }
+  .diagnostics-box { margin: 0 0 16px; padding: 10px 12px; border-left: 3px solid #d97706; background: color-mix(in srgb, #f59e0b 8%, transparent); border-radius: 0 8px 8px 0; font-size: 12px; }
+  .diagnostics-title { font-weight: 600; color: #b45309; margin-bottom: 8px; }
+  .diagnostics-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .diag-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .diag-loc { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: #b45309; text-decoration: underline; text-underline-offset: 2px; }
+  .diag-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, #f59e0b 16%, transparent); color: #92400e; }
+  .diag-detail { color: var(--foreground); }
+  .diag-snippet { margin: 0; padding: 6px 8px; border-radius: 6px; background: var(--background); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; overflow-x: auto; white-space: pre; }
+  .diag-caret { color: #dc2626; font-weight: 700; }
+  .render { margin: 16px 0; }
+  details { margin-top: 14px; font-size: 12px; }
+  details > summary { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--muted-foreground); font-size: 12px; font-weight: 500; list-style: none; }
   details > summary::-webkit-details-marker { display: none; }
-  details > summary::before { content: "▸"; color: var(--muted-foreground); }
+  details > summary::before { content: "▸"; }
   details[open] > summary::before { content: "▾"; }
-  details > summary:hover { background: var(--accent); }
-  details > pre { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--border);
-    border-radius: 8px; background: var(--card); }
+  details > summary:hover { color: var(--foreground); }
+  .src-view { margin-top: 8px; padding: 10px 0; border-radius: 8px; background: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; overflow-x: auto; }
+  .src-line, .src-diag-note { display: grid; grid-template-columns: 44px minmax(0, 1fr); padding: 0 12px 0 4px; }
+  .src-line { scroll-margin-top: 40px; }
+  .src-line .ln { text-align: right; padding-right: 12px; color: var(--muted-foreground); user-select: none; font-variant-numeric: tabular-nums; }
+  .src-line .code { white-space: pre-wrap; word-break: break-word; }
+  .src-line.has-diag { background: color-mix(in srgb, #f59e0b 16%, transparent); }
+  .src-line.has-diag .ln { color: #b45309; font-weight: 600; }
+  .src-diag-note { color: #b91c1c; font-weight: 600; background: color-mix(in srgb, #ef4444 8%, transparent); padding-bottom: 2px; }
+  .src-diag-note .code { white-space: pre; overflow-x: auto; }
 </style>
 </head><body><div class="layout" id="top">
 ${nav}

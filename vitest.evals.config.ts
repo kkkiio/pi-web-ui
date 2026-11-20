@@ -13,7 +13,7 @@ export default defineConfig({
     include: ["evals/**/*.eval.ts"],
     environment: "node",
     env: loadEnv("", process.cwd(), ""),
-    testTimeout: 300_000,
+    testTimeout: 600_000,
     hookTimeout: 60_000,
     maxConcurrency: 4,
     sequence: { concurrent: true },

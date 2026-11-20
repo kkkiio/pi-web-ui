@@ -25,8 +25,8 @@ export interface DilCase {
   readonly prompt: string;
   /** Why Markdown alone is the wrong shape for this prompt. */
   readonly why: string;
-  /** True when the prompt asks about this repository specifically (skipped in isolated runs to avoid eval leakage). */
-  readonly requiresRepo?: boolean;
+  /** Optional target repository (`<git-url>@<ref>`); runs the case in an isolated container checkout. */
+  readonly projectRepo?: string;
   readonly checks: readonly CaseCheck[];
 }
 
@@ -49,6 +49,17 @@ export interface CaseResult {
   readonly total: number;
   readonly diagnostics: string;
   readonly dilNodes: number;
+  readonly toolCallCount?: number;
+  readonly toolNames?: readonly string[];
+  readonly assistantTurns?: number;
+  readonly trajectoryFile?: string;
+}
+
+export interface CaseTrace {
+  readonly toolCallCount?: number;
+  readonly toolNames?: readonly string[];
+  readonly assistantTurns?: number;
+  readonly trajectoryFile?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +90,7 @@ const DIL_TAGS = new Set([
   "math",
   "code-block",
   "Link",
+  "svg",
 ]);
 
 /** DIL elements the model actually wrote (Markdown lowers share the same names). */
@@ -374,7 +386,7 @@ export function cleanDiagnostics(label: string): CaseCheck {
 // ---------------------------------------------------------------------------
 
 /** Run one case over model output. Score is the fraction of checks that pass. */
-export function scoreCase(dilCase: DilCase, text: string): CaseResult {
+export function scoreCase(dilCase: DilCase, text: string, trace?: CaseTrace): CaseResult {
   const context = contextOf(text);
   const checks = dilCase.checks.map((check) => ({ id: check.id, label: check.label, pass: safeTest(check, context) }));
   const passed = checks.filter((check) => check.pass).length;
@@ -388,6 +400,10 @@ export function scoreCase(dilCase: DilCase, text: string): CaseResult {
     score: checks.length === 0 ? 0 : Math.round((passed / checks.length) * 100),
     diagnostics: context.parse.diagnosticSummary,
     dilNodes: context.elements.filter((node) => node.type === "element").length,
+    ...(trace?.toolCallCount !== undefined ? { toolCallCount: trace.toolCallCount } : {}),
+    ...(trace?.toolNames !== undefined ? { toolNames: trace.toolNames } : {}),
+    ...(trace?.assistantTurns !== undefined ? { assistantTurns: trace.assistantTurns } : {}),
+    ...(trace?.trajectoryFile ? { trajectoryFile: trace.trajectoryFile } : {}),
   };
 }
 

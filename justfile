@@ -93,3 +93,7 @@ readme-images:
       --build-arg PLAYWRIGHT_VERSION="$playwright_version" \
       -t pi-web-ui-readme .
     docker run --rm -v "$PWD/docs/images:/out" pi-web-ui-readme
+
+# Build the isolated Docker sandbox image used for DIL eval cases with a `projectRepo`.
+eval-image:
+    docker build -t pi-dil-sandbox:latest evals/dil/docker

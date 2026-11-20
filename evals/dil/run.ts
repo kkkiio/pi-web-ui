@@ -80,14 +80,18 @@ async function runCases(options: Options, generator: DilAgent | null): Promise<V
     }
 
     for (let run = 1; run <= options.runs; run++) {
-      const answered = await (generator as DilAgent).run(dilCase.prompt);
+      const answered = await (generator as DilAgent).run(dilCase.prompt, {
+        projectRepo: dilCase.projectRepo,
+        caseId: dilCase.id,
+      });
       const text = answered.text;
       const section = answered.systemPrompt.includes("<dil>") ? "dil" : "no-dil";
-      const result = scoreCase(dilCase, text);
+      const result = scoreCase(dilCase, text, answered);
       cases.push(result);
       if (options.record) writeFile(recordingPath(dilCase.id, run), `${text}\n`);
+      const toolsInfo = answered.toolCallCount !== undefined ? `  tools:${answered.toolCallCount}` : "";
       process.stdout.write(
-        `  ${dilCase.id.padEnd(12)} run ${run}  ${String(result.score).padStart(3)}%  (${result.passed}/${result.total})  prompt:${section}  ${result.diagnostics}\n`,
+        `  ${dilCase.id.padEnd(12)} run ${run}  ${String(result.score).padStart(3)}%  (${result.passed}/${result.total})  prompt:${section}${toolsInfo}  ${result.diagnostics}\n`,
       );
     }
   }
