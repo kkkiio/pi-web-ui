@@ -36,9 +36,9 @@ See [docs/configuration.md](docs/configuration.md) for environment variables, `s
 - [x] Edit Message (inline rollback & resend; enabled by `/webui`)
 - [x] Add to Chat
 - [x] Git Diff Comment
-- [ ] BTW / Ask in Side Chat
 - [x] AskUserQuestion
-- [ ] Generative UI
+- [x] Generative UI
+- [ ] BTW / Ask in Side Chat
 
 ### Git Diff
 
