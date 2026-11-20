@@ -6,7 +6,7 @@ import {
   either,
   hasAnyTag,
   hasTag,
-  nested
+  nested,
 } from "./scoring.ts";
 
 export { DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
