@@ -22,7 +22,7 @@
 │   │   ├── 0012-interactive-agent-ui-positioning.md    # Interactive Agent UI positioning & feature cuts
 │   │   ├── 0013-explicit-webui-session-activation.md   # Activation boundary before/after /webui
 │   │   └── 0014-web-ui-test-storyboard.md              # Storyboard previews for web E2E scenarios (local)
-│   ├── prd/
+│   ├── featuremap/
 │   │   ├── columns-layout.md        # Single-column default + on-demand two-column layout
 │   │   ├── edit-message.md          # Inline edit user message + Save & Send
 │   │   └── right-panel.md           # Right panel (Git Diff + line Comment, Side Chat)

@@ -75,4 +75,4 @@ Pi Web UI 是单会话（Single-Session）的 **Interactive Agent UI**。过去�
 
 ## Further Notes
 
-- Right Panel 内部的 Tab 生命周期、Git Diff 渲染与行级 Comment 交互见 `docs/prd/right-panel.md`。
+- Right Panel 内部的 Tab 生命周期、Git Diff 渲染与行级 Comment 交互见 `docs/featuremap/right-panel.md`。

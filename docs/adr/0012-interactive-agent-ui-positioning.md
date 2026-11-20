@@ -66,8 +66,8 @@ To keep the interface focused and unobstructed:
 
 - `README.md`
 - `AGENTS.md`
-- `docs/prd/columns-layout.md`
-- `docs/prd/edit-message.md`
-- `docs/prd/right-panel.md`
+- `docs/featuremap/columns-layout.md`
+- `docs/featuremap/edit-message.md`
+- `docs/featuremap/right-panel.md`
 - `docs/adr/0002-web-ui-extension-event-protocol.md`
 - `docs/adr/0006-project-scope-single-session-web-ui.md`
