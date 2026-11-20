@@ -8,7 +8,7 @@
  */
 
 import { createElement, type ReactNode } from "react";
-import type { ResolvedProps } from "../resolve";
+import type { ResolvedProps } from "../render-tree";
 import { svgProps } from "../svg-map";
 
 export interface SvgElementProps {

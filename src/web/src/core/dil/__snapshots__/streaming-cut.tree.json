@@ -1,6 +1,5 @@
 {
   "diagnosticSummary": "unterminated_string×1 unterminated_tag×1 unclosed_tag×2",
-  "state": [],
   "diagnostics": [
     {
       "code": "unterminated_string",

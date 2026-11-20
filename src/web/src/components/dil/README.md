@@ -4,11 +4,8 @@ React renderer and component catalog that maps the unified DIL AST from [`src/co
 
 ## Positioning & Responsibilities
 
-1. **AST-to-React Coordinator (`dil-renderer.tsx`)**:
-   - `<DilRenderer source isStreaming />` runs the whole loop: throttle → `parseDocument` →
-     `evaluateStatements` + `resolveNodes` → JSX. No `eval`, no direct DOM mutation.
-   - Expansion of `{#each}` / `{#if}` / `{expr}` happens in `resolve.ts` **before** React
-     sees anything, so components only render resolved elements and text.
+1. **Assistant answers** — `<DilRenderer source={answer} isStreaming={streaming} />`
+   displays plain Markdown and DIL in the transcript.
 2. **Design Token Mapping (`tokens.ts`)**:
    - Maps DIL tokens (`padding`, `gap`, `radius`, `background`, `border`, `color`, `size`,
      `weight`, `align`, `justify`, `tabularNums`, `columns`, …) to Tailwind classes and a
@@ -92,30 +89,13 @@ a block that has already finished.
   (`src/core/dil/stream-repair.ts`) and always applies to the tail.
 - No `parsePrefix`/incremental parser API, no AST virtualization, no per-node memo.
 
-## Safety
-
-Expressions are evaluated by [`src/core/dil/evaluator.ts`](../../core/dil/evaluator.ts),
-never by `eval` or `new Function`. The renderer only decides *which* expression to hand
-over and *what a failure looks like*:
-
-- `{#if cond}` → false, `{#each list as x}` → `[]`, `{expr}` and attributes → absent;
-  one broken expression never removes its siblings (the `__dilSafe` contract).
-- Links render as anchors only for `http(s):` and `mailto:` (`safeLinkUrl`); anything else
-  shows its label as text.
-- `on*` attributes are wired up by `#48`: `onClick={() => …}` evaluates to a `SafeObject`
-  closure, which a control invokes through `DilRuntime.invoke` (`runtime.ts`) — never
-  through a JavaScript call, so the evaluator's allowlist stays in force.
-
 ## Where it is mounted
 
 The assistant answer in `chat-item-view.tsx` always mounts `<DilRenderer>`. Plain Markdown
 and mixed Markdown/DIL use the same parser and React tree throughout streaming. Reasoning
 continues to use Streamdown.
 
-The prompt side is `extensions/dil-prompt.ts`: after `/webui`, a `before_agent_start`
-handler adds the `<dil>` system section (copy in `extensions/dil-system-prompt.ts`), and
-`/webui-stop`, a session replacement or shutdown removes it. Nothing is injected before
-activation.
+Start a Pi Web UI session with `/webui` to enable DIL answers.
 
 ## Where #46 stops
 
@@ -140,50 +120,14 @@ A `mermaid` fence renders a diagram and keeps its source visible if rendering fa
 | Reference links, link definitions, and footnotes | Display as source text ([#60](https://github.com/kkkiio/pi-web-ui/issues/60), [#61](https://github.com/kkkiio/pi-web-ui/issues/61)) |
 | Raw HTML and images with other destinations | Display as source text |
 
-## Roadmap
-
-- **[#46 Core MVP](https://github.com/kkkiio/pi-web-ui/issues/46)** — layout primitives,
-  typography, throttled render + safe evaluation. **Done in this package.**
-- **[#49 Document & data primitives](https://github.com/kkkiio/pi-web-ui/issues/49)** —
-  `list` (incl. `connector` / `gap`), `table` (incl. Markdown column alignment), `blockquote`,
-  `Link`, Shiki `CodeBlock`, KaTeX `math`. **Done.**
-- **[#47 Parametric SVG](https://github.com/kkkiio/pi-web-ui/issues/47)** — `svg` +
-  `defs`/`marker`/`rect`/`path`/`text` with DIL attributes. **Done in this package**:
-  `svg-map.ts` owns the per-tag allowlist and id namespacing (pure, unit-tested), the
-  JSX lives in `primitives/svg.tsx`, and the renderer switches to SVG mode inside `<svg>`
-  so `<text>` means SVG text there. `href`/`xlink:href` are not in any allowlist.
-- **[#48 State & interaction](https://github.com/kkkiio/pi-web-ui/issues/48)** —
-  `DIL.useState` setters, the five corpus controls, and `GenUI.issueNewTurn`. **Done in
-  this package**: `runtime.ts` owns the state slots and the host bridge,
-  `primitives/controls.tsx` is the only control DOM, and `GenUI` is injected per document
-  (`runtime-context.ts`). `GenUI.openUrl` is
-  [#63](https://github.com/kkkiio/pi-web-ui/issues/63).
-
 ## Interaction
 
-`DIL.useState(init, { key })` is hoisted by the parser (`core/dil/statements.ts`) and bound
-by `runtime.ts`:
+```text
+{@body const [revealed, setRevealed] = DIL.useState(false)}
+<button onClick={() => setRevealed(true)}>Reveal answer</button>
+{#if revealed}<text>Here is the answer.</text>{/if}
+```
 
-- the value lives in a slot keyed by `{ key }` (the corpus always names one), or by the
-  variable name when it does not, so it survives every re-resolve of the same message;
-- each render binds the slot's **value**: `{@body const [x, setX] = DIL.useState(…) }` obeys
-  the same rule as the compiled reference, where `x` is a `const` of that render. A handler
-  that writes a slot and then reads it therefore sees the value from *its* render — use
-  `setX(prev => next)` to derive from the current one;
-- the setter writes the slot and asks the renderer to re-resolve — that counter is the
-  only thing a state change touches.
-
-That rule is not a preference: `conformance/` runs the reference's compiled artifacts and
-fails when our rendering, our emitted `GenUI` arguments, or our state slots disagree.
-
-A button's intent is decided by **running its handler**, not by reading its source text:
-`DilRuntime.probe` executes `onClick` with a `probing` flag that turns setters into no-ops
-and `GenUI` into a recorder. `{#if}` branches, lookups and template literals therefore
-decide correctly, and the probe yields the exact prompt the click would send.
-
-`GenUI.issueNewTurn(text)` sends `text` as the next user message. It does not draft,
-prefill or read the composer: the click is the send, and the host
-(`chat-item-view.tsx` → `sendPrompt`) owns the busy state that disables every card action
-while Pi is working. Dispatch is restricted to a control interaction, so a document that
-calls the action from a `{@body}` initialiser or an interpolation cannot send while it is
-being drawn.
+State survives updates to the message in the current page. Reload the page to return to
+the declared initial values. A card can call `GenUI.issueNewTurn(text)` from a control
+event to send the next user message when Pi is available.

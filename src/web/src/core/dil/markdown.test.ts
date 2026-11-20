@@ -444,12 +444,6 @@ test("half-streamed empty containers are pruned, non-empty ones are kept", () =>
   assert.equal(elements(box.children, "text").length, 1);
 });
 
-test("state declarations are collected from {@body} directives", () => {
-  const document = parseDocument('{@body const [tab,setTab] = DIL.useState("a"); const count = 2}\n<box>{tab}</box>');
-  assert.equal(document.diagnosticSummary, "clean");
-  assert.deepEqual(document.state, [{ name: "tab", setter: "setTab", initial: '"a"' }]);
-});
-
 test("a host-resolved component stays inside its sentence", () => {
   // ChatGPT's compiler emits `<Cite/>` as a child of the surrounding `<text>`, so a sentence
   // that cites a source is one paragraph, not three. The same holds for `<Entity/>`.

@@ -20,8 +20,9 @@ import fc from "fast-check";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
-import { resolveNodes } from "../../components/dil/resolve.ts";
-import { safeEvaluate } from "./evaluator.ts";
+import { compileDil } from "../../components/dil/compiler.ts";
+import { readTree } from "../../components/dil/render-tree.ts";
+import { createProgram } from "../../components/dil/sandbox-worker.js";
 import { hasDilElements, parseDocument } from "./index.ts";
 import type { DilNode } from "./types.ts";
 
@@ -165,7 +166,10 @@ test("property: inline DIL neighbours keep their separators", () => {
       const source = atoms.map((atom) => atom.source).join(" ");
       const expected = atoms.map((atom) => atom.text).join(" ");
       // Resolve first: `{1 + 1}` is an `expr` node until it is evaluated.
-      const resolved = resolveNodes(parseDocument(source).tree, {});
+      const compiled = compileDil(parseDocument(source));
+      const resolved = compiled.program
+        ? readTree(createProgram().load(compiled.program).tree, compiled.program.data)
+        : compiled.tree;
       const actual = squash(
         resolved.map((node) => (node.kind === "text" ? node.value : "")).join("") +
           resolved.map((node) => (node.kind === "element" ? flatten(node.children) : "")).join(""),
@@ -285,39 +289,3 @@ test("property: DIL and Markdown blocks keep one document node each", () => {
 
 // ---------------------------------------------------------------------------
 // O4 — evaluation and sanitizing stay inside the allowlist
-// ---------------------------------------------------------------------------
-
-const RENDERABLE = new Set(["undefined", "number", "string", "boolean", "object"]);
-
-test("property: expressions never throw outward and never return a function", () => {
-  const expression = fc.oneof(
-    fc.string({ maxLength: 40 }),
-    fc.constantFrom(
-      "globalThis",
-      "process.env",
-      "this",
-      "Function('return 1')",
-      "constructor",
-      "__proto__",
-      "'a'.constructor",
-      "[].__proto__, 1",
-      "Math.max(1, 2)",
-      "(1 + 2)",
-    ),
-    fc
-      .tuple(fc.string({ maxLength: 20 }), fc.integer(), fc.string({ maxLength: 20 }))
-      .map(([a, n, b]) => `${a} ${n} ${b}`),
-  );
-
-  fc.assert(
-    fc.property(expression, (source) => {
-      const value = safeEvaluate(source, {}, undefined);
-      assert.ok(RENDERABLE.has(typeof value), `expression returned ${typeof value}: ${source}`);
-      assert.equal(typeof value, "function" === typeof value ? "function" : typeof value);
-      if (value && typeof value === "object") {
-        assert.equal(Object.getPrototypeOf(value) === Object.prototype || Array.isArray(value), true);
-      }
-    }),
-    { numRuns: 80, seed: 20241118 },
-  );
-});

@@ -16,7 +16,7 @@
  * dropped from both sides and reported as *skipped* rather than silently ignored.
  */
 
-import type { ResolvedNode } from "../src/web/src/components/dil/resolve.ts";
+import type { ResolvedNode } from "../src/web/src/components/dil/render-tree.ts";
 import type { DilNode } from "../src/web/src/core/dil/types.ts";
 import type { ReferenceNode } from "./reference.ts";
 

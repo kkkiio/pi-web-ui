@@ -1,18 +1,4 @@
-/**
- * `{@body …}` payload handling.
- *
- * One directive may hold several statements (`const a = …; const b = …`), and the
- * state declarations inside it are the only thing the renderer needs before the
- * expression evaluator exists: they define the per-message state slots and their
- * semantic keys — `DIL.useState(init, { key })` when the model names one, the variable
- * name otherwise.
- *
- * Nothing here parses JavaScript beyond balanced scanning — validation and evaluation
- * belong to the evaluator (issue #47) so this module stays usable in the browser.
- */
-
 import { readBalanced, topLevelIndex } from "./scanner.ts";
-import type { DilStateDeclaration } from "./types.ts";
 
 /** One `{@body}` may hold several statements; split at top-level `;`. */
 export function splitStatements(code: string): string[] {
@@ -29,34 +15,21 @@ export function splitStatements(code: string): string[] {
 const USE_STATE =
   /^(?:const|let|var)\s+\[\s*([A-Za-z_$][\w$]*)\s*(?:,\s*([A-Za-z_$][\w$]*)\s*)?\]\s*=\s*(?:DIL\.)?useState\s*\(/;
 
-export type StateDeclaration = DilStateDeclaration;
-
-/** `DIL.useState(init, { key: "tab" })` → the slot name, when the model names one. */
-const STATE_KEY = /(?:^|[,{])\s*key\s*:\s*(["'])([^"']*)\1/;
-
-/** Every `DIL.useState` declared by a list of `{@body}` statements, in order. */
-export function findStateDeclarations(statements: readonly string[]): DilStateDeclaration[] {
-  const out: DilStateDeclaration[] = [];
-  for (const statement of statements) {
-    const match = USE_STATE.exec(statement.trim());
-    if (!match) continue;
-    const open = match[0].length - 1;
+/** Supply the document key for a standalone state declaration. */
+export function stateStatement(statement: string): string {
+  const match = USE_STATE.exec(statement);
+  const prefix = match?.[0];
+  if (prefix && match[1]) {
+    const call = prefix.search(/(?:DIL\.)?useState\s*\($/);
+    const open = prefix.length - 1;
     const args = readBalanced(statement, open, "(", ")");
-    const firstComma = topLevelIndex(args.inner, ",");
-    const initial = (firstComma < 0 ? args.inner : args.inner.slice(0, firstComma)).trim();
-    const options = firstComma < 0 ? "" : args.inner.slice(firstComma + 1);
-    const key = STATE_KEY.exec(options)?.[2];
-    out.push({
-      name: match[1],
-      setter: match[2] ?? null,
-      initial: initial || "undefined",
-      ...(key ? { key } : {}),
-    });
+    if (call >= 0 && args.ok && !statement.slice(args.end).trim()) {
+      const initial = args.inner.trim() ? `,${args.inner}` : "";
+      return `${statement.slice(0, call)}__dil.safe(() => __dil.state(${JSON.stringify(match[1])}${initial}\n)) ?? []`;
+    }
   }
-  return out;
-}
-
-/** State keys, keyed by variable name, as reported back to the session view state. */
-export function stateKeys(statements: readonly string[]): string[] {
-  return findStateDeclarations(statements).map((declaration) => declaration.name);
+  const binding = /^(const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([\s\S]+)$/.exec(statement);
+  return binding && topLevelIndex(binding[3], ",") < 0
+    ? `${binding[1]} ${binding[2]} = __dil.safe(() => (${binding[3]}\n))`
+    : statement;
 }

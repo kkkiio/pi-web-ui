@@ -1,28 +1,8 @@
-/**
- * `<DilRenderer>` — the end-to-end loop: `parseDocument` → safe evaluation → React.
- *
- * One component, three stages (`README.md` records why they are staged this way):
- *
- *   1. throttle   while `isStreaming`, publish the text at most every ~60 ms; when the
- *                 stream ends, publish the final text immediately (no trailing wait).
- *   2. parse      `parseDocument(text)` — a pure function of the string, ~1 ms, so there
- *                 is no incremental parse and no cached block to invalidate.
- *   3. resolve    `evaluateStatements` for the `{@body}` scope, with `DilRuntime.useState`
- *                 supplying each slot's current value, then `resolveNodes` to expand
- *                 `{#each}` / `{#if}` / `{expr}` before React sees anything.
- *
- * Then React renders plain elements: layout and typography primitives for the #46
- * vocabulary, the `#47` SVG primitives, the `#48` controls (the only components that own
- * a `DilRuntime`), and readable fallbacks for everything else (`#49` document/data
- * primitives).
- *
- * Pure logic lives in `resolve.ts` and `tokens.ts` and is unit-tested in Node; this file
- * is only JSX glue.
- */
-
 import { Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { MessageResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
-import { collectStatements, evaluateStatements, isInlineTag, parseDocument } from "../../core/dil/index";
+import { isInlineTag, parseDocument } from "../../core/dil/index";
+import { compileDil } from "./compiler";
 import {
   CodeBlockLeaf,
   FallbackBlock,
@@ -41,8 +21,8 @@ import { ControlButton, ControlLabel, ControlRadio, ControlRadioGroup, ControlTe
 import { Box, Col, Divider, Grid, GridItem, Row } from "./primitives/layout";
 import { SvgElement } from "./primitives/svg";
 import { Badge, Bold, Caption, Icon, InlineCode, Italic, Text, Title } from "./primitives/typography";
-import { type ResolvedNode, type ResolvedProps, resolveNodes } from "./resolve";
-import { DilRuntime } from "./runtime";
+import type { ResolvedNode, ResolvedProps } from "./render-tree";
+import { DilSandbox } from "./runtime";
 import { DilHostContext, DilRuntimeContext } from "./runtime-context";
 import { isSvgTag, svgIdPrefix } from "./svg-map";
 import { layoutSkin, textSkin } from "./tokens";
@@ -65,49 +45,44 @@ export function DilRenderer({
   throttleMs = DEFAULT_THROTTLE_MS,
   className,
 }: DilRendererProps) {
-  // Render keys are only unique inside this instance; SVGs in two messages would
-  // otherwise share `dil-n-0-arrow` and the second marker reference would resolve to the
-  // first diagram. `useId` gives every message its own namespace.
   const instance = useId();
   const host = useContext(DilHostContext);
-  const text = useThrottledText(source, isStreaming, throttleMs);
-  const document = useMemo(() => parseDocument(text, { isStreaming }), [text, isStreaming]);
-
-  // The runtime outlives a re-resolve: it owns the state slots and the host bridge. A
-  // state write bumps `version`, which is the only thing that re-runs the resolver.
-  //
-  // It must also outlive the *host*, which is rebuilt whenever Pi's status changes: the
-  // host is read through a ref, so a turn starting or ending does not throw away what the
-  // user typed into a card.
-  const [version, setVersion] = useState(0);
   const hostRef = useRef(host);
   hostRef.current = host;
-  const runtime = useMemo(
-    () =>
-      new DilRuntime(
-        () => setVersion((current) => current + 1),
-        () => hostRef.current,
-      ),
-    [],
-  );
+  const text = useThrottledText(source, isStreaming, throttleMs);
+  const compiled = useMemo(() => compileDil(parseDocument(text, { isStreaming })), [text, isStreaming]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [snapshot, setSnapshot] = useState<readonly ResolvedNode[]>();
+  const [sends, setSends] = useState<ReadonlySet<string>>(() => new Set());
+  const [runtime] = useState(() => new DilSandbox(setSnapshot, setSends, () => hostRef.current));
 
-  // `version` is not read by the callback on purpose: a setter writes a slot, not the
-  // document, so the counter is the only reason to re-run the resolver.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a state write must re-resolve
-  const resolved = useMemo(() => {
-    const statements = collectStatements(document.raw);
-    const scope = statements.length
-      ? evaluateStatements(statements, runtime.seed(), { useState: runtime.stateSlot })
-      : runtime.seed();
-    return resolveNodes(document.tree, scope);
-  }, [document, runtime, version]);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(([entry]) => runtime.setVisible(entry.isIntersecting), {
+      rootMargin: "0px 0px 400px 0px",
+    });
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+      runtime.setVisible(false);
+      runtime.stop();
+    };
+  }, [runtime]);
 
-  const value = useMemo(() => ({ runtime, host }), [runtime, host]);
+  useEffect(() => {
+    runtime.update(compiled.program);
+  }, [runtime, compiled.program]);
 
+  const value = useMemo(() => ({ runtime, host, sends }), [runtime, host, sends]);
   return (
     <DilRuntimeContext.Provider value={value}>
-      <div className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
-        {renderNodes(resolved, instance, null)}
+      <div ref={rootRef} className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
+        {compiled.program && !snapshot ? (
+          <MessageResponse>{compiled.fallback}</MessageResponse>
+        ) : (
+          renderNodes(compiled.program && snapshot ? snapshot : compiled.tree, instance, null)
+        )}
       </div>
     </DilRuntimeContext.Provider>
   );

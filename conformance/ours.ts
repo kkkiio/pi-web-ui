@@ -1,15 +1,7 @@
-/**
- * Our side of a conformance run: the same sample, the same events, the projections.
- *
- * It deliberately drives the *product* modules (`parseDocument` → `evaluateStatements` →
- * `resolveNodes`, with `DilRuntime` owning state and the host bridge) rather than a
- * harness-only reimplementation, so a difference means the shipped renderer differs from
- * the reference — not that a test double does.
- */
-
-import { type ResolvedNode, resolveNodes } from "../src/web/src/components/dil/resolve.ts";
-import { DilRuntime } from "../src/web/src/components/dil/runtime.ts";
-import { collectStatements, evaluateStatements, parseDocument } from "../src/web/src/core/dil/index.ts";
+import { compileDil } from "../src/web/src/components/dil/compiler.ts";
+import { type DilHandler, type ResolvedNode, readTree } from "../src/web/src/components/dil/render-tree.ts";
+import { createProgram } from "../src/web/src/components/dil/sandbox-worker.js";
+import { parseDocument } from "../src/web/src/core/dil/index.ts";
 import type { ReferenceEffect } from "./reference.ts";
 
 export interface OurProgram {
@@ -22,46 +14,21 @@ export interface OurProgram {
   click(tag: string): boolean;
 }
 
-export interface OurOptions {
-  /**
-   * Seed the slots from the captured `view_state`, as the reference does.
-   *
-   * Off by default: we do not implement state restore yet, and the comparison this PR
-   * makes is about *transitions*. The restore itself is a separate, registered gap.
-   */
-  readonly seedViewState?: boolean;
-  readonly viewState?: Record<string, unknown>;
-}
-
-export function createOurProgram(source: string, options: OurOptions = {}): OurProgram {
+export function createOurProgram(source: string): OurProgram {
   const performed: ReferenceEffect[] = [];
-  const runtime = new DilRuntime(
-    () => undefined,
-    () => ({
-      issueNewTurn: (prompt: string) => {
-        performed.push({ name: "issueNewTurn", args: [prompt] });
-      },
-      busy: false,
-    }),
-  );
-
-  // A harness-only seed: the product has no restore path yet (see `deviations.json`).
-  if (options.seedViewState && options.viewState) {
-    for (const [key, value] of Object.entries(options.viewState)) {
-      runtime.stateSlot(key, value, key);
-    }
-  }
-
-  const render = (): readonly ResolvedNode[] => {
-    const document = parseDocument(source, { isStreaming: false });
-    const statements = collectStatements(document.raw);
-    const scope = statements.length
-      ? evaluateStatements(statements, runtime.seed(), { useState: runtime.stateSlot })
-      : runtime.seed();
-    return resolveNodes(document.tree, scope);
+  const runtime = createProgram();
+  const compiled = compileDil(parseDocument(source, { isStreaming: false }));
+  const program = compiled.program;
+  let result = program ? runtime.load(program) : undefined;
+  let tree = program && result ? readTree(result.tree, program.data) : compiled.tree;
+  const fire = (value: unknown, args?: unknown[]): void => {
+    if (!program || !value) return;
+    const next = runtime.trigger((value as DilHandler).id, args);
+    if (!next) return;
+    result = next;
+    tree = readTree(next.tree, program.data);
+    for (const prompt of next.effects) performed.push({ name: "issueNewTurn", args: [prompt] });
   };
-
-  let tree = render();
   const find = (nodes: readonly ResolvedNode[], tag: string): ResolvedNode | null => {
     for (const node of nodes) {
       if (node.kind !== "element") continue;
@@ -74,14 +41,13 @@ export function createOurProgram(source: string, options: OurOptions = {}): OurP
 
   return {
     render: () => tree,
-    state: () => runtime.state(),
+    state: () => result?.state ?? {},
     effects: () => performed,
     clearEffects: () => performed.splice(0, performed.length),
     change: (tag, value) => {
       const node = find(tree, tag);
       if (!node || node.kind !== "element") return false;
-      runtime.invoke(node.props.onChange, [value]);
-      tree = render();
+      fire(node.props.onChange, [value]);
       return true;
     },
     click: (tag) => {
@@ -97,8 +63,7 @@ export function createOurProgram(source: string, options: OurOptions = {}): OurP
       collect(tree);
       const node = all.at(-1);
       if (!node || node.kind !== "element") return false;
-      runtime.invoke(node.props.onClick);
-      tree = render();
+      fire(node.props.onClick);
       return true;
     },
   };

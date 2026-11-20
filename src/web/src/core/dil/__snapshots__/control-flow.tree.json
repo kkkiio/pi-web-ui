@@ -1,6 +1,5 @@
 {
   "diagnosticSummary": "clean",
-  "state": [{"name": "expanded", "setter": "setExpanded", "initial": "false"}],
   "diagnostics": [],
   "tree": [
     {"stmt": "const [expanded,setExpanded] = DIL.useState(false)"},

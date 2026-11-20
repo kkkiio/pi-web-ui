@@ -5,7 +5,7 @@
  * compiled the model's DIL into, plus the data the client supplied (`constants`,
  * `appData`, `view_state`). That program is closed — its only free variables are the
  * runtime names below — so it runs in Node with a shim, and its output is the oracle our
- * interpreter is measured against.
+ * compiled renderer is measured against.
  *
  * Two things the shim must get right, because the whole comparison rests on them:
  *
@@ -16,6 +16,8 @@
  *   - **`view_state` seeds the slots.** The captured state is keyed the same way the model
  *     keyed it (`{ key }`), which makes "how state is named and restored" observable.
  */
+
+import type { DilArtifact } from "../src/web/src/components/dil/sandbox-worker.js";
 
 /** One node of the reference's render output, expanded to plain data. */
 export type ReferenceNode =
@@ -64,13 +66,13 @@ export interface ReferenceOptions {
    * Start from the captured `view_state`.
    *
    * Off by default: the transition comparison starts both sides from their declared
-   * initial values. Restore is its own check, because we do not implement it yet.
+   * initial values. Restored captures can be tested separately.
    */
   readonly seedViewState?: boolean;
 }
 
 export function createReferenceProgram(
-  code: string,
+  code: string | DilArtifact,
   data: SampleData,
   options: ReferenceOptions = {},
 ): ReferenceProgram {
@@ -126,25 +128,48 @@ export function createReferenceProgram(
 
   const host = (tag: string) => (props: Record<string, unknown>) => ({ type: tag, props, children: [props.children] });
 
-  const parameters = ["DIL", "__dil", "__dilSafe", "GenUI", ...HOST_COMPONENTS];
-  // `new Function` keeps the corpus out of the module graph; the program is data.
-  const run = new Function(...parameters, code) as (...args: unknown[]) => void;
+  const safe = (evaluate: () => unknown, failure?: unknown) => {
+    try {
+      return evaluate();
+    } catch {
+      return failure;
+    }
+  };
+  const local = typeof code !== "string" ? code : undefined;
+  const parameters = local
+    ? ["__dil", "__dilData", "DIL", "GenUI", "__dilPath"]
+    : ["DIL", "__dil", "__dilSafe", "GenUI", ...HOST_COMPONENTS];
+  const run = new Function(...parameters, typeof code === "string" ? code : `"use strict";\n${code.code}`) as (
+    ...args: unknown[]
+  ) => unknown;
 
   function render(): void {
+    if (local) {
+      root = () =>
+        run(
+          {
+            safe,
+            state: (name: string, initial: unknown, options?: { key?: string }) =>
+              runtime.useState(initial, { key: options?.key ?? name }),
+            flatten: (children: unknown[]) => children,
+            text: (value: unknown) => value,
+            each: (items: unknown, path: string, item: (value: unknown, index: number, path: string) => unknown) =>
+              Array.isArray(items) ? items.map((value, index) => item(value, index, `${path}.${index}`)) : [],
+            node: (index: number, _path: string, props: Record<string, unknown>, children: () => unknown) => {
+              const site = local.data[index];
+              if (!site || typeof site === "string") return null;
+              return runtime.jsx(site.name, { ...site.props, ...props }, children());
+            },
+          },
+          local.data,
+          runtime,
+          GenUI,
+          "",
+        );
+      return;
+    }
     root = null;
-    run(
-      runtime,
-      { Fragment: FRAGMENT, jsx: runtime.jsx },
-      (evaluate: () => unknown, failure: unknown) => {
-        try {
-          return evaluate();
-        } catch {
-          return failure;
-        }
-      },
-      GenUI,
-      ...HOST_COMPONENTS.map(host),
-    );
+    run(runtime, { Fragment: FRAGMENT, jsx: runtime.jsx }, safe, GenUI, ...HOST_COMPONENTS.map(host));
   }
 
   render();

@@ -104,17 +104,6 @@ test("the fixtures together exercise the Phase 1 vocabulary", () => {
   }
 });
 
-test("state slots are reported per fixture", () => {
-  assert.deepEqual(
-    parseDocument(fixture("layout-metrics")).state.map((slot) => [slot.name, slot.setter, slot.initial]),
-    [["window", "setWindow", '"5m"']],
-  );
-  assert.deepEqual(
-    parseDocument(fixture("control-flow")).state.map((slot) => slot.name),
-    ["expanded"],
-  );
-});
-
 test("lowered prose keeps no stray markdown syntax", () => {
   const leftovers: string[] = [];
   for (const name of fixtures()) {

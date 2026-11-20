@@ -1,187 +1,237 @@
-/**
- * Per-document interaction runtime — the state the renderer did not have before `#48`.
- *
- * DIL documents are evaluated, not compiled (`../../core/dil`), so the dialect has no
- * place to *store* anything: `{@body const [tab, setTab] = DIL.useState("a")}` binds an
- * initial value and an inert setter (`core/dil/evaluator.ts`). This module supplies the
- * other half — slots that survive a re-resolve, setters that write them, and the single
- * host bridge the model may call.
- *
- * Three decisions worth knowing before reading the code:
- *
- *   - **A render binds values, not accessors.** The compiled reference is ordinary
- *     JavaScript: `const [x, setX] = DIL.useState(…)` is a `const` of the render that
- *     created the handler, so a handler that writes a slot and then reads it sees the value
- *     from *its* render. `derived.test.ts` in `conformance/` pins that against the reference
- *     runtime; `setX(prev => …)` is how a handler derives from the current value.
- *   - **The probe runs the handler for real, with side effects switched off.** A button
- *     cannot be classified as "sends a turn" by reading its source text: `{#if}`,
- *     lookups and template literals decide at evaluation time. So setters and `GenUI`
- *     honour a `probing` flag that records the call instead of performing it.
- *   - **Nothing here touches React.** `bump` is the renderer's own re-render request, so
- *     this file stays unit-testable in Node.
- */
+import type { DilProgram } from "./compiler.ts";
+import type { DilHandler, ResolvedNode } from "./render-tree.ts";
+import { readTree, readViewState } from "./render-tree.ts";
+import frameHtml from "./sandbox-frame.html?raw";
+import type { DilResult } from "./sandbox-worker.js";
+import workerSource from "./sandbox-worker.js?raw";
 
-import type { DilScope } from "../../core/dil/evaluator.ts";
-import { callSafe, DilEvaluationError } from "../../core/dil/evaluator.ts";
-import { callable, isSafeObject, namespaceValue, SAFE } from "../../core/dil/evaluator-allowlist.ts";
-import type { DilStateDeclaration } from "../../core/dil/types.ts";
-
-/** What the browser provides a document: one action, and whether it may run now. */
 export interface DilHost {
-  /** Send `prompt` as the next user message. Rejects when Pi is busy or disconnected. */
-  issueNewTurn(prompt: string): Promise<void> | void;
-  /** True while a turn is in flight: a card cannot start another one. */
   readonly busy: boolean;
+  issueNewTurn(prompt: string): Promise<void> | void;
 }
 
-/** A host action a handler would perform, as discovered by `probe`. */
-export interface DilAction {
-  readonly kind: "issueNewTurn";
-  readonly text: string;
+interface Revision {
+  readonly revision: number;
+  readonly program: DilProgram;
 }
 
-export class DilRuntime {
-  private readonly slots = new Map<string, unknown>();
-  private readonly bump: () => void;
-  private readonly getHost: () => DilHost | null;
-  private probing = false;
-  private observed: DilAction[] = [];
-  private dispatched: Promise<void> | null = null;
-  /** Non-zero only while `invoke` runs: a click is the one thing allowed to dispatch. */
-  private interacting = 0;
+type Request = (Revision & { kind: "load" }) | { kind: "trigger"; revision: number; handler: string; args: unknown[] };
 
-  /**
-   * `getHost` reads the host at call time on purpose. The host is rebuilt whenever Pi's
-   * status changes (`busy` flips at every turn), and a runtime that captured it would be
-   * recreated just as often — taking every card's state with it. The runtime outlives the
-   * host; only the slot map has to be stable.
-   */
-  constructor(bump: () => void, getHost: () => DilHost | null = () => null) {
-    this.bump = bump;
-    this.getHost = getHost;
+interface EventRequest {
+  readonly request: Extract<Request, { kind: "trigger" }>;
+  readonly onSend?: () => void;
+  readonly resolve: () => void;
+  readonly reject: (error: Error) => void;
+}
+
+/** Own the runner, preserving the last usable revision and its state while a message is mounted. */
+export class DilSandbox {
+  private frame: HTMLIFrameElement | undefined;
+  private port: MessagePort | undefined;
+  private ready = false;
+  private visible = false;
+  private sequence = 0;
+  private revision = 0;
+  private loaded = 0;
+  private attempted = 0;
+  private desired: Revision | undefined;
+  private committed: Revision | undefined;
+  private state: Record<string, unknown> = {};
+  private events: EventRequest[] = [];
+  private pending: { id: number; request: Request; event?: EventRequest } | undefined;
+  private watchdog: ReturnType<typeof setTimeout> | undefined;
+  private idle: ReturnType<typeof setTimeout> | undefined;
+  private intent = 0;
+  private buttons = new Set<string>();
+  private sends = new Set<string>();
+
+  constructor(
+    private readonly onTree: (tree: readonly ResolvedNode[]) => void,
+    private readonly onIntents: (sends: ReadonlySet<string>) => void,
+    private readonly getHost: () => DilHost | null,
+  ) {}
+
+  update(program: DilProgram | undefined): void {
+    if (program === this.desired?.program) return;
+    if (!program) {
+      this.stop();
+      this.desired = undefined;
+      return;
+    }
+    this.desired = { program, revision: ++this.revision };
+    if (this.visible) this.connect();
+    this.pump();
   }
 
-  /**
-   * The `DIL.useState` half of statement evaluation.
-   *
-   * Values live in `slots`, keyed by the model's `{ key }` when it names one and by the
-   * variable name otherwise, so a slot keeps its value across every re-resolve of the
-   * same message.
-   *
-   * `evaluateStatements` calls this for each declaration so the statements *after* it see
-   * the value the user chose: with the reference's own example,
-   * `const price = seats * 29` has to follow `setSeats(10)`, which a freshly evaluated
-   * initial value would erase on every re-resolve.
-   */
-  // Named `stateSlot`, not `useState`: the lint rule for React hooks reads a call of a
-  // `use…` identifier as a hook, and this is an injected factory.
-  stateSlot = (name: string, initial: unknown, key?: string): readonly [unknown, unknown] => {
-    const slot = key ?? name;
-    if (!this.slots.has(slot)) this.slots.set(slot, initial);
-    return [this.slots.get(slot), callable(([next]) => this.write(slot, next))];
-  };
-
-  /**
-   * The document's slots, as plain data — the same shape the reference persists as
-   * `view_state.root`. Used by the conformance harness to compare state, not by the UI.
-   */
-  state(): Record<string, unknown> {
-    return Object.fromEntries(this.slots);
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    clearTimeout(this.idle);
+    if (visible) {
+      this.connect();
+      this.pump();
+    } else if (this.frame) {
+      this.idle = setTimeout(() => {
+        if (this.pending || this.events.length) this.setVisible(false);
+        else this.stop();
+      }, 1_000);
+    }
   }
 
-  /** The one global the renderer adds: `GenUI`. Everything else comes from the document. */
-  seed(): DilScope {
-    return {
-      GenUI: namespaceValue({
-        issueNewTurn: callable(([text]) => this.issueNewTurn(text)),
-      }),
+  invoke(handler: DilHandler, args: unknown[] = [], onSend?: () => void): Promise<void> {
+    if (!this.committed) return Promise.resolve();
+    const revision = this.committed.revision;
+    return new Promise((resolve, reject) => {
+      this.events.push({ request: { kind: "trigger", revision, handler: handler.id, args }, onSend, resolve, reject });
+      this.connect();
+      this.pump();
+    });
+  }
+
+  stop(): void {
+    clearTimeout(this.watchdog);
+    clearTimeout(this.idle);
+    this.port?.close();
+    this.frame?.remove();
+    this.frame = undefined;
+    this.port = undefined;
+    this.ready = false;
+    this.intent = 0;
+    this.loaded = 0;
+    this.attempted = 0;
+    this.pending?.event?.resolve();
+    this.pending = undefined;
+    for (const event of this.events.splice(0)) event.resolve();
+  }
+
+  private recover(failed = this.pending?.request): void {
+    this.stop();
+    if (this.visible && failed && this.desired && this.desired.revision > failed.revision) {
+      if (failed.kind === "load" && failed.revision === this.committed?.revision) {
+        this.attempted = failed.revision;
+      }
+      this.connect();
+    }
+  }
+
+  private connect(): void {
+    if (this.frame || !this.desired) return;
+    const frame = document.createElement("iframe");
+    const channel = new MessageChannel();
+    frame.hidden = true;
+    frame.title = "DIL sandbox";
+    frame.setAttribute("sandbox", "allow-scripts");
+    frame.referrerPolicy = "no-referrer";
+    frame.srcdoc = frameHtml;
+    this.frame = frame;
+    this.port = channel.port1;
+    const stopped = () => {
+      if (this.frame === frame) this.recover();
     };
+    frame.addEventListener(
+      "load",
+      () => {
+        frame.contentWindow?.postMessage({ source: workerSource, state: this.state }, "*", [channel.port2]);
+      },
+      { once: true },
+    );
+    channel.port1.onmessage = ({ data }) => {
+      if (data?.stopped) {
+        stopped();
+      } else if (data?.ready) {
+        clearTimeout(this.watchdog);
+        this.ready = true;
+        this.pump();
+      } else if (data?.kind === "intents") {
+        if (data.id === this.intent && Array.isArray(data.sends)) {
+          this.sends = new Set(data.sends.filter((id: unknown) => typeof id === "string" && this.buttons.has(id)));
+          this.onIntents(this.sends);
+        }
+      } else {
+        this.receive(data);
+      }
+    };
+    this.watchdog = setTimeout(stopped, 5_500);
+    document.body.append(frame);
   }
 
-  /**
-   * Run `handler` with side effects suppressed and report the action it would perform.
-   *
-   * `null` means "this control does nothing outside the document" — a local button
-   * (`onClick={() => setRevealed(true)}`), or a handler that failed to evaluate.
-   */
-  probe(handler: unknown): DilAction | null {
-    if (!isSafeObject(handler)) return null;
-    const wasProbing = this.probing;
-    this.observed = [];
-    this.probing = true;
+  private pump(): void {
+    if (!this.ready || this.pending || !this.desired || !this.port) return;
+    const event = this.events[0];
+    const restore = this.committed && this.loaded === 0 && this.attempted === 0 && this.committed;
+    let request: Request;
+    let dispatched: EventRequest | undefined;
+    if (restore) {
+      request = { ...restore, kind: "load" };
+    } else if (event) {
+      if (this.loaded === 0) {
+        this.events.shift()?.resolve();
+        this.pump();
+        return;
+      }
+      request = { ...event.request, revision: this.loaded };
+      dispatched = this.events.shift();
+    } else if (this.desired.revision > this.attempted) {
+      request = { ...this.desired, kind: "load" };
+    } else {
+      return;
+    }
+    const id = ++this.sequence;
+    this.pending = { id, request, event: dispatched };
+    this.watchdog = setTimeout(() => this.recover(), 1_500);
+    this.port.postMessage({ id, request });
+  }
+
+  private receive(data: { id: number; result: DilResult | null } | undefined): void {
+    const pending = this.pending;
+    if (!pending || pending.id !== data?.id) return;
+    this.pending = undefined;
+    clearTimeout(this.watchdog);
+    const { request, event } = pending;
+    const revision = request.kind === "load" ? request : this.committed;
+    if (request.kind === "load") this.attempted = request.revision;
+    let prompt: string | undefined;
     try {
-      callSafe(handler);
+      if (data.result && revision) {
+        const tree = readTree(data.result.tree, revision.program.data);
+        this.state = readViewState(data.result.state);
+        this.committed = revision;
+        this.loaded = revision.revision;
+        this.onTree(tree);
+        this.intent = pending.id;
+        this.buttons = new Set(Array.isArray(data.result.buttons) ? data.result.buttons.slice(0, 5_000) : []);
+        this.sends = new Set([...this.sends].filter((id) => this.buttons.has(id)));
+        this.onIntents(this.sends);
+        if (this.buttons.size) {
+          this.port?.postMessage({
+            kind: "probe",
+            id: this.intent,
+            program: revision.program,
+            state: this.state,
+            buttons: [...this.buttons],
+          });
+        }
+        const first = Array.isArray(data.result.effects) ? data.result.effects[0] : undefined;
+        if (event && typeof first === "string" && first.length <= 1_000_000 && first.trim()) prompt = first.trim();
+      }
     } catch {
-      // A handler that cannot run advertises nothing; its click is inert either way.
-    } finally {
-      this.probing = wasProbing;
+      event?.resolve();
+      this.recover(request);
+      return;
     }
-    const [action] = this.observed;
-    this.observed = [];
-    return action ?? null;
-  }
-
-  /**
-   * Run `handler` for real. Returns the host promise when the handler started a turn, so
-   * the control can show a sending state until Pi acknowledges it.
-   */
-  invoke(handler: unknown, args: readonly unknown[] = []): Promise<void> | null {
-    if (!isSafeObject(handler)) return null;
-    this.dispatched = null;
-    this.interacting += 1;
-    try {
-      callSafe(handler, args);
-    } catch {
-      // Failure policy of the whole renderer: one broken handler never takes the
-      // transcript down. A host rejection is reported by `sendPrompt` via the store.
-    } finally {
-      this.interacting -= 1;
+    if (event && prompt) {
+      const host = this.getHost();
+      if (!host || host.busy) {
+        event.reject(new Error("Pi is unavailable"));
+      } else {
+        event.onSend?.();
+        const message = prompt;
+        void Promise.resolve()
+          .then(() => host.issueNewTurn(message))
+          .then(event.resolve, event.reject);
+      }
+    } else {
+      event?.resolve();
     }
-    const dispatched = this.dispatched;
-    this.dispatched = null;
-    return dispatched;
-  }
-
-  private write(key: string, next: unknown): void {
-    // Same rule as dispatch: a value may only change because the user acted. A document
-    // that calls a setter from an interpolation (`<text>{setN(n + 1)}</text>`) or from an
-    // attribute that is not a handler would otherwise write — and re-render — mid-render.
-    if (this.probing || this.interacting === 0) return;
-    const previous = this.slots.get(key);
-    // `setX(prev => prev + 1)`: an arrow argument is an updater, as in the reference
-    // runtime — DIL has no other way to express "derive from the current value".
-    //
-    // It runs inside the evaluation that produced it, so it shares that evaluation's step
-    // budget: a handler that recurses through a functional setter must still hit the limit.
-    const value =
-      isSafeObject(next) && next[SAFE] === "arrow" ? callSafe(next, [previous], { freshBudget: false }) : next;
-    if (Object.is(value, previous)) return;
-    this.slots.set(key, value);
-    this.bump();
-  }
-
-  private issueNewTurn(value: unknown): unknown {
-    if (typeof value !== "string") throw new DilEvaluationError("issueNewTurn expects a string");
-    const text = value.trim();
-    if (!text) throw new DilEvaluationError("issueNewTurn expects a prompt");
-    if (this.probing) {
-      this.observed.push({ kind: "issueNewTurn", text });
-      return undefined;
-    }
-    // Rendering is not consent. `{@body const x = GenUI.issueNewTurn(…)}` or
-    // `<text>{GenUI.issueNewTurn(…)}</text>` evaluates outside any click, and opening a
-    // past message would then start agent work by itself — so only `invoke` may dispatch.
-    if (this.interacting === 0) {
-      throw new DilEvaluationError("issueNewTurn only runs from a control interaction");
-    }
-    const host = this.getHost();
-    if (!host) throw new DilEvaluationError("issueNewTurn is unavailable outside the Web UI");
-    const dispatched = Promise.resolve(host.issueNewTurn(text));
-    // A control that does not await (a `radio` change that happens to send) must not turn
-    // a host rejection into an unhandled one; the button still sees `dispatched` reject.
-    dispatched.catch(() => undefined);
-    this.dispatched = dispatched;
-    return dispatched;
+    this.pump();
   }
 }

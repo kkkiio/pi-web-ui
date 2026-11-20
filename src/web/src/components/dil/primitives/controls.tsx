@@ -1,26 +1,10 @@
-import { createContext, type ReactNode, useContext, useId, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { ResolvedProps } from "../resolve";
+import type { DilHandler, ResolvedProps } from "../render-tree";
 import { useDilRuntime } from "../runtime-context";
-
-/**
- * The interactive controls of `#48` — the five the corpus actually contains.
- *
- * `button` / `radio-group` / `radio` / `label` / `textarea` are the whole interaction
- * vocabulary, so these components carry the only DOM in the DIL pipeline. Everything
- * they know about behaviour comes from the runtime:
- *
- *   - handlers are `SafeObject`s, invoked through `DilRuntime.invoke` (never called);
- *   - a button's intent comes from `DilRuntime.probe`, which runs it with side effects
- *     off, so "this sends a message" is decided by the handler itself, not by its text;
- *   - state reads go through getters, so a control never sees a stale value.
- *
- * Failure policy matches the rest of the renderer: a missing or unusable prop degrades
- * (an unknown `size`, a `value` that is not a string), never throws.
- */
 
 export interface ControlProps {
   readonly props: ResolvedProps;
@@ -36,29 +20,22 @@ function buttonSize(value: unknown): "sm" | "default" | "lg" {
 
 export function ControlButton({ props, children }: ControlProps) {
   const context = useDilRuntime();
-  const action = useMemo(() => context?.runtime.probe(props.onClick) ?? null, [context, props.onClick]);
+  const handler = props.onClick as DilHandler | undefined;
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
-
-  const sends = action !== null;
+  const sends = handler ? context?.sends.has(handler.id) === true : false;
   const host = context?.host ?? null;
   const blocked = sends && (host === null || host.busy);
   const color = typeof props.color === "string" ? props.color : undefined;
 
   const onClick = async () => {
-    if (!context) return;
+    if (!context || !handler) return;
     setFailed(false);
-    if (!sends) {
-      context.runtime.invoke(props.onClick);
-      return;
-    }
-    // The click is the send: a card never drafts, and `busy` is the only gate.
-    setSending(true);
+    if (sends) setSending(true);
     try {
-      await context.runtime.invoke(props.onClick);
-    } catch (error) {
+      await context.runtime.invoke(handler, [], () => setSending(true));
+    } catch {
       setFailed(true);
-      void error;
     } finally {
       setSending(false);
     }
@@ -69,7 +46,7 @@ export function ControlButton({ props, children }: ControlProps) {
       <Button
         aria-busy={sending || undefined}
         className={cn(props.block === true && "w-full", sending && "gap-2")}
-        data-dil-action={action?.kind}
+        data-dil-action={sends ? "issueNewTurn" : undefined}
         disabled={blocked || sending}
         onClick={onClick}
         size={buttonSize(props.size)}
@@ -102,9 +79,22 @@ const RadioGroupContext = createContext<RadioGroupContextValue | null>(null);
 export function ControlRadioGroup({ props, children }: ControlProps) {
   const context = useDilRuntime();
   const name = useId();
-  const select = (value: unknown) => context?.runtime.invoke(props.onChange, [value]);
-  const disabled = !context || props.onChange === undefined;
-  const value = { selected: props.value, select, disabled, name };
+  const handler = props.onChange as DilHandler | undefined;
+  const [draft, setDraft] = useState<{ value: unknown }>();
+  const version = useRef(0);
+  const select = (value: unknown) => {
+    if (!context || !handler) return;
+    const edit = ++version.current;
+    setDraft({ value });
+    void context.runtime
+      .invoke(handler, [value])
+      .catch(() => undefined)
+      .finally(() => {
+        if (edit === version.current) setDraft(undefined);
+      });
+  };
+  const disabled = !context || !handler;
+  const value = { selected: draft ? draft.value : props.value, select, disabled, name };
   return (
     <RadioGroupContext.Provider value={value}>
       <div
@@ -146,15 +136,29 @@ export function ControlLabel({ children }: ControlProps) {
 
 export function ControlTextarea({ props }: ControlProps) {
   const context = useDilRuntime();
+  const handler = props.onChange as DilHandler | undefined;
   const rows = typeof props.rows === "number" && props.rows > 0 ? Math.min(props.rows, 20) : 3;
+  const [draft, setDraft] = useState<string>();
+  const version = useRef(0);
   return (
     <Textarea
       className="resize-y text-sm"
-      disabled={!context || props.onChange === undefined}
-      onChange={(event) => context?.runtime.invoke(props.onChange, [event.currentTarget.value])}
+      disabled={!context || !handler}
+      onChange={(event) => {
+        if (!context || !handler) return;
+        const value = event.currentTarget.value;
+        const edit = ++version.current;
+        setDraft(value);
+        void context.runtime
+          .invoke(handler, [value])
+          .catch(() => undefined)
+          .finally(() => {
+            if (edit === version.current) setDraft(undefined);
+          });
+      }}
       placeholder={typeof props.placeholder === "string" ? props.placeholder : undefined}
       rows={rows}
-      value={text(props.value)}
+      value={draft ?? text(props.value)}
     />
   );
 }
