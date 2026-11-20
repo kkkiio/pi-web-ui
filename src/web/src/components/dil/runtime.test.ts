@@ -90,3 +90,25 @@ test("rendering never starts a user turn or applies a setter", () => {
   assert.equal(local.state.n, 1);
   assert.deepEqual(session.fire("button", "onClick", [], 1).effects, ["explicit click"]);
 });
+
+test("button intent follows the current state and calls through aliases", () => {
+  const source = [
+    "{@body const [revealed, setRevealed] = DIL.useState(false)}",
+    '{@body const send = () => GenUI.issueNewTurn("continue")}',
+    "<button onClick={() => revealed ? send() : setRevealed(true)}>Continue</button>",
+  ].join("\n");
+  const { program } = compileDil(parseDocument(source));
+  assert.ok(program);
+  const active = load(source);
+  const preview = createProgram(active.result.state);
+  const before = preview.load(program);
+  assert.equal(preview.probe(before.buttons[0]), false);
+  assert.deepEqual(active.result.state, { revealed: false });
+
+  assert.deepEqual(active.fire("button", "onClick").effects, []);
+  const after = createProgram(active.result.state);
+  const ready = after.load(program);
+  assert.equal(after.probe(ready.buttons[0]), true);
+  assert.deepEqual(active.result.effects, []);
+  assert.deepEqual(active.fire("button", "onClick").effects, ["continue"]);
+});

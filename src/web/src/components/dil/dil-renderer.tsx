@@ -53,7 +53,8 @@ export function DilRenderer({
   const compiled = useMemo(() => compileDil(parseDocument(text, { isStreaming })), [text, isStreaming]);
   const rootRef = useRef<HTMLDivElement>(null);
   const [snapshot, setSnapshot] = useState<readonly ResolvedNode[]>();
-  const [runtime] = useState(() => new DilSandbox(setSnapshot, () => hostRef.current));
+  const [sends, setSends] = useState<ReadonlySet<string>>(() => new Set());
+  const [runtime] = useState(() => new DilSandbox(setSnapshot, setSends, () => hostRef.current));
 
   useEffect(() => {
     const root = rootRef.current;
@@ -73,7 +74,7 @@ export function DilRenderer({
     runtime.update(compiled.program);
   }, [runtime, compiled.program]);
 
-  const value = useMemo(() => ({ runtime, host }), [runtime, host]);
+  const value = useMemo(() => ({ runtime, host, sends }), [runtime, host, sends]);
   return (
     <DilRuntimeContext.Provider value={value}>
       <div ref={rootRef} className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>

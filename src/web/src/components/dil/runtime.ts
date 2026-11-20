@@ -19,6 +19,7 @@ type Request = (Revision & { kind: "load" }) | { kind: "trigger"; revision: numb
 
 interface EventRequest {
   readonly request: Extract<Request, { kind: "trigger" }>;
+  readonly onSend?: () => void;
   readonly resolve: () => void;
   readonly reject: (error: Error) => void;
 }
@@ -40,9 +41,13 @@ export class DilSandbox {
   private pending: { id: number; request: Request; event?: EventRequest } | undefined;
   private watchdog: ReturnType<typeof setTimeout> | undefined;
   private idle: ReturnType<typeof setTimeout> | undefined;
+  private intent = 0;
+  private buttons = new Set<string>();
+  private sends = new Set<string>();
 
   constructor(
     private readonly onTree: (tree: readonly ResolvedNode[]) => void,
+    private readonly onIntents: (sends: ReadonlySet<string>) => void,
     private readonly getHost: () => DilHost | null,
   ) {}
 
@@ -72,11 +77,11 @@ export class DilSandbox {
     }
   }
 
-  invoke(handler: DilHandler, args: unknown[] = []): Promise<void> {
+  invoke(handler: DilHandler, args: unknown[] = [], onSend?: () => void): Promise<void> {
     if (!this.committed) return Promise.resolve();
     const revision = this.committed.revision;
     return new Promise((resolve, reject) => {
-      this.events.push({ request: { kind: "trigger", revision, handler: handler.id, args }, resolve, reject });
+      this.events.push({ request: { kind: "trigger", revision, handler: handler.id, args }, onSend, resolve, reject });
       this.connect();
       this.pump();
     });
@@ -90,11 +95,22 @@ export class DilSandbox {
     this.frame = undefined;
     this.port = undefined;
     this.ready = false;
+    this.intent = 0;
     this.loaded = 0;
     this.attempted = 0;
     this.pending?.event?.resolve();
     this.pending = undefined;
     for (const event of this.events.splice(0)) event.resolve();
+  }
+
+  private recover(failed = this.pending?.request): void {
+    this.stop();
+    if (this.visible && failed && this.desired && this.desired.revision > failed.revision) {
+      if (failed.kind === "load" && failed.revision === this.committed?.revision) {
+        this.attempted = failed.revision;
+      }
+      this.connect();
+    }
   }
 
   private connect(): void {
@@ -109,7 +125,7 @@ export class DilSandbox {
     this.frame = frame;
     this.port = channel.port1;
     const stopped = () => {
-      if (this.frame === frame) this.stop();
+      if (this.frame === frame) this.recover();
     };
     frame.addEventListener(
       "load",
@@ -125,6 +141,11 @@ export class DilSandbox {
         clearTimeout(this.watchdog);
         this.ready = true;
         this.pump();
+      } else if (data?.kind === "intents") {
+        if (data.id === this.intent && Array.isArray(data.sends)) {
+          this.sends = new Set(data.sends.filter((id: unknown) => typeof id === "string" && this.buttons.has(id)));
+          this.onIntents(this.sends);
+        }
       } else {
         this.receive(data);
       }
@@ -156,7 +177,7 @@ export class DilSandbox {
     }
     const id = ++this.sequence;
     this.pending = { id, request, event: dispatched };
-    this.watchdog = setTimeout(() => this.stop(), 1_500);
+    this.watchdog = setTimeout(() => this.recover(), 1_500);
     this.port.postMessage({ id, request });
   }
 
@@ -176,12 +197,25 @@ export class DilSandbox {
         this.committed = revision;
         this.loaded = revision.revision;
         this.onTree(tree);
+        this.intent = pending.id;
+        this.buttons = new Set(Array.isArray(data.result.buttons) ? data.result.buttons.slice(0, 5_000) : []);
+        this.sends = new Set([...this.sends].filter((id) => this.buttons.has(id)));
+        this.onIntents(this.sends);
+        if (this.buttons.size) {
+          this.port?.postMessage({
+            kind: "probe",
+            id: this.intent,
+            program: revision.program,
+            state: this.state,
+            buttons: [...this.buttons],
+          });
+        }
         const first = Array.isArray(data.result.effects) ? data.result.effects[0] : undefined;
         if (event && typeof first === "string" && first.length <= 1_000_000 && first.trim()) prompt = first.trim();
       }
     } catch {
       event?.resolve();
-      this.stop();
+      this.recover(request);
       return;
     }
     if (event && prompt) {
@@ -189,6 +223,7 @@ export class DilSandbox {
       if (!host || host.busy) {
         event.reject(new Error("Pi is unavailable"));
       } else {
+        event.onSend?.();
         const message = prompt;
         void Promise.resolve()
           .then(() => host.issueNewTurn(message))

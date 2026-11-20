@@ -23,7 +23,7 @@ export function ControlButton({ props, children }: ControlProps) {
   const handler = props.onClick as DilHandler | undefined;
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
-  const sends = handler?.sends === true;
+  const sends = handler ? context?.sends.has(handler.id) === true : false;
   const host = context?.host ?? null;
   const blocked = sends && (host === null || host.busy);
   const color = typeof props.color === "string" ? props.color : undefined;
@@ -33,11 +33,11 @@ export function ControlButton({ props, children }: ControlProps) {
     setFailed(false);
     if (sends) setSending(true);
     try {
-      await context.runtime.invoke(handler);
+      await context.runtime.invoke(handler, [], () => setSending(true));
     } catch {
       setFailed(true);
     } finally {
-      if (sends) setSending(false);
+      setSending(false);
     }
   };
 

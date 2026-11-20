@@ -2,7 +2,6 @@
   const LIMIT = 5_000;
   const MAX_TEXT = 1_000_000;
   const NativeFunction = Function;
-  const functionSource = Function.call.bind(Function.prototype.toString);
   const copy = structuredClone;
   const trim = (value) => (typeof value === "string" ? value.trim() : "");
   const isArray = Array.isArray;
@@ -63,7 +62,6 @@
     let slots = new Map(Object.entries(initialState));
     let factory;
     let programData;
-    let lastTree;
     let callbacks = new Map();
     let effects;
     let updating = false;
@@ -90,6 +88,7 @@
 
     function render(nextFactory, data) {
       const handlers = new Map();
+      const buttons = [];
       const budget = { nodes: LIMIT * 8, text: MAX_TEXT };
       let nodes = LIMIT;
       let iterations = LIMIT;
@@ -150,9 +149,9 @@
               if (typeof value !== "function") continue;
               const { offset, name: tag } = data[site];
               const id = `${offset}:${tag}:${path}:${name}`;
-              const sends = name === "onClick" && functionSource(value).includes("issueNewTurn");
+              if (tag === "button" && name === "onClick") buttons.push(id);
               handlers.set(id, value);
-              props[name] = { id, sends };
+              props[name] = { id };
             } else {
               const property = safe(() => sanitize(value, budget));
               if (property !== undefined) props[name] = property;
@@ -164,7 +163,7 @@
       const tree = nextFactory(runtime, data, DIL, GenUI, "")?.list;
       if (!isArray(tree)) throw new Error("DIL program did not return a tree");
       const saved = sanitize(Object.fromEntries(slots), budget);
-      return { tree, handlers, state: saved };
+      return { tree, handlers, buttons, state: saved };
     }
 
     return {
@@ -182,14 +181,26 @@
         try {
           const next = render(nextFactory, artifact.data);
           callbacks = next.handlers;
-          lastTree = next.tree;
           factory = nextFactory;
           programData = artifact.data;
-          return { tree: lastTree, state: next.state, effects: [] };
+          return { tree: next.tree, buttons: next.buttons, state: next.state, effects: [] };
         } catch (error) {
           slots = before;
           throw error;
         }
+      },
+      probe(id) {
+        const handler = callbacks.get(id);
+        if (!handler) return false;
+        const recorded = [];
+        effects = recorded;
+        try {
+          handler();
+        } catch {
+        } finally {
+          effects = undefined;
+        }
+        return recorded.length > 0;
       },
       trigger(id, args = []) {
         if (!factory || !callbacks.has(id)) return null;
@@ -203,8 +214,7 @@
           effects = undefined;
           const next = render(factory, programData);
           callbacks = next.handlers;
-          lastTree = next.tree;
-          return { tree: lastTree, state: next.state, effects: performed };
+          return { tree: next.tree, buttons: next.buttons, state: next.state, effects: performed };
         } catch {
           slots = before;
           return null;
@@ -233,9 +243,21 @@
         if (!port) return;
         const send = port.postMessage.bind(port);
         const receive = port.addEventListener.bind(port);
-        const program = createProgram(event.data);
+        const program = createProgram(event.data.state);
         for (const name of ["Worker", "SharedWorker", "BroadcastChannel", "postMessage", "importScripts", "close"]) {
           Object.defineProperty(self, name, { value: undefined, writable: false, configurable: false });
+        }
+        const task = event.data.intent;
+        if (task) {
+          for (const handler of task.buttons) {
+            try {
+              const specimen = createProgram(copy(event.data.state));
+              specimen.load(task.program);
+              if (specimen.probe(handler)) send({ handler });
+            } catch {}
+          }
+          send({ done: true });
+          return;
         }
         let revision = 0;
         receive("message", ({ data }) => {

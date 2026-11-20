@@ -2,7 +2,6 @@ export type ResolvedProps = Readonly<Record<string, unknown>>;
 
 export interface DilHandler {
   readonly id: string;
-  readonly sends: boolean;
 }
 
 export type ResolvedNode =
@@ -98,11 +97,9 @@ export function readTree(value: unknown, data: DilData): ResolvedNode[] {
             typeof value === "object" &&
             "id" in value &&
             typeof value.id === "string" &&
-            value.id.length <= 512 &&
-            "sends" in value &&
-            typeof value.sends === "boolean"
+            value.id.length <= 512
           ) {
-            props[name] = { id: value.id, sends: value.sends } satisfies DilHandler;
+            props[name] = { id: value.id } satisfies DilHandler;
           }
         } else {
           props[name] = readValue(value, budget);

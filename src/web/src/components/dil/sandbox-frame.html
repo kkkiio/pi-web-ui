@@ -1,18 +1,47 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; worker-src blob:; script-src 'sha256-Mud1bxE6BjydVPPUoDGxIfhPB2rBBF5Po7WNwiGOOK4=' 'unsafe-eval'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; worker-src blob:; script-src 'sha256-HbRX0ArNLX+8U6VAEmE8Do4VSFuboGDgX18mtUDvcT4=' 'unsafe-eval'; base-uri 'none'; form-action 'none'">
 <script>
 const BOOT_TIMEOUT = 5000;
 const RUN_TIMEOUT = 500;
 addEventListener("message", (event) => {
   const host = event.ports[0];
   if (event.source !== parent || !host || typeof event.data?.source !== "string") return;
-  const url = URL.createObjectURL(new Blob([event.data.source], { type: "text/javascript" }));
+  const source = new Blob([event.data.source], { type: "text/javascript" });
+  const url = URL.createObjectURL(source);
   const worker = new Worker(url, { name: "dil" });
   const channel = new MessageChannel();
   let timer = setTimeout(stop, BOOT_TIMEOUT);
+  let cancelProbe;
+  function probe(task) {
+    cancelProbe?.();
+    const probeUrl = URL.createObjectURL(source);
+    const preview = new Worker(probeUrl, { name: "dil-intent" });
+    const previewChannel = new MessageChannel();
+    const sends = [];
+    const timeout = setTimeout(publish, RUN_TIMEOUT);
+    function close() {
+      clearTimeout(timeout);
+      preview.terminate();
+      URL.revokeObjectURL(probeUrl);
+      previewChannel.port1.close();
+      cancelProbe = undefined;
+    }
+    function publish() {
+      close();
+      host.postMessage({ kind: "intents", id: task.id, sends });
+    }
+    cancelProbe = close;
+    preview.addEventListener("error", publish, { once: true });
+    previewChannel.port1.onmessage = ({ data }) => {
+      if (data.done) publish();
+      else if (typeof data.handler === "string") sends.push(data.handler);
+    };
+    preview.postMessage({ intent: task, state: task.state }, [previewChannel.port2]);
+  }
   function stop() {
     clearTimeout(timer);
+    cancelProbe?.();
     worker.terminate();
     URL.revokeObjectURL(url);
     channel.port1.close();
@@ -26,10 +55,14 @@ addEventListener("message", (event) => {
     host.postMessage(data);
   };
   host.onmessage = ({ data }) => {
+    if (data.kind === "probe") {
+      probe(data);
+      return;
+    }
     clearTimeout(timer);
     timer = setTimeout(stop, RUN_TIMEOUT);
     channel.port1.postMessage(data);
   };
-  worker.postMessage(event.data.state, [channel.port2]);
+  worker.postMessage({ state: event.data.state }, [channel.port2]);
 }, { once: true });
 </script>
