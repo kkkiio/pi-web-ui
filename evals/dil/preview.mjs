@@ -7,6 +7,7 @@
  *
  *   node evals/dil/preview.mjs                 # the last `npm run eval:dil` report
  *   node evals/dil/preview.mjs --recordings    # the committed recordings
+ *   node evals/dil/preview.mjs --examples      # the prompt examples (extensions/*.dil.md)
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
@@ -27,10 +28,14 @@ execFileSync("npx", ["vite", "build", "--ssr", "../../evals/dil/preview-entry.ts
   cwd: join(root, "src", "web"),
   stdio: "inherit",
 });
-const recordings = process.argv.includes("--recordings");
+const source = process.argv.includes("--examples")
+  ? "examples"
+  : process.argv.includes("--recordings")
+    ? "recordings"
+    : "report";
 const file = execFileSync("node", [join(out, "preview-entry.mjs")], {
   encoding: "utf8",
-  env: { ...process.env, DIL_PREVIEW_SOURCE: recordings ? "recordings" : "report" },
+  env: { ...process.env, DIL_PREVIEW_SOURCE: source },
 }).trim();
 rmSync(out, { recursive: true, force: true });
 console.log(`preview: ${file}`);

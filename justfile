@@ -52,6 +52,21 @@ eval +models="deepseek-v4.1-flash glm-5.3 glm-5.3-flash": gen
     IFS=,
     DIL_EVAL_MODELS="$*" npx vitest run --config vitest.evals.config.ts --reporter=verbose
 
+# Render the prompt examples (extensions/*.dil.md) through the product renderer and open the page.
+preview-examples: gen
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! ls dist/assets/index-*.css >/dev/null 2>&1; then
+      npm run build:web
+    fi
+    node evals/dil/preview.mjs --examples
+    page="$PWD/evals/dil/preview-out/examples.html"
+    case "$(uname -s)" in
+      Darwin) open "$page" ;;
+      Linux) xdg-open "$page" >/dev/null 2>&1 || true ;;
+      *) : ;;
+    esac
+
 # Render a DIL eval run through the product renderer and open the page.
 #   just preview-eval               # the last live report, else the recordings
 #   just preview-eval recordings    # the committed recordings only

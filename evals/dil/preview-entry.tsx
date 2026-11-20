@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
+import { DIL_PROMPT_EXAMPLES, DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
 import { DilRenderer } from "../../src/web/src/components/dil/dil-renderer";
 import { parseDocument } from "../../src/web/src/core/dil/index.ts";
 import type { DilDiagnostic } from "../../src/web/src/core/dil/types.ts";
@@ -185,6 +185,129 @@ function fromReports(): Report[] {
   }
   const latest = join(ROOT, "evals", "dil", "report.json");
   return existsSync(latest) ? [JSON.parse(readFileSync(latest, "utf8")) as Report] : [];
+}
+
+function writeExamplesPreview(): void {
+  const examples = Object.entries(DIL_PROMPT_EXAMPLES);
+  const cards = examples
+    .map(([name, source]) => {
+      const anchor = `example-${name}`;
+      const rendered = renderToStaticMarkup(<DilRenderer source={source} />);
+      const parsed = parseDocument(source);
+      const sourceLines = normalizeSource(source).split("\n");
+      const diagPanel = renderDiagnosticsPanel(anchor, sourceLines, parsed.diagnostics);
+      const numberedSource = renderNumberedSource(anchor, sourceLines, parsed.diagnostics);
+      const hasDiagnostics = parsed.diagnostics.length > 0;
+      const status = hasDiagnostics
+        ? `<span class="score fail">${parsed.diagnostics.length} diagnostics</span>`
+        : `<span class="score pass">clean · ${sourceLines.length} lines</span>`;
+      return `<section class="case" id="${anchor}">
+  <header class="case-head">
+    <h3>${escapeHtml(name)} <small>extensions/${escapeHtml(name)}.dil.md</small></h3>
+    <div class="case-stats">${status}</div>
+  </header>
+  ${diagPanel}
+  <div class="render preview-frame">${rendered}</div>
+  <details class="raw"${hasDiagnostics ? " open" : ""}>
+    <summary>raw source (${sourceLines.length} lines)</summary>
+    ${numberedSource}
+  </details>
+</section>`;
+    })
+    .join("");
+
+  const tocItems = examples
+    .map(([name]) => `<li><a href="#example-${escapeHtml(name)}"><span>${escapeHtml(name)}</span></a></li>`)
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DIL prompt examples preview</title>
+<style>${builtCss()}</style>
+<style>
+  html, body { height: auto; min-height: 100%; overflow: visible; }
+  body { margin: 0; background: var(--background); color: var(--foreground); font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  .layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 40px; max-width: 1120px; margin: 0 auto; padding: 32px 24px 96px; }
+  main { min-width: 0; }
+  .toc { position: sticky; top: 24px; align-self: start; font-size: 12px; }
+  .toc .top { display: block; font-weight: 600; margin-bottom: 12px; color: var(--foreground); text-decoration: none; }
+  .toc ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .toc a { display: flex; justify-content: space-between; padding: 4px 8px; border-radius: 6px; color: var(--muted-foreground); text-decoration: none; }
+  .toc a:hover { background: var(--muted); color: var(--foreground); }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 24px; }
+  .toolbar button { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--background); color: var(--foreground); cursor: pointer; }
+  .toolbar button.active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+  .toolbar .sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+  .preview-frame { max-width: var(--frame-width, 680px); transition: max-width 150ms ease; }
+  .case { scroll-margin-top: 24px; border-top: 1px solid var(--border); padding-top: 24px; margin-top: 28px; }
+  .case-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .case-stats { display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; }
+  h3 { margin: 0; font-size: 16px; } h3 small { color: var(--muted-foreground); font-weight: 400; margin-left: 8px; font-size: 12px; }
+  .score { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
+  .score.pass { color: #15803d; } .score.fail { color: #b91c1c; }
+  .diagnostics-box { margin: 0 0 16px; padding: 10px 12px; border-left: 3px solid #d97706; background: color-mix(in srgb, #f59e0b 8%, transparent); border-radius: 0 8px 8px 0; font-size: 12px; }
+  .diagnostics-title { font-weight: 600; color: #b45309; margin-bottom: 8px; }
+  .diagnostics-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .diag-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .diag-loc { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: #b45309; }
+  .diag-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, #f59e0b 16%, transparent); color: #92400e; }
+  .diag-snippet { margin: 0; padding: 6px 8px; border-radius: 6px; background: var(--background); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; overflow-x: auto; white-space: pre; }
+  .diag-caret { color: #dc2626; font-weight: 700; }
+  .render { margin: 16px 0; }
+  details { margin-top: 14px; font-size: 12px; }
+  details > summary { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--muted-foreground); font-size: 12px; font-weight: 500; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸"; }
+  details[open] > summary::before { content: "▾"; }
+  details > summary:hover { color: var(--foreground); }
+  .src-view { margin-top: 8px; padding: 10px 0; border-radius: 8px; background: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; overflow-x: auto; }
+  .src-line, .src-diag-note { display: grid; grid-template-columns: 44px minmax(0, 1fr); padding: 0 12px 0 4px; }
+  .src-line .ln { text-align: right; padding-right: 12px; color: var(--muted-foreground); user-select: none; font-variant-numeric: tabular-nums; }
+  .src-line .code { white-space: pre-wrap; word-break: break-word; }
+  .src-line.has-diag { background: color-mix(in srgb, #f59e0b 16%, transparent); }
+  .src-diag-note { color: #b91c1c; font-weight: 600; background: color-mix(in srgb, #ef4444 8%, transparent); padding-bottom: 2px; }
+  @media (max-width: 900px) { .layout { display: block; } .toc { position: static; margin-bottom: 20px; } }
+</style>
+</head><body><div class="layout" id="top">
+<nav class="toc" aria-label="Examples">
+  <a class="top" href="#top">Prompt examples</a>
+  <ul>${tocItems}</ul>
+</nav>
+<main>
+<h1>DIL prompt examples</h1>
+<div class="toolbar">
+  <button type="button" data-width="680px" class="active">Desktop (680px)</button>
+  <button type="button" data-width="375px">Mobile (375px)</button>
+  <button type="button" data-width="100%">Full</button>
+  <span class="sep"></span>
+  <button type="button" id="theme-toggle">Toggle dark</button>
+</div>
+${cards}
+</main>
+</div>
+<script>
+  for (const btn of document.querySelectorAll("[data-width]")) {
+    btn.addEventListener("click", () => {
+      document.documentElement.style.setProperty("--frame-width", btn.dataset.width);
+      for (const b of document.querySelectorAll("[data-width]")) b.classList.toggle("active", b === btn);
+    });
+  }
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    document.documentElement.classList.toggle("dark");
+  });
+</script>
+</body></html>`;
+
+  mkdirSync(OUT, { recursive: true });
+  const file = join(OUT, "examples.html");
+  writeFileSync(file, html);
+  process.stdout.write(`${file}\n`);
+}
+
+if (process.env.DIL_PREVIEW_SOURCE === "examples") {
+  writeExamplesPreview();
+  process.exit(0);
 }
 
 const reports: Report[] = process.env.DIL_PREVIEW_SOURCE === "recordings" ? [fromRecordings()] : fromReports();

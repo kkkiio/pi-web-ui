@@ -1,7 +1,7 @@
-In stateless serverless architectures, concurrent requests hit independent workers and must coordinate through an external database:
+In stateless serverless architectures, concurrent requests hit independent workers and coordinate through a shared database:
 
 <box border radius="xl" padding={3} gap={2}>
-  <text weight="medium" size="sm">Stateless Serverless: Compute Separated from Shared State</text>
+  <title>Stateless Serverless: Compute Separated from Shared State</title>
   <svg viewBox="0 0 340 188" width="100%">
     <defs>
       <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
@@ -23,4 +23,4 @@ In stateless serverless architectures, concurrent requests hit independent worke
   <caption>Requests from the same room may land on different workers with no shared in-memory state.</caption>
 </box>
 
-If Players A and B both try to pick up the same item at once, two workers can read `owner = null` simultaneously and both believe they succeeded unless the database serializes the write.
+If Players A and B pick up the same item at once, both workers can read `owner = null` unless the database serializes the write.
