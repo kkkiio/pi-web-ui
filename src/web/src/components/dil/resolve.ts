@@ -19,7 +19,13 @@
  */
 
 import type { DilScope } from "../../core/dil/evaluator.ts";
-import { evaluateCondition, evaluateList, formatValue, safeEvaluate } from "../../core/dil/evaluator.ts";
+import {
+  bindEachPattern,
+  evaluateCondition,
+  evaluateList,
+  formatValue,
+  safeEvaluate,
+} from "../../core/dil/evaluator.ts";
 import type { DilElementNode, DilFenceNode, DilNode } from "../../core/dil/types.ts";
 
 export type ResolvedProps = Readonly<Record<string, unknown>>;
@@ -95,7 +101,8 @@ function resolveNode(node: DilNode, scope: DilScope, budget: Budget): ResolvedNo
       const out: ResolvedNode[] = [];
       items.forEach((item, index) => {
         if (budget.remaining <= 0) return;
-        const frame: Record<string, unknown> = { ...scope, [node.item]: item };
+        const frame: Record<string, unknown> = { ...scope };
+        bindEachPattern(node.item, item, frame, scope);
         if (node.index) frame[node.index] = index;
         for (const resolved of resolveNodes(node.body, frame, budget)) out.push(resolved);
       });

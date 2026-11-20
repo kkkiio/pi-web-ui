@@ -36,6 +36,7 @@ import {
   type BlockStatement,
   type CallExpression,
   type Expression,
+  type Pattern,
   parse,
   parseExpressionAt,
   type SpreadElement,
@@ -103,6 +104,92 @@ export function evaluateList(source: string, scope: DilScope): readonly unknown[
     return Array.isArray(value) ? value : [];
   } catch {
     return [];
+  }
+}
+
+const SIMPLE_IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+
+/**
+ * Bind one `{#each}` item into `target` according to `pattern` — a plain identifier
+ * (`item`) or a destructuring pattern (`[n, name, size]`, `{ name, pct }`).
+ * Never throws: malformed or mismatched shapes bind missing slots to `undefined`.
+ */
+export function bindEachPattern(
+  pattern: string,
+  value: unknown,
+  target: Record<string, unknown>,
+  scope: DilScope = {},
+): void {
+  if (SIMPLE_IDENTIFIER.test(pattern)) {
+    if (!isForbiddenKey(pattern)) target[pattern] = value;
+    return;
+  }
+  const statement = parseStatement(`const ${pattern} = 0`);
+  if (statement?.type !== "VariableDeclaration") return;
+  const id = statement.declarations[0]?.id;
+  if (!id) return;
+  steps = 0;
+  bindPattern(id, value, target, [BUILTIN_SCOPE, scope, target]);
+}
+
+function bindPattern(node: Pattern, value: unknown, target: Record<string, unknown>, context: Context): void {
+  switch (node.type) {
+    case "Identifier":
+      if (!isForbiddenKey(node.name)) target[node.name] = value;
+      return;
+
+    case "AssignmentPattern": {
+      const resolved = value === undefined ? safeNode(node.right, context) : value;
+      bindPattern(node.left, resolved, target, context);
+      return;
+    }
+
+    case "ArrayPattern": {
+      const list = Array.isArray(value) ? value : null;
+      for (let i = 0; i < node.elements.length; i++) {
+        const element = node.elements[i];
+        if (!element) continue;
+        if (element.type === "RestElement") {
+          bindPattern(element.argument, list ? list.slice(i) : [], target, context);
+          return;
+        }
+        bindPattern(element, list ? list[i] : undefined, target, context);
+      }
+      return;
+    }
+
+    case "ObjectPattern": {
+      const obj =
+        typeof value === "object" && value !== null && !isSafeObject(value) ? (value as Record<string, unknown>) : null;
+      const used = new Set<string>();
+      for (const property of node.properties) {
+        if (property.type === "RestElement") {
+          const rest: Record<string, unknown> = {};
+          if (obj) {
+            for (const key of Object.keys(obj)) {
+              if (!used.has(key) && !isForbiddenKey(key)) rest[key] = obj[key];
+            }
+          }
+          bindPattern(property.argument, rest, target, context);
+          return;
+        }
+        const key =
+          !property.computed && property.key.type === "Identifier"
+            ? property.key.name
+            : property.key.type === "Literal" &&
+                (typeof property.key.value === "string" || typeof property.key.value === "number")
+              ? String(property.key.value)
+              : null;
+        if (!key || isForbiddenKey(key)) continue;
+        used.add(key);
+        const propValue = obj && Object.hasOwn(obj, key) ? obj[key] : undefined;
+        bindPattern(property.value, propValue, target, context);
+      }
+      return;
+    }
+
+    default:
+      return;
   }
 }
 

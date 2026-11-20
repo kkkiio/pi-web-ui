@@ -233,30 +233,117 @@ export function readInlineMathSpan(text: string, start: number): InlineSpan | nu
 
 export interface EachClause {
   readonly list: string;
-  /** Raw loop pattern, e.g. `item` or `item, i`. */
+  /** Raw loop pattern, e.g. `item`, `item, i`, `[a, b]`, `{ name, pct }, i`. */
   readonly pattern: string;
   readonly item: string;
   readonly index: string | null;
 }
 
+function splitTopLevelCommas(src: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  while (true) {
+    const comma = topLevelIndex(src, ",", start);
+    if (comma < 0) {
+      parts.push(src.slice(start));
+      return parts;
+    }
+    parts.push(src.slice(start, comma));
+    start = comma + 1;
+  }
+}
+
+function isValidBindingPattern(raw: string): boolean {
+  const s = raw.trim();
+  if (!s) return false;
+  if (IDENTIFIER.test(s)) return true;
+
+  if (s.startsWith("[") && s.endsWith("]")) {
+    const span = readBalanced(s, 0, "[", "]");
+    if (!span.ok || span.end !== s.length) return false;
+    const parts = splitTopLevelCommas(span.inner);
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      if (!part) continue;
+      if (part.startsWith("...")) {
+        if (!IDENTIFIER.test(part.slice(3).trim())) return false;
+        if (parts.slice(i + 1).some((tail) => tail.trim() !== "")) return false;
+        continue;
+      }
+      const eq = topLevelIndex(part, "=");
+      if (eq >= 0) {
+        if (!isValidBindingPattern(part.slice(0, eq)) || !part.slice(eq + 1).trim()) return false;
+      } else if (!isValidBindingPattern(part)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  if (s.startsWith("{") && s.endsWith("}")) {
+    const span = readBalanced(s, 0, "{", "}");
+    if (!span.ok || span.end !== s.length) return false;
+    const parts = splitTopLevelCommas(span.inner);
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      if (!part) {
+        if (i !== parts.length - 1) return false;
+        continue;
+      }
+      if (part.startsWith("...")) {
+        if (!IDENTIFIER.test(part.slice(3).trim())) return false;
+        if (parts.slice(i + 1).some((tail) => tail.trim() !== "")) return false;
+        continue;
+      }
+      const colon = topLevelIndex(part, ":");
+      if (colon >= 0) {
+        const key = part.slice(0, colon).trim();
+        const rhs = part.slice(colon + 1).trim();
+        if (!IDENTIFIER.test(key) && !/^(['"]).*\1$/.test(key)) return false;
+        const eq = topLevelIndex(rhs, "=");
+        if (eq >= 0) {
+          if (!isValidBindingPattern(rhs.slice(0, eq)) || !rhs.slice(eq + 1).trim()) return false;
+        } else if (!isValidBindingPattern(rhs)) {
+          return false;
+        }
+      } else {
+        const eq = topLevelIndex(part, "=");
+        const name = (eq >= 0 ? part.slice(0, eq) : part).trim();
+        if (!IDENTIFIER.test(name)) return false;
+        if (eq >= 0 && !part.slice(eq + 1).trim()) return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * `{#each list as item}` → `{ list, item }`, split at the top-level ` as ` so
- * `{ a: " as b" } as y` keeps the string intact. Returns null when the clause has no
- * top-level ` as `.
+ * `{ a: " as b" } as y` keeps the string intact. Supports plain identifiers as well as
+ * array/object destructuring (`[a, b]`, `{ name, pct }`), plus an optional top-level
+ * index identifier (`… , i`). Returns null when the clause is malformed.
  */
 export function splitEachClause(expr: string): EachClause | null {
   const at = findTopLevel(expr, (source, i) => source.startsWith(" as ", i));
   if (at < 0) return null;
   const list = expr.slice(0, at).trim();
   const pattern = expr.slice(at + 4).trim();
-  const parts = pattern.split(",").map((part) => part.trim());
-  const item = parts[0] || "item";
-  const index = parts[1] || null;
+  if (!list || !pattern) return null;
+
+  const comma = topLevelIndex(pattern, ",");
+  const item = (comma < 0 ? pattern : pattern.slice(0, comma)).trim();
+  const rest = comma < 0 ? "" : pattern.slice(comma + 1).trim();
+  if (comma >= 0 && (!rest || topLevelIndex(rest, ",") >= 0)) return null;
+  if (!isValidBindingPattern(item)) return null;
+  if (rest && !IDENTIFIER.test(rest)) return null;
+
   return {
-    list: list || "[]",
+    list,
     pattern,
-    item: IDENTIFIER.test(item) ? item : "item",
-    index: index && IDENTIFIER.test(index) ? index : null,
+    item,
+    index: rest || null,
   };
 }
 

@@ -161,3 +161,13 @@ test("a streaming fence reaches the renderer with closed: false", () => {
   assert.equal(resolveFirst("$$\n\\int_0^1\n$$").closed, true);
   assert.equal(resolveFirst("**<text>x</text>**").closed, true, "a non-fence element is closed");
 });
+
+test("each supports array and object destructuring with optional index", () => {
+  const arrSource =
+    '{#each [["1", "preamble", 169], ["2", "tools", 339]] as [n, name, size], idx}<text>{idx}:{n}-{name}-{size}|</text>{/each}';
+  assert.equal(text(resolved(arrSource)), "0:1-preamble-169|1:2-tools-339|");
+
+  const objSource =
+    '{#each [{ name: "a", pct: "10%" }, { name: "b" }] as { name: label, pct = "0%" }}<text>{label}={pct}|</text>{/each}';
+  assert.equal(text(resolved(objSource)), "a=10%|b=0%|");
+});

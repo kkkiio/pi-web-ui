@@ -196,6 +196,31 @@ test("a malformed each clause falls back to a safe list and item", () => {
   assert.equal(each.item, "item");
 });
 
+test("parses each with array and object destructuring patterns", () => {
+  const arr = parse("{#each rows as [n, name, size], i}<text>{n}:{name}:{size}:{i}</text>{/each}");
+  assert.equal(arr.diagnosticSummary, "clean");
+  const arrNode = arr.nodes[0];
+  assert.ok(arrNode.type === "each");
+  assert.equal(arrNode.item, "[n, name, size]");
+  assert.equal(arrNode.index, "i");
+
+  const obj = parse("{#each rows as { name, pct = '0%' }}<text>{name}:{pct}</text>{/each}");
+  assert.equal(obj.diagnosticSummary, "clean");
+  const objNode = obj.nodes[0];
+  assert.ok(objNode.type === "each");
+  assert.equal(objNode.item, "{ name, pct = '0%' }");
+  assert.equal(objNode.index, null);
+
+  // Truly malformed patterns must emit malformed_each instead of silently binding index.
+  for (const bad of [
+    "{#each rows as [n, name}<text>{n}</text>{/each}",
+    "{#each rows as a, b, c}<text>{a}</text>{/each}",
+    "{#each rows as 123}<text>x</text>{/each}",
+  ]) {
+    assert.match(parse(bad).diagnosticSummary, /malformed_each/, bad);
+  }
+});
+
 test("missing closing tags keep the node with closed: false", () => {
   const result = parse("<box><text>a</text>");
   const box = only(result.nodes, "box");
