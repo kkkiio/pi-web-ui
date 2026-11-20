@@ -23,10 +23,6 @@ Per `docs/adr/0001-pi-extension-output-policy.md`: never write to `stdout`/`stde
 
 Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards events unchanged. Never interpret extension payloads into Pi Web UI product concepts inside the extension. The browser owns feature interpretation.
 
-### Interactive Agent UI positioning
-
-Per `docs/adr/0012-interactive-agent-ui-positioning.md`: Pi Web UI is an **Interactive Agent UI** built to steer high-impulse, cryptic coding models (e.g., GPT coding variants, DeepSeek) that tend to interpret prompts overly literally, diverge into rabbit holes, or rush into execution before clarifying intent. When designing or implementing UI features (such as `Add to Chat`, `Git Diff Comment`, `BTW / Ask in Side Chat`, `AskUserQuestion`, `Edit Message`, or `Generative UI`), keep session scope single-process (`docs/adr/0006-project-scope-single-session-web-ui.md`) and keep product-level UI interpretation in `src/web/` (`docs/adr/0002-web-ui-extension-event-protocol.md`).
-
 ### Product language
 
 **Rule**: All UI text is English.
@@ -48,7 +44,6 @@ activation again. Recommend continuing activated sessions in Web UI.
 - **Add to Chat** — Transcript selection attachment that pins user feedback to exact assistant prose, reasoning, or tool output spans.
 - **Git Diff Comment** — Line-level comment/quote action inside the Right Panel Git Diff view (Codex-style) that attaches specific file/line changes and user feedback to the chat composer.
 - **Side Chat (BTW)** — Isolated side inquiry in the Right Panel used to unpack cryptic model output without polluting the main session trajectory or triggering main-agent execution.
-- **AskUserQuestion** — Structured clarification interaction where the agent presents multi-choice or form questions to align on intent before executing tasks.
 - **Edit Message** — Inline editing of a previous user message (`Save & Send`) that rewinds the session via `navigate_tree` and re-sends the updated prompt.
 - **Generative UI** — Task-specific interactive visual views rendered in place of dense prose explanations.
 - **Process Group** — A collapsible transcript section for a contiguous sequence of assistant reasoning and tool calls within a turn.
@@ -138,116 +133,15 @@ activation again. Recommend continuing activated sessions in Web UI.
 └── justfile                     # just tasks (fmt, check, build, readme-images)
 ```
 
-### Architecture: Extension ↔ Frontend Communication
-
-```mermaid
-graph LR
-    A[Pi TUI<br/>terminal] <-->|Pi events| B[Pi Process<br/>mirror-server.ts]
-    B <-->|HTTP + WS :3001| C[Browser]
-```
-
-- **Extension (`mirror-server.ts`)**: subscribes to Pi events via `pi.on(...)`, forwards them to browser WebSocket clients. Accepts commands from browser, executes via extension API.
-- **Frontend (`src/web/`)**: React + Vite + Tailwind. `PiClient` connects to the extension WebSocket, `event-dispatch.ts` routes raw events into Zustand slices, and React components render store state.
-- **Dev proxy**: `vite dev` on `:4444` proxies `/api` → `:3001` and `/ws` → `ws://localhost:3001`.
-
-#### Event envelope
-
-All WebSocket messages to the browser use:
-
-```json
-{ "type": "event", "event": "<event-name>", "payload": { "...": "..." } }
-```
-
-Pi core events carry their native fields inside `payload`. Extension-bus events keep their source payload nested under `payload` when needed to avoid field collisions.
-
-#### State snapshot on connect
-
-When a browser WebSocket connects, `buildStateSnapshot(latestCtx)` sends full session state (messages, model, session info, tool calls). After that, incremental events keep the UI in sync.
-
-#### Commands from browser → extension
-
-Browser sends JSON commands over WebSocket. Commands invoke Pi extension API methods (send message, cancel, set model, etc.) through `latestCtx`/`latestExecuteCtx`.
-
 ## Operation Guide
 
-### Development Workflow
-
-#### Frontend development
-
-Run Pi with Pi Web UI on its normal port in one terminal, then:
+### Feedback
 
 ```bash
-npm run dev:web
-```
-
-Open `http://localhost:4444`. Vite serves the React UI and proxies `/api` and `/ws` to the Pi Web UI extension on `localhost:3001`.
-
-#### Build for production
-
-```bash
-npm run build:web
-```
-
-Output goes to `dist/`. Then run Pi with the built assets:
-
-```bash
-PI_WEB_UI_STATIC_DIR=$(pwd)/dist pi
-```
-
-### Testing & Checks
-
-| Layer | What it proves | Command |
-| --- | --- | --- |
-| Check | types and lint (fast, no tests) | `just check` |
-| Test | all unit tests, including `conformance/` | `just test` |
-| Build | production bundle | `just build` |
-| Verify | check + test + build, what CI proves minus the browser | `just verify` |
-| Unit | DIL grammar, streaming recovery, Markdown lowering | `npm run test:dil` |
-| Snapshots | what the parser produced for each `*.dil.md` fixture | `npm run test:dil:update`, then review the diff |
-| E2E | the real Pi Web UI path works | `npm run e2e` |
-| Storyboard | what a scenario looks like | `npm run e2e:storyboard -- e2e/features/x.feature`, then `npm run e2e:preview` |
-
-DIL fixtures live next to the parser (`src/web/src/core/dil/__fixtures__/*.dil.md`); every
-fixture has a committed AST + fallback snapshot in `__snapshots__/`, which is the review
-artifact for parser changes.
-
-E2E drives a real browser through the real product path: `pi --mode rpc` with
-`extensions/mirror-server.ts`, real tools, and a temp git workspace; only the model is
-replaced by the faux provider. Rules and rationale live in
-[ADR 0010](docs/adr/0010-real-pi-web-ui-e2e.md) — do not mock `/ws`, set React state
-directly, or accept a DOM selector as proof of behavior.
-
-Storyboards exist so a reviewer can understand a scenario without reading step
-definitions: video, one screenshot per Gherkin step, step chapters, and the scenario's
-`Why` line. Record the features you touched; use `--full` after UI or step changes. See
-[ADR 0014](docs/adr/0014-web-ui-test-storyboard.md).
-
-Visual validation is not E2E: prove what a user sees with screenshots or visible bounds
-(desktop and mobile), or with a storyboard's per-step screenshots. A selector match is
-not proof that something is visible. See
-[ADR 0011](docs/adr/0011-web-ui-visual-validation.md).
-
-CI runs `npm run e2e` on every PR; local `just check` does not.
-
-README images (`docs/images/*.png`) are committed snapshots generated in exactly one
-place: `just readme-images`, which runs the `@readme` scenarios from
-`e2e/features/readme-preview.feature` inside the pinned Linux image
-(`e2e/readme-image.Dockerfile`, 2x pixel density) and copies the result back. They are not
-snapshot assertions, but they are reviewable output. That project is not part of
-`npm run e2e` (chromium only) nor of CI, because the pixels depend on the platform: the app
-ships no webfont, so `Inter, ui-sans-serif, system-ui, …` resolves to the OS UI font and
-each OS rasterizes text its own way, which means a host render can never match the
-committed files. If your change affects what those scenarios show, run
-`just readme-images`, inspect the diff, and commit it with the change; if the images changed
-when they should not have, treat it as a regression and check the Playwright image tag in
-the Dockerfile before assuming a UI change.
-
-```bash
-just check   # npx tsc --noEmit + biome check .       (fast, no tests)
-just test    # npm run test:dil, includes conformance/
-just verify  # check + test + build
-just fmt     # biome check --write
-npm run lint # biome lint
+just check
+just fmt
+just test
+just build
 ```
 
 ### PR Workflow
