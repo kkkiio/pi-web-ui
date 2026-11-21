@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate `extensions/examples.gen.ts` from `extensions/*.dil.md`.
+ * Generate `extensions/examples.gen.ts` from `extensions/examples/*.dil.md`.
  *
  * Run via `just gen`. Keeping the examples as standalone `.dil.md` files avoids
  * escaping backticks and `${...}` in TypeScript template literals, while the generated
@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const EXTENSIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "extensions");
+const EXAMPLES_DIR = join(EXTENSIONS_DIR, "examples");
 const OUT_FILE = join(EXTENSIONS_DIR, "examples.gen.ts");
 
 const EXAMPLES = [
@@ -23,12 +24,12 @@ const EXAMPLES = [
 
 export function renderExamplesModule() {
   const lines = [
-    "// Generated from extensions/*.dil.md — do not edit manually.",
+    "// Generated from extensions/examples/*.dil.md — do not edit manually.",
     "// Run `just gen` to regenerate.",
     "",
   ];
   for (const { exportName, file } of EXAMPLES) {
-    const content = readFileSync(join(EXTENSIONS_DIR, file), "utf8").trim();
+    const content = readFileSync(join(EXAMPLES_DIR, file), "utf8").trim();
     lines.push(`export const ${exportName} = ${JSON.stringify(content)};`);
   }
   lines.push("");
