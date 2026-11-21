@@ -52,7 +52,7 @@ eval +models="deepseek-v4.1-flash glm-5.3 glm-5.3-flash": gen
     IFS=,
     DIL_EVAL_MODELS="$*" npx vitest run --config vitest.evals.config.ts --reporter=verbose
 
-# Render the prompt examples (extensions/*.dil.md) through the product renderer and open the page.
+# Render the prompt examples (extensions/examples/*.dil.md) through the product renderer and open the page.
 preview-examples: gen
     node evals/dil/preview.mjs --examples
 

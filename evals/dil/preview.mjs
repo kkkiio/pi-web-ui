@@ -5,7 +5,7 @@
  *
  *   node evals/dil/preview.mjs                 # the last `npm run eval:dil` report
  *   node evals/dil/preview.mjs --recordings    # the committed recordings
- *   node evals/dil/preview.mjs --examples      # the prompt examples (extensions/*.dil.md)
+ *   node evals/dil/preview.mjs --examples      # the prompt examples (extensions/examples/*.dil.md)
  *   node evals/dil/preview.mjs --data-only     # write preview-out/data.json and exit
  *   node evals/dil/preview.mjs --no-open       # serve without opening the browser
  */
