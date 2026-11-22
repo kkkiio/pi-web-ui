@@ -14,13 +14,39 @@ import { ImagePreviewStrip } from "./image-preview-strip";
 type ToolCall = Extract<ChatItem, { kind: "tool" }>;
 
 const FILE_PREVIEW_LINES = 8;
-const TERMINAL_THEME = normalizeTheme({
-  name: "Pi terminal",
-  colors: { "editor.foreground": "#e2e8f0", "editor.background": "#111827" },
-});
+const ANSI_COLORS = {
+  Black: ["#302f2c", "#a6b7b8"],
+  Red: ["#a4262c", "#ff8a83"],
+  Green: ["#176b3a", "#85d8a2"],
+  Yellow: ["#785700", "#efca72"],
+  Blue: ["#185a9d", "#84bff7"],
+  Magenta: ["#743286", "#daa9e8"],
+  Cyan: ["#17616b", "#7dd6db"],
+  White: ["#53616d", "#c4cece"],
+  BrightBlack: ["#5e5b53", "#93a1a1"],
+  BrightRed: ["#b82836", "#ffabaa"],
+  BrightGreen: ["#217946", "#a8ebbd"],
+  BrightYellow: ["#866100", "#ffe29e"],
+  BrightBlue: ["#1e62ad", "#b1d6ff"],
+  BrightMagenta: ["#873d99", "#edc3f6"],
+  BrightCyan: ["#1d6b75", "#a7eceb"],
+  BrightWhite: ["#64695f", "#f4f1e9"],
+} as const;
+const TERMINAL_THEMES = (["light", "dark"] as const).map((name, index) =>
+  normalizeTheme({
+    name,
+    colors: {
+      "editor.foreground": "var(--card-foreground)",
+      "editor.background": "var(--card)",
+      ...Object.fromEntries(
+        Object.entries(ANSI_COLORS).map(([color, variants]) => [`terminal.ansi${color}`, variants[index]]),
+      ),
+    },
+  }),
+);
 const COPY_BUTTON_CLASS = "size-7 shrink-0 text-current hover:bg-current/10 hover:text-current";
 
-function BashDetails({ tool }: { tool: ToolCall }) {
+function BashDetails({ tool, theme }: { tool: ToolCall; theme: "light" | "dark" }) {
   const { command, timeout } = (tool.input ?? {}) as { command?: unknown; timeout?: unknown };
   const { truncation } = (tool.outputDetails ?? {}) as { truncation?: { truncated?: boolean } };
   const running = tool.state === "input-streaming" || tool.state === "input-available";
@@ -33,7 +59,7 @@ function BashDetails({ tool }: { tool: ToolCall }) {
   ).replace(/\r\n/g, "\n");
   const lines = useMemo(() => {
     let offset = 0;
-    return tokenizeAnsiWithTheme(TERMINAL_THEME, output).map((tokens) => {
+    return tokenizeAnsiWithTheme(TERMINAL_THEMES[theme === "dark" ? 1 : 0], output).map((tokens) => {
       const key = offset;
       const spans = tokens.map((token) => {
         const span = { ...token, key: offset };
@@ -43,7 +69,7 @@ function BashDetails({ tool }: { tool: ToolCall }) {
       offset += 1;
       return { key, spans };
     });
-  }, [output]);
+  }, [output, theme]);
   const outputRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   useLayoutEffect(() => {
@@ -54,10 +80,13 @@ function BashDetails({ tool }: { tool: ToolCall }) {
   const duration = tool.durationMs !== undefined ? `${(tool.durationMs / 1000).toFixed(1)}s` : undefined;
   const status = failed ? "Failed" : running ? "Running" : "Completed";
   return (
-    <div className="min-w-0 overflow-hidden rounded-md border border-slate-700 bg-slate-950 text-slate-300">
-      <div className="flex min-w-0 items-start gap-2 border-slate-700 border-b bg-slate-900 px-2.5 py-2">
-        <SquareTerminalIcon aria-hidden className="mt-1 size-4 shrink-0 text-slate-400" />
-        <pre className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-slate-100 text-xs">
+    <section
+      aria-label="Bash command"
+      className="min-w-0 overflow-hidden rounded-md border bg-card text-card-foreground"
+    >
+      <div className="flex min-w-0 items-start gap-2 border-b bg-muted/40 px-2.5 py-2">
+        <SquareTerminalIcon aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
+        <pre className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs">
           {typeof command === "string" ? command : ""}
         </pre>
         {typeof command === "string" && (
@@ -70,12 +99,17 @@ function BashDetails({ tool }: { tool: ToolCall }) {
         )}
       </div>
       <div className="flex min-h-9 items-center gap-2 px-3 text-xs">
-        <span className={cn("font-medium", failed ? "text-red-400" : running ? "text-sky-300" : "text-emerald-300")}>
+        <span
+          className={cn(
+            "font-medium",
+            failed ? "text-destructive" : running ? "text-primary" : "text-emerald-700 dark:text-emerald-300",
+          )}
+        >
           {status}
         </span>
-        {duration && <span className="text-slate-400">{duration}</span>}
-        {typeof timeout === "number" && <span className="text-slate-400">Timeout {timeout}s</span>}
-        {truncation?.truncated && <span className="text-amber-300">Output truncated</span>}
+        {duration && <span className="text-muted-foreground">{duration}</span>}
+        {typeof timeout === "number" && <span className="text-muted-foreground">Timeout {timeout}s</span>}
+        {truncation?.truncated && <span className="text-amber-800 dark:text-amber-300">Output truncated</span>}
         {hasOutput && (
           <CodeBlockCopyButton
             aria-label="Copy output"
@@ -88,7 +122,7 @@ function BashDetails({ tool }: { tool: ToolCall }) {
       {hasOutput ? (
         <div
           ref={outputRef}
-          className="max-h-64 overflow-auto border-slate-800 border-t"
+          className="max-h-64 overflow-auto border-t"
           data-quote-source="bash output"
           onScroll={(event) => {
             const { scrollHeight, clientHeight, scrollTop } = event.currentTarget;
@@ -111,9 +145,9 @@ function BashDetails({ tool }: { tool: ToolCall }) {
           </pre>
         </div>
       ) : (
-        !running && <p className="border-slate-800 border-t px-3 py-2 text-slate-400 text-xs">No output</p>
+        !running && <p className="border-t px-3 py-2 text-muted-foreground text-xs">No output</p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -236,7 +270,7 @@ function EditDetails({ tool, theme }: { tool: ToolCall; theme: "light" | "dark" 
 
 export function ToolCallDetails({ tool, theme }: { tool: ToolCall; theme: "light" | "dark" }) {
   if (tool.name === "bash" && typeof (tool.input as { command?: unknown } | null)?.command === "string") {
-    return <BashDetails tool={tool} />;
+    return <BashDetails theme={theme} tool={tool} />;
   }
   if (tool.name === "edit") return <EditDetails theme={theme} tool={tool} />;
 
