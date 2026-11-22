@@ -40,6 +40,15 @@ async function expectPreview(page: Page, trigger: Locator) {
   await expect(dialog).toBeHidden();
 }
 
+Then("Pi is working", async ({ page }) => {
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
+});
+
+When("Pi continues reading the image", async () => {
+  if (!world.harness) throw new Error("Pi Web UI is not running");
+  await world.harness.command("/finish-test-image-read");
+});
+
 Then("the user attachment opens as an image preview", async ({ page }) => {
   const user = page.getByRole("log").locator(".is-user");
   await expectPreview(page, user.getByRole("button", { name: "View image 1", exact: true }));

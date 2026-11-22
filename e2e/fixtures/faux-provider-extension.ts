@@ -93,7 +93,8 @@ export default function (pi: ExtensionAPI) {
     tokenSize: fixtureName === "process-group" ? { min: 8, max: 8 } : { min: 64, max: 64 },
     ...(fixtureName === "process-group" && { tokensPerSecond: 6 }),
   });
-  const responses = responsesByName[fixtureName as keyof typeof responsesByName] || chatLifecycleResponses;
+  const fixture = responsesByName[fixtureName as keyof typeof responsesByName] || chatLifecycleResponses;
+  const responses = typeof fixture === "function" ? fixture(pi) : fixture;
 
   faux.setResponses([...responses, ...chatLifecycleResponses]);
   pi.registerProvider(faux.provider);
