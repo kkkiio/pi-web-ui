@@ -313,6 +313,7 @@ function TrajectoryBody({
                   onToggleTool={onToggleTool}
                   reasoningRow={item.kind === "message"}
                   processRow
+                  theme="light"
                 />
               ))}
             </ProcessGroup>
@@ -336,6 +337,7 @@ function TrajectoryBody({
             onCopy={copyText}
             onQuote={() => {}}
             onToggleTool={onToggleTool}
+            theme="light"
           />
         );
       })}
