@@ -33,17 +33,21 @@ async function checkFormatting(page: Page) {
   await expect(body.locator("em")).toHaveText("emphasis");
   await expect(body.locator("blockquote")).toHaveText("Quoted instruction");
   await expect(body.locator("li")).toHaveText(["First item", "Second item"]);
-  await expect(body.locator("p").first()).toHaveText("First line\nSecond line");
-  await expect(body.locator("p").first().locator("br")).toHaveCount(1);
-  // Confirm a line break is visible rather than just present in the DOM.
-  const height = await body
-    .locator("p")
-    .first()
-    .evaluate((node) => ({
-      height: node.getBoundingClientRect().height,
-      lineHeight: Number.parseFloat(getComputedStyle(node).lineHeight),
-    }));
-  expect(height.height).toBeGreaterThanOrEqual(height.lineHeight * 2 - 1);
+  const paragraph = body.locator("p").first();
+  await expect(paragraph).toHaveText("First line\nSecond line");
+  await expect(paragraph.locator("br")).toHaveCount(1);
+  await expect
+    .poll(() =>
+      paragraph.evaluate((node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const lines = Array.from(range.getClientRects()).filter(({ width, height }) => width > 0 && height > 0);
+        const firstLine = lines[0];
+        const lastLine = lines.at(-1);
+        return firstLine && lastLine ? lastLine.top - firstLine.top : 0;
+      }),
+    )
+    .toBeGreaterThan(0);
   await expect(body).toContainText("escaped dollar: $5");
   await expect(body.locator("p").last()).toHaveText("Unclosed **marker");
   await expect(body.locator("code").first()).toHaveText("<b>inline code</b>");

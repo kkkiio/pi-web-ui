@@ -38,5 +38,12 @@ jobs:
         run: npm run build:web
 
       - name: Run real Pi E2E
-        run: npm run e2e
+        id: e2e
+        run: npm run e2e -- --retries=1 --fail-on-flaky-tests
 
+      - name: Upload Playwright failure artifacts
+        if: failure() && steps.e2e.conclusion == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-failures
+          path: e2e/test-results/
