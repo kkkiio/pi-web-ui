@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { JudgeHarnessInput, RunJudge } from "vitest-evals";
-import { apiKeyFor } from "./agent.ts";
 import { CHECK_LABELS, type CheckResult } from "./scoring.ts";
 
 const MODEL = "glm-5.3-flash";
@@ -22,6 +21,7 @@ export async function requestSvgJudge(
   input: JudgeHarnessInput,
   signal?: AbortSignal,
 ) {
+  const { apiKeyFor } = await import("./agent.ts");
   const credentials = new InMemoryCredentialStore();
   await credentials.modify(provider, async () => ({ type: "api_key", key: apiKeyFor(provider) }));
   const runtime = await ModelRuntime.create({ credentials, modelsPath: null });

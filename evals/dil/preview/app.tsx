@@ -272,7 +272,6 @@ function parseTrajectory(source: string): ChatItem[] {
     },
     [],
   );
-  // Static replay: no composer to add to, so drop the assistant message actions menu.
   return items.map((item) =>
     item.kind === "message" && item.role === "assistant" ? { ...item, copyable: false } : item,
   );

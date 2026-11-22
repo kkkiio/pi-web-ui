@@ -11,7 +11,7 @@
    Tailwind's automatic content detection never reaches them; scan the component
    trees explicitly so their utilities are generated in every build. */
 @source "./src/components/pi-web-ui";
-@source "../components";
+@source "./components";
 
 @theme inline {
   --color-background: var(--background);

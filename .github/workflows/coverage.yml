@@ -50,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
       # One run, two destinations: the readable table for the summary, lcov for Coveralls.
       - name: Measure
         run: |
