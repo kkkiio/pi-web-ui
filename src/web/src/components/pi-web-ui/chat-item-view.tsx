@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
-import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
+import { Tool, ToolContent, ToolHeader } from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
 import { type DilHost, DilHostContext, DilRenderer } from "../dil";
 
-import { ImagePreviewStrip } from "./image-preview-strip";
+import { ToolCallDetails } from "./tool-call-details";
 import type { TranscriptQuote } from "./transcript-quote";
 
 export function ChatItemView({
@@ -29,6 +29,7 @@ export function ChatItemView({
   onToggleTool,
   reasoningRow = false,
   processRow = false,
+  theme,
 }: {
   item: ChatItem;
   onCopy: (text: string) => Promise<void> | void;
@@ -36,6 +37,7 @@ export function ChatItemView({
   onToggleTool: (id: string, open: boolean) => void;
   reasoningRow?: boolean;
   processRow?: boolean;
+  theme: "light" | "dark";
 }) {
   const item = usePiWebUiStore((state) =>
     transcriptItem.kind === "message" && transcriptItem.streaming && state.streamingMessage?.id === transcriptItem.id
@@ -136,17 +138,18 @@ export function ChatItemView({
             state={item.state}
             summary={item.name === "webui_ask_user_question" ? undefined : formatToolSummary(item)}
             title={item.name === "webui_ask_user_question" ? "Ask question" : item.name}
+            trailing={
+              item.name === "bash" && item.exitCode !== undefined ? (
+                <span className={cn("font-mono text-xs", item.exitCode !== 0 && "text-destructive")}>
+                  Exit {item.exitCode}
+                </span>
+              ) : undefined
+            }
             type={`tool-${item.name}` as `tool-${string}`}
           />
           {expandable && (
             <ToolContent>
-              <ToolInput input={item.input as never} />
-              <ToolOutput
-                data-quote-source={`${item.name} output`}
-                errorText={item.errorText}
-                output={item.output as never}
-              />
-              <ImagePreviewStrip images={item.outputImages} readonly />
+              <ToolCallDetails theme={theme} tool={item} />
             </ToolContent>
           )}
         </Tool>

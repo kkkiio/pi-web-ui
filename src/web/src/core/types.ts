@@ -42,6 +42,8 @@ export type ChatItem =
       input: unknown;
       output?: unknown;
       outputDetails?: unknown;
+      exitCode?: number;
+      durationMs?: number;
       outputImages?: PromptImage[];
       errorText?: string;
       state: ToolState;
@@ -71,6 +73,7 @@ export type RpcEvent = {
   args?: unknown;
   partialResult?: unknown;
   result?: unknown;
+  durationMs?: number;
   isError?: boolean;
   name?: string;
   summary?: string;
@@ -97,6 +100,7 @@ export type PiMessage = {
   usage?: Usage;
   toolCallId?: string;
   toolName?: string;
+  durationMs?: number;
   isError?: boolean;
 };
 

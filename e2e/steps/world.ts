@@ -7,6 +7,7 @@ export type FixtureName =
   | "chat-lifecycle"
   | "workspace-artifact"
   | "tool-failure"
+  | "tool-call-views"
   | "edit-history"
   | "dil-markdown"
   | "dil-render"

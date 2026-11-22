@@ -63,6 +63,7 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     sessionFile = sync.sessionFile;
     const currentItems = sameSession ? get().items : [];
     const items = syncToItems(entries, nextId, currentItems);
+    const openTools = new Set(currentItems.flatMap((item) => (item.kind === "tool" && item.open ? [item.id] : [])));
     const liveMessage = sameSession && sync.isStreaming ? get().streamingMessage : null;
     const keepStreaming = liveMessage && !items.some((item) => item.id === liveMessage.id);
     if (keepStreaming) {
@@ -108,6 +109,9 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     });
     for (const event of sync.liveEvents ?? []) dispatchPiEvent(get(), event);
     set((state) => ({
+      items: state.items.map((item) =>
+        item.kind === "tool" && !item.open && openTools.has(item.id) ? { ...item, open: true } : item,
+      ),
       questionDrafts: Object.fromEntries(
         Object.entries(state.questionDrafts).filter(([id]) => state.questionnaires[id]?.status === "pending"),
       ),
@@ -338,10 +342,11 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
   applyToolExecutionUpdate: (event) => {
     if (!event.toolCallId) return;
     const { text, images } = parseToolOutput(event.partialResult);
+    const details = (event.partialResult as { details?: unknown } | undefined)?.details;
     set((state) => ({
       items: state.items.map((item) =>
         item.kind === "tool" && item.id === event.toolCallId
-          ? { ...item, output: text, outputImages: images, state: "input-available" }
+          ? { ...item, output: text, outputImages: images, outputDetails: details, state: "input-available" }
           : item,
       ),
     }));
@@ -351,6 +356,8 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     get().requestGitStatusRefresh({ debounce: true });
     if (!event.toolCallId) return;
     const { text, images } = parseToolOutput(event.result);
+    const result = event.result as { details?: unknown; structuredContent?: { exit_code?: unknown } } | undefined;
+    const exitCode = result?.structuredContent?.exit_code;
     set((state) => ({
       items: state.items.map((item) =>
         item.kind === "tool" && item.id === event.toolCallId
@@ -359,7 +366,11 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
               errorText: event.isError ? text : undefined,
               output: event.isError ? undefined : text,
               outputImages: images,
-              outputDetails: (event.result as { details?: unknown } | undefined)?.details,
+              outputDetails: result?.details,
+              ...(item.name === "bash" && {
+                exitCode: typeof exitCode === "number" && Number.isInteger(exitCode) ? exitCode : undefined,
+                durationMs: event.durationMs,
+              }),
               state: event.isError ? "output-error" : "output-available",
             }
           : item,

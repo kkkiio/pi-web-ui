@@ -31,6 +31,7 @@ export type ToolPart = ToolUIPart | DynamicToolUIPart;
 export type ToolHeaderProps = {
   title?: string;
   summary?: ReactNode;
+  trailing?: ReactNode;
   collapsible?: boolean;
   className?: string;
 } & (
@@ -77,6 +78,7 @@ export const ToolHeader = ({
   className,
   collapsible = true,
   summary,
+  trailing,
   title,
   type,
   state,
@@ -106,8 +108,13 @@ export const ToolHeader = ({
           </span>
         )}
       </div>
-      {collapsible && (
-        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+      {(trailing || collapsible) && (
+        <div className="flex shrink-0 items-center gap-2">
+          {trailing}
+          {collapsible && (
+            <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+          )}
+        </div>
       )}
     </CollapsibleTrigger>
   );

@@ -24,9 +24,15 @@ export function formatQuotedPrompt(text: string, quotes: TranscriptQuote[]) {
 }
 
 function quoteSource(node: Node | null) {
-  const element = node instanceof Element ? node : node?.parentElement;
-  if (element?.closest('button, input, textarea, [contenteditable="true"]')) return null;
-  return element?.closest<HTMLElement>("[data-quote-source]") ?? null;
+  let element = node instanceof Element ? node : node?.parentElement;
+  while (element) {
+    if (element.closest('button, input, textarea, [contenteditable="true"]')) return null;
+    const source = element.closest<HTMLElement>("[data-quote-source]");
+    if (source) return source;
+    const root = element.getRootNode();
+    element = root instanceof ShadowRoot ? root.host : null;
+  }
+  return null;
 }
 
 export function TranscriptQuoteAction({

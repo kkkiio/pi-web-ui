@@ -78,6 +78,10 @@ export function syncToItems(
       if (tool) {
         const { text, images } = parseToolOutput(message.content);
         tool.outputDetails = message.details;
+        if (tool.name === "bash") {
+          tool.durationMs = message.durationMs;
+          tool.exitCode = previousTools.get(tool.id)?.exitCode;
+        }
         tool.outputImages = images;
         if (entry.id && !tool.relatedEntryIds?.includes(entry.id)) {
           tool.relatedEntryIds = [...(tool.relatedEntryIds ?? []), entry.id];
