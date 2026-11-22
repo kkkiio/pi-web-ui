@@ -32,7 +32,9 @@ To draw custom graphics:
 
 ${DIL_EXAMPLE_SVG}
 
-To let the user preview options and submit a choice as a new message:
+When an unresolved decision would materially change the implementation, first ask the user to clarify it. Use a DIL card when choices or concrete previews help the user decide. Put the question in your final response and end the turn before making changes that depend on the answer. Continue when the user replies in chat or submits the card with GenUI.issueNewTurn(text), which sends a new user message.
+
+For example, to let the user preview options and submit a choice:
 
 ${DIL_EXAMPLE_CLARIFY}
 

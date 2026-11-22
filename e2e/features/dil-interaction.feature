@@ -19,3 +19,21 @@ Feature: DIL interaction
     And the transcript shows "已收到测试结果，接下来检查系统 MIDI 服务。"
     And the composer is still empty after the card is submitted
     And the card still shows the answer I chose
+
+  @p0
+  Scenario: A dry-run card accepts an updated answer
+    Given Pi is ready to clarify the export dry-run
+    When I open Pi Web UI
+    And I send "Add a dry-run flag to the export command so I can see which files it would write."
+    Then the dry-run card previews "reports/summary.csv overwrite"
+    And I can answer in the chat input
+    When I submit the dry-run choice
+    Then the card's answer reaches Pi as a user message "Dry-run behavior for existing export files: Mark overwrites."
+    And the transcript shows "I'll mark overwrites in the dry-run output."
+    And the composer is ready for the next message
+    When I choose "Show new files only" in the dry-run card
+    Then the dry-run card previews "reports/orders.json new"
+    When I submit the dry-run choice
+    Then the card's answer reaches Pi as a user message "Dry-run behavior for existing export files: Show new files only."
+    And the transcript shows "I'll show only new files in the dry-run output."
+    And the dry-run answers survive a reload

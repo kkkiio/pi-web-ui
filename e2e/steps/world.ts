@@ -11,6 +11,7 @@ export type FixtureName =
   | "edit-history"
   | "dil-markdown"
   | "dil-render"
+  | "export-clarify"
   | "dil-interaction";
 
 /** Shared state for one scenario. Step files read and write this instead of keeping

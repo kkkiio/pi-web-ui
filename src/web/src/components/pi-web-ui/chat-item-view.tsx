@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { historicalQuestion } from "../../core/ask-user-question";
 import { usePiWebUiStore } from "../../core/store";
 import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
@@ -28,7 +27,6 @@ export function ChatItemView({
   onQuote,
   onToggleTool,
   reasoningRow = false,
-  processRow = false,
   theme,
 }: {
   item: ChatItem;
@@ -36,7 +34,6 @@ export function ChatItemView({
   onQuote: (quote: TranscriptQuote) => void;
   onToggleTool: (id: string, open: boolean) => void;
   reasoningRow?: boolean;
-  processRow?: boolean;
   theme: "light" | "dark";
 }) {
   const item = usePiWebUiStore((state) =>
@@ -44,7 +41,6 @@ export function ChatItemView({
       ? state.streamingMessage
       : transcriptItem,
   );
-  const questionnaire = usePiWebUiStore((state) => state.questionnaires[item.id]);
 
   // The browser half of DIL's `GenUI` (`#48`): a card's button sends a turn directly. The
   // composer is not involved — no draft, no prefill — and `busy` disables every card
@@ -86,47 +82,6 @@ export function ChatItemView({
   }
 
   if (item.kind === "tool") {
-    if (item.name === "webui_ask_user_question" && !processRow) {
-      if (questionnaire?.status === "pending") return null;
-      const question = historicalQuestion(item);
-      if (!question) return null;
-      const details = item.outputDetails as
-        | {
-            answers?: { questionIndex: number; kind: string; answer: string | null; selected?: string[] }[];
-          }
-        | undefined;
-      return (
-        <section
-          aria-label="Questions and answers"
-          className="space-y-2 rounded-lg border px-3 py-2 text-sm"
-          data-quote-source="Question answers"
-          data-testid="ask-user-question-history"
-        >
-          <div className="text-muted-foreground text-xs">
-            {question.status === "cancelled" ? "Cancelled" : "Answered"}
-          </div>
-          {question.status === "answered" &&
-            (details?.answers ? (
-              <dl className="space-y-2">
-                {details.answers.map((answer) => (
-                  <div key={answer.questionIndex}>
-                    <dt className="break-words text-muted-foreground">
-                      {question.questions[answer.questionIndex]?.question}
-                    </dt>
-                    <dd className="whitespace-pre-wrap break-words">
-                      {answer.kind === "skipped"
-                        ? "Skipped"
-                        : [...(answer.selected ?? []), answer.answer].filter(Boolean).join(", ")}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            ) : (
-              <div className="whitespace-pre-wrap break-words">{String(item.output ?? "")}</div>
-            ))}
-        </section>
-      );
-    }
     const expandable = isToolExpandable(item);
     const open = expandable ? (item.open ?? false) : false;
 
@@ -136,8 +91,8 @@ export function ChatItemView({
           <ToolHeader
             collapsible={expandable}
             state={item.state}
-            summary={item.name === "webui_ask_user_question" ? undefined : formatToolSummary(item)}
-            title={item.name === "webui_ask_user_question" ? "Ask question" : item.name}
+            summary={formatToolSummary(item)}
+            title={item.name}
             trailing={
               item.name === "bash" && item.exitCode !== undefined ? (
                 <span className={cn("font-mono text-xs", item.exitCode !== 0 && "text-destructive")}>

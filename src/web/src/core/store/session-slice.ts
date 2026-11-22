@@ -96,7 +96,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
       error: null,
       items,
       streamingMessage: keepStreaming ? liveMessage : null,
-      questionnaires: {},
       lastUsage: findLastUsage(entries),
       usageTotals: sumUsageTotals(tree),
       contextUsage: sync.contextUsage ?? null,
@@ -111,9 +110,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
     set((state) => ({
       items: state.items.map((item) =>
         item.kind === "tool" && !item.open && openTools.has(item.id) ? { ...item, open: true } : item,
-      ),
-      questionDrafts: Object.fromEntries(
-        Object.entries(state.questionDrafts).filter(([id]) => state.questionnaires[id]?.status === "pending"),
       ),
     }));
     get().requestGitStatusRefresh({ debounce: true });
@@ -376,20 +372,6 @@ export const createSessionSlice: StoreSlice<SessionSlice> = (set, get) => ({
           : item,
       ),
     }));
-    const question = get().questionnaires[event.toolCallId];
-    if (question) {
-      const details = (event.result as { details?: { cancelled?: boolean } } | undefined)?.details;
-      set((state) => ({
-        questionnaires: {
-          ...state.questionnaires,
-          [question.toolCallId]: {
-            ...question,
-            status: event.isError || details?.cancelled ? "cancelled" : "answered",
-            submitting: false,
-          },
-        },
-      }));
-    }
   },
 
   markPromptReady: () => {

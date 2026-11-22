@@ -1,6 +1,5 @@
 import { fauxProvider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import askUserQuestionResponses from "./responses/ask-user-question.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
 import dilHeavyResponses from "./responses/dil-heavy.ts";
 import dilInteractionResponses from "./responses/dil-interaction.ts";
@@ -24,7 +23,6 @@ import workspaceArtifactResponses from "./responses/workspace-artifact.ts";
 const responsesByName = {
   "image-previews": imageResponses,
   "prompt-draft": promptDraftResponses,
-  "ask-user-question": askUserQuestionResponses,
   "process-group": processGroupResponses,
   "report-export": reportExportResponses,
   "export-clarify": exportClarifyResponses,
@@ -64,23 +62,6 @@ export default function (pi: ExtensionAPI) {
       }
     },
   });
-  for (const [command, registered, active] of [
-    ["assert-question-active", true, true],
-    ["assert-question-inactive", true, false],
-    ["assert-question-absent", false, false],
-  ] as const) {
-    pi.registerCommand(command, {
-      handler: async () => {
-        const tools = pi.getAllTools().filter((tool) => tool.name === "webui_ask_user_question");
-        if (
-          Boolean(tools.length) !== registered ||
-          pi.getActiveTools().includes("webui_ask_user_question") !== active
-        ) {
-          throw new Error("Question tool registration or activation does not match the expected lifecycle.");
-        }
-      },
-    });
-  }
   pi.registerCommand("assert-dil-prompt", {
     handler: async (args, ctx) => {
       const expected = (args ?? "").trim() === "active";
@@ -89,18 +70,6 @@ export default function (pi: ExtensionAPI) {
         throw new Error(`DIL prompt section is ${present ? "present" : "absent"}; expected ${args}`);
       }
     },
-  });
-  pi.registerCommand("assert-tool-state", {
-    handler: async (args) => {
-      const { active = [], inactive = [] } = JSON.parse(args) as { active?: string[]; inactive?: string[] };
-      const tools = pi.getActiveTools();
-      if (active.some((name) => !tools.includes(name)) || inactive.some((name) => tools.includes(name))) {
-        throw new Error(`Unexpected active tools: ${tools.join(", ")}`);
-      }
-    },
-  });
-  pi.registerCommand("disable-read", {
-    handler: async () => pi.setActiveTools(pi.getActiveTools().filter((name) => name !== "read")),
   });
   pi.registerCommand("new-test-session", {
     handler: async (_args, ctx) => {

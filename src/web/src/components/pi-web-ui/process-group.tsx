@@ -36,10 +36,7 @@ export function groupTranscript(items: ChatItem[], showThinking: boolean): Trans
       process.push(item);
     }
 
-    if (
-      (!tool && (!assistant || item.text.trim())) ||
-      (item.kind === "tool" && item.name === "webui_ask_user_question")
-    ) {
+    if (!tool && (!assistant || item.text.trim())) {
       process = undefined;
       sections.push({ kind: "standalone", item });
     }
@@ -75,11 +72,9 @@ export function ProcessGroup({
   const open =
     (tools.length > 0 && selection.command !== toolExpansion ? toolExpansion?.open : selection.open) ?? false;
 
-  const toolDetail = runningTool && runningTool.name !== "webui_ask_user_question" && formatToolSummary(runningTool);
+  const toolDetail = runningTool && formatToolSummary(runningTool);
   const toolAction =
-    runningTool?.name === "webui_ask_user_question"
-      ? "Waiting for your answer"
-      : runningTool && (TOOL_ACTIONS.get(runningTool.name) ?? `Running ${formatToolInvocationTitle(runningTool.name)}`);
+    runningTool && (TOOL_ACTIONS.get(runningTool.name) ?? `Running ${formatToolInvocationTitle(runningTool.name)}`);
   const title = active
     ? runningTool
       ? [toolAction, toolDetail].filter(Boolean).join(" ")
