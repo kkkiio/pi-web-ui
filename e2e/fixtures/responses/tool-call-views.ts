@@ -6,8 +6,15 @@ export default [
   fauxAssistantMessage(
     [
       fauxToolCall("bash", {
-        command:
-          "printf '\\033[32mBuild started\\033[0m\\n'; while [ ! -f .finish ]; do sleep 0.1; done; printf 'Build failed\\n' >&2; exit 7",
+        command: [
+          "printf '\\033[32mBuild started\\033[0m\\n\\033[40mBackground notice\\033[0m\\n'",
+          "while [ ! -f .finish ]; do",
+          `  : 'https://example.test/${"long-path".repeat(12)}'`,
+          "  sleep 0.1",
+          "done",
+          "printf 'Build failed\\n' >&2",
+          "exit 7",
+        ].join("\n"),
         timeout: 25,
       }),
     ],

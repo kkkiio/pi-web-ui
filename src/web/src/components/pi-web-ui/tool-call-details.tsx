@@ -59,10 +59,21 @@ function BashDetails({ tool, theme }: { tool: ToolCall; theme: "light" | "dark" 
   ).replace(/\r\n/g, "\n");
   const lines = useMemo(() => {
     let offset = 0;
-    return tokenizeAnsiWithTheme(TERMINAL_THEMES[theme === "dark" ? 1 : 0], output).map((tokens) => {
+    const terminalTheme = TERMINAL_THEMES[theme === "dark" ? 1 : 0];
+    return tokenizeAnsiWithTheme(terminalTheme, output).map((tokens) => {
       const key = offset;
       const spans = tokens.map((token) => {
-        const span = { ...token, key: offset };
+        let { color } = token;
+        const { bgColor } = token;
+        if (color === terminalTheme.fg && bgColor && /^#[0-9a-f]{6}$/i.test(bgColor)) {
+          const [red, green, blue] = [1, 3, 5].map((start) => {
+            const channel = Number.parseInt(bgColor.slice(start, start + 2), 16) / 255;
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+          const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+          color = luminance > 0.179 ? "#000" : "#fff";
+        }
+        const span = { ...token, color, key: offset };
         offset += token.content.length;
         return span;
       });
@@ -86,7 +97,7 @@ function BashDetails({ tool, theme }: { tool: ToolCall; theme: "light" | "dark" 
     >
       <div className="flex min-w-0 items-start gap-2 border-b bg-muted/40 px-2.5 py-2">
         <SquareTerminalIcon aria-hidden className="mt-1 size-4 shrink-0 text-muted-foreground" />
-        <pre className="min-w-0 flex-1 overflow-x-auto py-1 font-mono text-xs">
+        <pre className="max-h-40 min-w-0 flex-1 overflow-auto whitespace-pre-wrap py-1 font-mono text-xs [overflow-wrap:anywhere]">
           {typeof command === "string" ? command : ""}
         </pre>
         {typeof command === "string" && (

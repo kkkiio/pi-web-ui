@@ -28,9 +28,25 @@ Then("I can see the command and its latest output after reloading", async ({ pag
   await group.click();
   await row.click();
   await expect(output).toBeVisible();
+});
 
-  await page.getByRole("button", { name: "Copy command", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("while [ ! -f .finish ]");
+Then("I can read and copy the long command on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const terminal = page.getByRole("region", { name: "Bash command" });
+  const command = terminal.locator("pre").first();
+  const source = await command.textContent();
+  expect(source).toContain("\n  sleep 0.1\n");
+  await expect.poll(() => command.evaluate(({ scrollWidth, clientWidth }) => scrollWidth - clientWidth)).toBe(0);
+  const wrapped = await command.evaluate((element) => {
+    const code = document.createRange();
+    code.selectNodeContents(element);
+    const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+    return code.getBoundingClientRect().height > (element.textContent?.split("\n").length ?? 0) * lineHeight;
+  });
+  expect(wrapped).toBe(true);
+  await terminal.getByRole("button", { name: "Copy command", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(source);
+  await page.setViewportSize({ width: 1280, height: 800 });
 });
 
 When("the command exits with an error", async () => {
@@ -43,18 +59,23 @@ Then("I can see the failure and copy the command output", async ({ page }) => {
   const output = page.getByText("Build failed", { exact: true });
   await expect(output).toBeVisible();
   await page.getByRole("button", { name: "Copy output", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Build started\nBuild failed\n");
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("Build started\nBackground notice\nBuild failed\n");
   await expect(page.getByText("The file review is complete.", { exact: true })).toBeVisible();
 });
 
 Then("the Bash card follows the selected color palette", async ({ page }) => {
   const terminal = page.getByRole("region", { name: "Bash command" });
   const greenOutput = terminal.getByText("Build started", { exact: true });
+  const backgroundNotice = terminal.getByText("Background notice", { exact: true });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "light", exact: true }).click();
   await page.getByText("Warm Paper", { exact: true }).click();
   await expect(terminal).toHaveCSS("background-color", "rgb(248, 245, 239)");
   await expect(greenOutput).toHaveCSS("color", "rgb(23, 107, 58)");
+  await expect(backgroundNotice).toHaveCSS("background-color", "rgb(48, 47, 44)");
+  await expect(backgroundNotice).toHaveCSS("color", "rgb(255, 255, 255)");
 
   await page.getByText("Solarized Light", { exact: true }).click();
   await expect(terminal).toHaveCSS("background-color", "rgb(248, 241, 223)");
@@ -62,6 +83,8 @@ Then("the Bash card follows the selected color palette", async ({ page }) => {
   await page.getByRole("button", { name: "dark", exact: true }).click();
   await expect(terminal).toHaveCSS("background-color", "rgb(7, 54, 66)");
   await expect(greenOutput).toHaveCSS("color", "rgb(133, 216, 162)");
+  await expect(backgroundNotice).toHaveCSS("background-color", "rgb(166, 183, 184)");
+  await expect(backgroundNotice).toHaveCSS("color", "rgb(0, 0, 0)");
   await page.keyboard.press("Escape");
 });
 
