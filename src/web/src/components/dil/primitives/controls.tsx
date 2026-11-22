@@ -123,6 +123,7 @@ export function ControlRadio({ props, children }: ControlProps) {
         name={group?.name}
         onChange={() => group?.select(props.value)}
         type="radio"
+        value={typeof props.value === "string" || typeof props.value === "number" ? props.value : undefined}
       />
       <span className="min-w-0">{children}</span>
     </label>

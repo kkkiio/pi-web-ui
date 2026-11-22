@@ -46,7 +46,7 @@ export class DilSandbox {
   private sends = new Set<string>();
 
   constructor(
-    private readonly onTree: (tree: readonly ResolvedNode[]) => void,
+    private readonly onTree: (tree: readonly ResolvedNode[], errors: number) => void,
     private readonly onIntents: (sends: ReadonlySet<string>) => void,
     private readonly getHost: () => DilHost | null,
   ) {}
@@ -196,7 +196,7 @@ export class DilSandbox {
         this.state = readViewState(data.result.state);
         this.committed = revision;
         this.loaded = revision.revision;
-        this.onTree(tree);
+        this.onTree(tree, data.result.errors);
         this.intent = pending.id;
         this.buttons = new Set(Array.isArray(data.result.buttons) ? data.result.buttons.slice(0, 5_000) : []);
         this.sends = new Set([...this.sends].filter((id) => this.buttons.has(id)));

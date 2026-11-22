@@ -1,15 +1,16 @@
+import { CheckIcon, CopyIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Message, MessageContent } from "../../../src/web/components/ai-elements/message";
 import { DilRenderer } from "../../../src/web/src/components/dil/dil-renderer";
+import { ChatItemView } from "../../../src/web/src/components/pi-web-ui/chat-item-view";
+import { groupTranscript, ProcessGroup } from "../../../src/web/src/components/pi-web-ui/process-group";
+import { UserMessageContent } from "../../../src/web/src/components/pi-web-ui/user-message-content";
+import { syncToItems } from "../../../src/web/src/core/chat-conversion";
 import { parseDocument } from "../../../src/web/src/core/dil/index";
 import type { DilDiagnostic } from "../../../src/web/src/core/dil/types";
-import type {
-  CaseDefinition,
-  CaseResult,
-  ExamplesPreviewData,
-  PreviewData,
-  ReportsPreviewData,
-  Summary,
-} from "./types";
+import { copyText } from "../../../src/web/src/core/format";
+import type { ChatItem, PiMessage } from "../../../src/web/src/core/types";
+import type { CaseResult, ExamplesPreviewData, PreviewData, ReportsPreviewData, Summary } from "./types";
 
 function normalizeSource(source: string): string {
   const withoutBom = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
@@ -80,10 +81,12 @@ function NumberedSource({
   anchor,
   sourceLines,
   diagnostics,
+  activeLine,
 }: {
   readonly anchor: string;
   readonly sourceLines: readonly string[];
   readonly diagnostics: readonly DilDiagnostic[];
+  readonly activeLine?: number | null;
 }) {
   const byLine = useMemo(() => {
     const map = new Map<number, DilDiagnostic[]>();
@@ -101,9 +104,14 @@ function NumberedSource({
         const lineNo = idx + 1;
         const lineDiags = byLine.get(lineNo);
         const hasErr = Boolean(lineDiags && lineDiags.length > 0);
+        const isActive = lineNo === activeLine;
         return (
           <Fragment key={lineNo}>
-            <div className={`src-line${hasErr ? " has-diag" : ""}`} id={`${anchor}-L${lineNo}`}>
+            <div
+              className={`src-line${hasErr ? " has-diag" : ""}${isActive ? " is-targeted" : ""}`}
+              id={`${anchor}-L${lineNo}`}
+              tabIndex={isActive ? -1 : undefined}
+            >
               <span className="ln">{lineNo}</span>
               <span className="code">{lineText || " "}</span>
             </div>
@@ -122,6 +130,26 @@ function NumberedSource({
         );
       })}
     </div>
+  );
+}
+
+function CopySourceButton({ text }: { readonly text: string }) {
+  const [copied, setCopied] = useState(false);
+  const Icon = copied ? CheckIcon : CopyIcon;
+  return (
+    <button
+      type="button"
+      aria-label="Copy raw source"
+      className={copied ? "copy-src-btn copied" : "copy-src-btn"}
+      onClick={async () => {
+        if (copied) return;
+        await copyText(text);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      }}
+    >
+      <Icon size={14} />
+    </button>
   );
 }
 
@@ -151,7 +179,13 @@ function ExampleCard({ name, source }: { readonly name: string; readonly source:
       </div>
       <details className="raw" open={hasDiagnostics}>
         <summary>raw source ({sourceLines.length} lines)</summary>
-        <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        <div className="src-frame">
+          <div className="src-head">
+            <span>source</span>
+            <CopySourceButton text={source} />
+          </div>
+          <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        </div>
       </details>
     </section>
   );
@@ -217,65 +251,270 @@ function ExamplesView({ data }: { readonly data: ExamplesPreviewData }) {
   );
 }
 
+type TrajectoryState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; items: ChatItem[] };
+
+function parseTrajectory(source: string): ChatItem[] {
+  const entries = source
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { type: string; id?: string; message?: PiMessage });
+  let counter = 0;
+  const items = syncToItems(
+    entries,
+    (prefix) => {
+      counter += 1;
+      return `${prefix}-${counter}`;
+    },
+    [],
+  );
+  return items.map((item) =>
+    item.kind === "message" && item.role === "assistant" ? { ...item, copyable: false } : item,
+  );
+}
+
+function TrajectoryBody({
+  state,
+  onToggleTool,
+}: {
+  readonly state: TrajectoryState;
+  readonly onToggleTool: (id: string, open: boolean) => void;
+}) {
+  if (state.status === "idle") return null;
+  if (state.status === "loading") return <div className="trajectory-status">loading trajectory…</div>;
+  if (state.status === "error") {
+    return <div className="trajectory-status trajectory-error">failed to load trajectory: {state.message}</div>;
+  }
+
+  const sections = groupTranscript(state.items, true);
+  return (
+    <div className="trajectory-view">
+      {sections.map((section) => {
+        if (section.kind === "process") {
+          const first = section.rows[0];
+          return (
+            <ProcessGroup
+              key={`process:${first.kind}:${first.id}`}
+              rows={section.rows}
+              active={false}
+              toolExpansion={null}
+            >
+              {section.rows.map((item) => (
+                <ChatItemView
+                  key={`${item.kind}:${item.id}`}
+                  item={item}
+                  onCopy={copyText}
+                  onQuote={() => {}}
+                  onToggleTool={onToggleTool}
+                  reasoningRow={item.kind === "message"}
+                  processRow
+                  theme="light"
+                />
+              ))}
+            </ProcessGroup>
+          );
+        }
+
+        const { item } = section;
+        if (item.kind === "message" && item.role === "user") {
+          return (
+            <Message key={`user:${item.id}`} from="user">
+              <MessageContent className="is-user:dark ml-auto min-w-0 max-w-full rounded-lg bg-secondary px-4 py-3 text-sm text-foreground">
+                <UserMessageContent>{item.text}</UserMessageContent>
+              </MessageContent>
+            </Message>
+          );
+        }
+        return (
+          <ChatItemView
+            key={`${item.kind}:${item.id}`}
+            item={item}
+            onCopy={copyText}
+            onQuote={() => {}}
+            onToggleTool={onToggleTool}
+            theme="light"
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function TrajectorySection({ url }: { readonly url: string }) {
+  const [state, setState] = useState<TrajectoryState>({ status: "idle" });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading" });
+    fetch(`/${url}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        return res.text();
+      })
+      .then((source) => {
+        if (!cancelled) setState({ status: "ready", items: parseTrajectory(source) });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setState({ status: "error", message: err instanceof Error ? err.message : String(err) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  function toggleTool(id: string, nextOpen: boolean) {
+    setState((prev) =>
+      prev.status === "ready"
+        ? {
+            status: "ready",
+            items: prev.items.map((item) =>
+              item.kind === "tool" && item.id === id ? { ...item, open: nextOpen } : item,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  return <TrajectoryBody state={state} onToggleTool={toggleTool} />;
+}
+
 function CaseCard({
   anchor,
   model,
   result,
-  definition,
 }: {
   readonly anchor: string;
   readonly model: string;
   readonly result: CaseResult;
-  readonly definition?: CaseDefinition;
 }) {
   const parsed = useMemo(() => parseDocument(result.text), [result.text]);
   const sourceLines = useMemo(() => normalizeSource(result.text).split("\n"), [result.text]);
-  const hasDiagnostics = parsed.diagnostics.length > 0;
+  const [showSource, setShowSource] = useState(false);
+  const [activeLine, setActiveLine] = useState<number | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    function openLinkedLine() {
+      const prefix = `#${anchor}-L`;
+      const hash = window.location.hash;
+      if (!hash.startsWith(prefix)) return;
+      const line = Number(hash.slice(prefix.length));
+      if (!Number.isInteger(line) || line < 1 || line > sourceLines.length) return;
+      setShowSource(true);
+      setActiveLine(line);
+    }
+
+    openLinkedLine();
+    window.addEventListener("hashchange", openLinkedLine);
+    return () => window.removeEventListener("hashchange", openLinkedLine);
+  }, [anchor, sourceLines.length]);
+
+  useEffect(() => {
+    if (!showSource || activeLine === null) return;
+    const line = document.getElementById(`${anchor}-L${activeLine}`);
+    line?.scrollIntoView({ block: "center" });
+    line?.focus({ preventScroll: true });
+  }, [activeLine, anchor, showSource]);
 
   const traceBits: string[] = [];
   if (result.toolCallCount !== undefined) traceBits.push(`${result.toolCallCount} tools`);
   if (result.assistantTurns !== undefined) traceBits.push(`${result.assistantTurns} turns`);
 
   return (
-    <section className="case" id={anchor} data-case-anchor={anchor}>
-      <div className="case-model-row">
-        <span className="model-pill">{model}</span>
-      </div>
-      <header className="case-head">
-        <h3>
-          {result.id} <small>{result.category}</small>
-        </h3>
-        <div className="case-stats">
-          {traceBits.length > 0 ? <span className="trace">{traceBits.join(" · ")}</span> : null}
-          <span className={`score ${result.score === 100 ? "pass" : "fail"}`}>
-            {result.score}% · {result.passed}/{result.total}
-          </span>
+    <section
+      className="case report-case"
+      id={anchor}
+      data-case-anchor={anchor}
+      aria-labelledby={`${anchor}-title`}
+      ref={cardRef}
+    >
+      <header className="report-case-head">
+        <div className="report-case-title">
+          <h3 id={`${anchor}-title`}>{result.id}</h3>
+        </div>
+        <span className={`report-case-score score ${result.score === 100 ? "pass" : "fail"}`}>
+          {result.score}% · {result.passed}/{result.total}
+          {result.unscored ? ` · ${result.unscored} unscored` : ""}
+        </span>
+        <div className="report-case-meta">
+          <span>{model}</span>
+          <span>{result.category}</span>
+        </div>
+        <div className="case-view-switch" role="group" aria-label="Case view">
+          {(
+            [
+              ["Preview", false],
+              ["Raw Source", true],
+            ] as const
+          ).map(([label, isSource]) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={showSource === isSource}
+              aria-controls={`${anchor}-${isSource ? "source" : "preview"}`}
+              onClick={() => {
+                if (showSource === isSource) return;
+                if (window.location.hash.startsWith(`#${anchor}-L`)) {
+                  window.history.replaceState(null, "", `#${anchor}`);
+                }
+                if (cardRef.current && cardRef.current.getBoundingClientRect().top < 0) {
+                  cardRef.current.scrollIntoView();
+                }
+                setActiveLine(null);
+                setShowSource(isSource);
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </header>
-      {definition ? (
-        <blockquote className="prompt-quote">
-          <p className="prompt-text">{definition.prompt}</p>
-          <p className="why">{definition.why}</p>
-        </blockquote>
-      ) : null}
-      <ul className="checks">
-        {result.checks.map((check) => (
-          <li key={check.label} className={check.pass ? "pass" : "fail"}>
-            {check.pass ? "✓" : "✗"} {check.label}
-          </li>
-        ))}
-      </ul>
-      <DiagnosticsPanel anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
-      <div className="render">
-        <DilRenderer source={result.text} />
+      <div className="report-case-body">
+        {traceBits.length > 0 ? <div className="report-case-trace trace">{traceBits.join(" · ")}</div> : null}
+        <ul className="checks">
+          {result.checks.map((check) => (
+            <li
+              key={check.id ?? check.label}
+              className={check.pass === null ? undefined : check.pass ? "pass" : "fail"}
+              title={check.detail}
+            >
+              {check.pass === null ? "–" : check.pass ? "✓" : "✗"} {check.label}
+            </li>
+          ))}
+        </ul>
+        <DiagnosticsPanel anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        <div id={`${anchor}-preview`} hidden={showSource}>
+          {result.trajectoryUrl ? (
+            <TrajectorySection url={result.trajectoryUrl} />
+          ) : (
+            <div className="render">
+              <DilRenderer source={result.text} />
+            </div>
+          )}
+        </div>
+        <div id={`${anchor}-source`} className="src-frame" hidden={!showSource}>
+          {showSource && (
+            <>
+              <div className="src-head">
+                <span>{sourceLines.length} lines</span>
+                <CopySourceButton text={result.text} />
+              </div>
+              <NumberedSource
+                anchor={anchor}
+                sourceLines={sourceLines}
+                diagnostics={parsed.diagnostics}
+                activeLine={activeLine}
+              />
+            </>
+          )}
+        </div>
       </div>
-      <details className="raw" open={hasDiagnostics}>
-        <summary>
-          raw source ({sourceLines.length} lines
-          {hasDiagnostics ? ` · ${parsed.diagnostics.length} diagnostics` : ""})
-        </summary>
-        <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
-      </details>
     </section>
   );
 }
@@ -294,23 +533,16 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
     [data.reports],
   );
 
-  const [filter, setFilter] = useState<number | "all">("all");
   const [activeAnchor, setActiveAnchor] = useState<string | null>(null);
   const tocLinkRefs = useRef(new Map<string, HTMLAnchorElement>());
 
-  const visibleEntries = useMemo(
-    () =>
-      entries
-        .map((entry, idx) => ({ ...entry, reportIndex: idx }))
-        .filter((entry) => filter === "all" || entry.reportIndex === filter),
-    [entries, filter],
-  );
+  const visibleEntries = useMemo(() => entries.map((entry, idx) => ({ ...entry, reportIndex: idx })), [entries]);
 
   const activeContext = useMemo(() => {
     if (!activeAnchor) return null;
     for (const entry of visibleEntries) {
-      for (const item of entry.summary.cases) {
-        const anchor = `case-${entry.reportIndex}-${item.id}`;
+      for (const [index, item] of entry.summary.cases.entries()) {
+        const anchor = `case-${entry.reportIndex}-${index}-${item.id}`;
         if (anchor === activeAnchor) {
           return { model: entry.model, caseId: item.id, reportIndex: entry.reportIndex };
         }
@@ -327,7 +559,7 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
     function syncActiveFromScroll() {
       const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-case-anchor]"));
       if (elements.length === 0) return;
-      const threshold = 110;
+      const threshold = 16;
       let current = elements[0];
       for (const el of elements) {
         if (el.getBoundingClientRect().top <= threshold) current = el;
@@ -346,6 +578,7 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
       });
     }
 
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
     syncActiveFromScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
@@ -354,24 +587,15 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
     };
   }, []);
 
-  function handleSelectFilter(nextFilter: number | "all") {
-    setFilter(nextFilter);
-    requestAnimationFrame(() => {
-      const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-case-anchor]"));
-      if (elements.length === 0) return;
-      const threshold = 110;
-      let current = elements[0];
-      for (const el of elements) {
-        if (el.getBoundingClientRect().top <= threshold) current = el;
-        else break;
-      }
-      setActiveAnchor(current.dataset.caseAnchor ?? null);
-    });
-  }
-
   useEffect(() => {
     if (!activeAnchor) return;
-    tocLinkRefs.current.get(activeAnchor)?.scrollIntoView({ block: "nearest" });
+    const link = tocLinkRefs.current.get(activeAnchor);
+    const toc = link?.closest("nav");
+    if (!link || !toc || toc.scrollHeight <= toc.clientHeight) return;
+    const bounds = toc.getBoundingClientRect();
+    const item = link.getBoundingClientRect();
+    if (item.top < bounds.top) toc.scrollTop += item.top - bounds.top;
+    else if (item.bottom > bounds.bottom) toc.scrollTop += item.bottom - bounds.bottom;
   }, [activeAnchor]);
 
   return (
@@ -389,8 +613,8 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
                 <span className={`score ${summary.score === 100 ? "pass" : "fail"}`}>{summary.score}%</span>
               </a>
               <ul>
-                {summary.cases.map((item) => {
-                  const anchor = `case-${reportIndex}-${item.id}`;
+                {summary.cases.map((item, index) => {
+                  const anchor = `case-${reportIndex}-${index}-${item.id}`;
                   const isActive = activeAnchor === anchor;
                   return (
                     <li key={anchor}>
@@ -414,62 +638,19 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
         })}
       </nav>
       <main>
-        {activeContext ? (
-          <div className="sticky-context">
-            <div className="ctx-trail">
-              <span className="model-pill">{activeContext.model}</span>
-              <span className="ctx-sep">/</span>
-              <span className="ctx-case">{activeContext.caseId}</span>
-            </div>
-          </div>
-        ) : null}
         <h1>DIL eval preview</h1>
         <details className="system">
           <summary>system prompt section &lt;dil&gt;</summary>
           <pre>{data.systemPrompt}</pre>
         </details>
-        <p className="meta">
-          {entries.length} model{entries.length === 1 ? "" : "s"}: {entries.map((entry) => entry.model).join(" · ")}
-          <br />
-          rendered with the product DIL renderer; Markdown answers use react-markdown as the fallback
-        </p>
-        {entries.length > 1 ? (
-          <div className="filter-bar" role="tablist" aria-label="Filter by model">
-            <button
-              type="button"
-              className={`filter-btn${filter === "all" ? " active" : ""}`}
-              onClick={() => handleSelectFilter("all")}
-            >
-              All ({entries.length})
-            </button>
-            {entries.map(({ model, summary }, idx) => (
-              <button
-                key={`${model}-${summary.variant}`}
-                type="button"
-                className={`filter-btn${filter === idx ? " active" : ""}`}
-                onClick={() => handleSelectFilter(idx)}
-              >
-                {model} <span className={`score ${summary.score === 100 ? "pass" : "fail"}`}>{summary.score}%</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
         {visibleEntries.map(({ model, summary, reportIndex }) => (
           <section key={reportIndex} className="model-section">
             <h2 id={`model-${reportIndex}`}>
               {model} <span className={`score ${summary.score === 100 ? "pass" : "fail"}`}>{summary.score}%</span>
             </h2>
-            {summary.cases.map((result) => {
-              const anchor = `case-${reportIndex}-${result.id}`;
-              return (
-                <CaseCard
-                  key={anchor}
-                  anchor={anchor}
-                  model={model}
-                  result={result}
-                  definition={data.definitions[result.id]}
-                />
-              );
+            {summary.cases.map((result, index) => {
+              const anchor = `case-${reportIndex}-${index}-${result.id}`;
+              return <CaseCard key={anchor} anchor={anchor} model={model} result={result} />;
             })}
           </section>
         ))}

@@ -7,6 +7,11 @@
 /* The DIL renderer emits class names from token maps; scan it explicitly so its
    utilities exist even before the message view imports the component. */
 @source "./src/components/dil";
+/* The eval preview bundles these components under a different Vite root, where
+   Tailwind's automatic content detection never reaches them; scan the component
+   trees explicitly so their utilities are generated in every build. */
+@source "./src/components/pi-web-ui";
+@source "./components";
 
 @theme inline {
   --color-background: var(--background);

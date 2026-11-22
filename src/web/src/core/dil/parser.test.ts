@@ -103,6 +103,52 @@ test("parses prose mixed with elements, attributes and interpolations", () => {
   );
 });
 
+test("a multiline opening tag can share the last line with its content and following elements", () => {
+  const doc = parseDocument(`<row>
+  <button
+    onClick={() => GenUI.issueNewTurn("继续")}
+  >{label}</button><caption>{status}</caption>
+</row>`);
+
+  assert.deepEqual(doc.diagnostics, []);
+  const row = only(doc.raw, "row");
+  const button = only(row.children, "button");
+  const caption = only(row.children, "caption");
+  assert.equal(expression(button, "onClick"), '() => GenUI.issueNewTurn("继续")');
+  assert.equal(button.closed, true);
+  assert.equal(caption.closed, true);
+  assert.deepEqual(
+    button.children.map((node) => node.type === "expr" && node.code),
+    ["label"],
+  );
+  assert.deepEqual(
+    caption.children.map((node) => node.type === "expr" && node.code),
+    ["status"],
+  );
+});
+
+test("SVG comments leave only the intended diagram labels", () => {
+  const doc = parseDocument(`<svg viewBox="0 0 140 50">
+    <!-- Worktree: {ignored} <rect/> -->
+    <g>
+      <!-- Label and boundary -->
+      <rect width="100" height="40"/>
+      <text x="10" y="22">暂<!-- inline -->存区</text>
+    </g>
+    <!-- The next label is positioned below the node. --><text x="10" y="48">git add</text>
+  </svg>`);
+
+  assert.deepEqual(doc.diagnostics, []);
+  const diagram = only(doc.tree, "svg");
+  const labels: string[] = [];
+  walk(diagram.children, (node) => {
+    if (node.type === "element" && node.name === "text") {
+      labels.push(node.children.map((child) => (child.type === "text" ? child.value : "")).join(""));
+    }
+  });
+  assert.deepEqual(labels, ["暂存区", "git add"]);
+});
+
 test("keeps fenced code blocks literal, including DIL-looking content", () => {
   const result = parse("说明：\n\n```html\n<box>{x}</box>\n{#if a}b{/if}\n```\n\n结尾。");
   assert.equal(result.diagnosticSummary, "clean");

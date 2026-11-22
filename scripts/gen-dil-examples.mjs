@@ -20,6 +20,7 @@ const EXAMPLES = [
   { exportName: "DIL_EXAMPLE_FLOW", file: "flow.dil.md" },
   { exportName: "DIL_EXAMPLE_OBJECTS", file: "objects.dil.md" },
   { exportName: "DIL_EXAMPLE_SVG", file: "svg.dil.md" },
+  { exportName: "DIL_EXAMPLE_CLARIFY", file: "clarify.dil.md" },
 ];
 
 export function renderExamplesModule() {

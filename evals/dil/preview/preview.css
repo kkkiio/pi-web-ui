@@ -230,23 +230,6 @@ main {
   opacity: 0.9;
 }
 
-.case-model-row {
-  margin-bottom: 6px;
-}
-
-.model-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--foreground);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
 @media (max-width: 900px) {
   .layout,
   .layout--examples {
@@ -286,6 +269,110 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 24px;
   margin-top: 28px;
+}
+
+.report-case {
+  margin-top: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+  isolation: isolate;
+  scroll-margin-top: 12px;
+}
+
+.report-case-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-areas: "title score switch" "meta score switch";
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 12px 16px;
+  border-radius: 11px 11px 0 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
+}
+
+.report-case-title {
+  grid-area: title;
+  overflow-wrap: anywhere;
+}
+
+.report-case-title h3 {
+  font-weight: 650;
+}
+
+.report-case-score {
+  grid-area: score;
+  white-space: nowrap;
+}
+
+.report-case-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.case-view-switch {
+  grid-area: switch;
+  justify-self: start;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+}
+
+.case-view-switch button {
+  min-height: 30px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.case-view-switch button:hover {
+  background: var(--muted);
+}
+
+.case-view-switch button[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.case-view-switch button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.report-case-body {
+  padding: 14px 16px 16px;
+}
+
+.report-case-trace {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 600px) {
+  .report-case-head {
+    grid-template-areas: "title score" "meta meta" "switch switch";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .case-view-switch {
+    margin-top: 4px;
+  }
 }
 
 .case-head {
@@ -462,6 +549,22 @@ h3 small {
   margin: 16px 0;
 }
 
+.trajectory-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trajectory-status {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+}
+
+.trajectory-status.trajectory-error {
+  color: #b91c1c;
+}
+
 details {
   margin-top: 14px;
   font-size: 12px;
@@ -493,6 +596,52 @@ details[open] > summary::before {
 
 details > summary:hover {
   color: var(--foreground);
+}
+
+.copy-src-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.copy-src-btn:hover {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.copy-src-btn.copied {
+  color: #15803d;
+}
+
+.src-frame {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.src-frame .src-view {
+  margin-top: 0;
+  padding: 10px 0 6px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.src-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 80%, var(--background));
+  color: var(--muted-foreground);
+  font-size: 11px;
 }
 
 .src-view {
@@ -537,6 +686,12 @@ details > summary:hover {
 .src-line.has-diag .ln {
   color: #b45309;
   font-weight: 600;
+}
+
+.src-line.is-targeted {
+  background: color-mix(in srgb, var(--primary) 15%, var(--background));
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
 }
 
 .src-diag-note {

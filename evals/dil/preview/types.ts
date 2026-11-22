@@ -6,9 +6,18 @@ export interface CaseResult {
   readonly passed: number;
   readonly total: number;
   readonly diagnostics: string;
-  readonly checks: readonly { readonly label: string; readonly pass: boolean }[];
+  readonly unscored?: number;
+  readonly checks: readonly {
+    readonly id?: string;
+    readonly label: string;
+    readonly pass: boolean | null;
+    readonly detail?: string;
+  }[];
   readonly toolCallCount?: number;
+  readonly toolNames?: readonly string[];
   readonly assistantTurns?: number;
+  /** Relative URL of the copied Pi session JSONL under preview-out/trajectories/. */
+  readonly trajectoryUrl?: string;
 }
 
 export interface Summary {

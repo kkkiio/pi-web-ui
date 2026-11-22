@@ -1,7 +1,7 @@
 /**
  * Live DIL eval through `vitest-evals`.
  *
- * Same cases and same `parseDocument` scoring as the CLI runner, expressed as a
+ * Same cases and scoring as the CLI runner, expressed as a
  * harness-backed Vitest suite so progress, concurrency, retries, and filtering come from
  * Vitest while `afterAll` persists `reports/<provider>-<model>.json` + `report.json` for
  * `just preview-eval`.
@@ -17,16 +17,20 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, expect } from "vitest";
-import { createHarness, describeEval } from "vitest-evals";
+import { createHarness, createJudge, describeEval, type JudgeHarnessInput } from "vitest-evals";
 import { apiKeyFor, createDilAgent, type DilAgent } from "./agent.ts";
 import { DIL_CASES } from "./cases.ts";
-import { type CaseResult, scoreCase, summarize } from "./scoring.ts";
+import { DilEvalScorer } from "./render-scoring.ts";
+import { type CaseResult, type CheckResult, summarize } from "./scoring.ts";
+import { assessSvgLayout, requestSvgJudge } from "./svg-judge.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPORT = join(HERE, "report.json");
 const REPORTS = join(HERE, "reports");
-
 const PROVIDER = process.env.DIL_EVAL_PROVIDER ?? "deepseek";
+const scorer = new DilEvalScorer(PROVIDER);
+
+afterAll(() => scorer.close());
 
 /**
  * `DIL_EVAL_MODELS="deepseek-v4.1-flash,opencode-go/glm-5.3"` runs the whole suite once
@@ -118,13 +122,34 @@ for (const model of MODELS) {
     for (const dilCase of DIL_CASES) {
       it.skipIf(!configuredFor(model.provider))(`${dilCase.id}: ${dilCase.category}`, async ({ run }) => {
         const result = await run({ caseId: dilCase.id, prompt: dilCase.prompt, projectRepo: dilCase.projectRepo });
-        const scored = scoreCase(dilCase, result.output.text, result.output);
+        const scored = await scorer.score(dilCase, result.output.text, result.output, async (screenshots) => {
+          let checks: CheckResult[] | undefined;
+          const judge = createJudge<EvalInput, EvalOutput>({
+            name: "SVG layout",
+            judgeHarness: createHarness<JudgeHarnessInput, string>({
+              name: `${PROVIDER}/glm-5.3-flash`,
+              run: ({ input, signal }) => requestSvgJudge(PROVIDER, screenshots, input, signal),
+            }),
+            async assess({ input, runJudge }) {
+              if (!runJudge) throw new Error("SVG layout judge requires a harness");
+              checks = await assessSvgLayout(input.prompt, runJudge);
+              return {
+                score: checks.filter((check) => check.pass).length / checks.length,
+                metadata: { output: checks.map(({ id, pass, detail }) => ({ id, pass, detail: detail ?? "" })) },
+              };
+            },
+          });
+          await expect(result).toSatisfyJudge(judge, { threshold: null });
+          if (!checks) throw new Error("SVG layout judge returned no checks");
+          return checks;
+        });
         results.push(scored);
         expect(result.output.systemPrompt).toContain("<dil>");
-        const missed = scored.checks.filter((check) => !check.pass).map((check) => check.label);
+        const missed = scored.checks
+          .filter((check) => check.pass === false)
+          .map((check) => (check.detail ? `${check.label}\n${check.detail}` : check.label));
         const preview = result.output.text.slice(0, 400);
         expect(missed, `${scored.score}% — parse: ${scored.diagnostics}\n--- model output ---\n${preview}`).toEqual([]);
-        expect(scored.diagnostics).toBe("clean");
       });
     }
   });

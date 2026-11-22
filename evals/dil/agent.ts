@@ -12,14 +12,13 @@
  * repo is mounted inside a `--network=none` Docker sandbox and Pi's tools (`read`, `write`,
  * `edit`, `bash`) proxy into that container via Pi's pluggable `operations` API.
  *
- * The provider layer is `ModelRuntime` from `pi-coding-agent`, so credentials resolve
- * exactly like the product (`~/.pi/agent/auth.json`, or an API key from the environment /
- * repo `.env`).
+ * The provider layer is `ModelRuntime` from `pi-coding-agent`; credentials come from an
+ * API key in the environment or the repo `.env` — never the local `~/.pi` login.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -59,7 +58,7 @@ function envNames(provider: string): readonly string[] {
   return [...new Set([...(PROVIDER_ENV_NAMES[provider] ?? []), generic])];
 }
 
-/** Environment → repo `.env` → Pi's own credential store. */
+/** Environment → repo `.env`. The eval never reads `~/.pi` credentials. */
 export function apiKeyFor(provider: string): string {
   const names = envNames(provider);
   for (const name of names) {
@@ -79,14 +78,8 @@ export function apiKeyFor(provider: string): string {
     }
   }
 
-  const authFile = join(homedir(), ".pi", "agent", "auth.json");
-  if (existsSync(authFile)) {
-    const entry = JSON.parse(readFileSync(authFile, "utf8"))[provider] as { key?: string } | undefined;
-    if (entry?.key) return entry.key;
-  }
-  throw new Error(`no ${names.join(" / ")}: set it, add it to .env, or log in through Pi`);
+  throw new Error(`no ${names.join(" / ")}: set it or add it to the repo .env`);
 }
-
 export interface AgentRun {
   readonly text: string;
   /** Pi's effective system prompt for the run, as replayed from the transcript. */
