@@ -119,6 +119,32 @@ test("proportion bars in repeated rows can distinguish components by color", { s
   assert.equal(matching.checks.find(({ id }) => id === "colorDistinction")?.pass, false);
 });
 
+test("SVG coverage follows the visible paint of nodes, connectors, and arrowheads", { skip }, async () => {
+  const scenarios = [
+    [
+      svg.replace('fill="#bfdbfe"', 'fill="#bfdbfe" fillOpacity={0}'),
+      ["labeledConcepts", "visibleConnections", "flowDirection", "colorDistinction"],
+    ],
+    [svg.replace('fill="#bfdbfe"', 'fill="#bfdbfe" fillOpacity="0.04" stroke="currentColor"'), ["colorDistinction"]],
+    [
+      svg.replace('stroke="currentColor" markerEnd=', 'stroke="currentColor" strokeOpacity={0} markerEnd='),
+      ["visibleConnections", "flowDirection"],
+    ],
+    [svg.replace('fill="currentColor"/>', 'fill="currentColor" fillOpacity={0}/>'), ["flowDirection"]],
+    [
+      svg.replace('y="35">已完成', 'y="35" fillOpacity={0}>已完成'),
+      ["labeledConcepts", "visibleConnections", "flowDirection"],
+    ],
+  ] as const;
+  for (const [chart, missed] of scenarios) {
+    const result = await scorer.score(example, chart, undefined, null);
+    assert.deepEqual(
+      result.checks.filter(({ pass }) => pass === false).map(({ id }) => id),
+      missed,
+    );
+  }
+});
+
 test("a line between labeled shapes can show a relationship without direction", { skip }, async () => {
   const result = await scorer.score(example, svg.replace(' markerEnd="url(#arrow)"', ""), undefined, null);
   assert.deepEqual(
@@ -159,6 +185,16 @@ test("labeled SVG boundaries can show containment", { skip }, async () => {
   assert.deepEqual(
     result.checks.filter(({ pass }) => pass === false),
     [],
+  );
+  const transparent = await scorer.score(
+    scenario,
+    nested.replace('stroke="currentColor"', 'stroke="currentColor" strokeOpacity={0}'),
+    undefined,
+    null,
+  );
+  assert.deepEqual(
+    transparent.checks.filter(({ pass }) => pass === false).map(({ id }) => id),
+    ["labeledConcepts", "nestedBoundaries"],
   );
   const shifted = await scorer.score(scenario, nested.replace("translate(12 24)", "translate(50 24)"), undefined, null);
   assert.deepEqual(

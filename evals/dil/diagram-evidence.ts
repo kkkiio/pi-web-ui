@@ -35,7 +35,7 @@ export function diagramEvidence(root: HTMLElement): DiagramEvidence {
   const pixel = canvas.getContext("2d", { willReadFrequently: true });
   if (!pixel) throw new Error("Cannot measure rendered colors");
   const palette = new Map<string, Color | null>();
-  function color(css: string): Color | null {
+  function color(css: string, opacity = "1"): Color | null {
     if (!palette.has(css)) {
       pixel?.clearRect(0, 0, 1, 1);
       if (!pixel) return null;
@@ -45,8 +45,17 @@ export function diagramEvidence(root: HTMLElement): DiagramEvidence {
       const [r, g, b, a] = pixel.getImageData(0, 0, 1, 1).data;
       palette.set(css, a > 8 ? [r, g, b, a] : null);
     }
-    return palette.get(css) ?? null;
+    const paint = palette.get(css);
+    if (!paint) return null;
+    const [red, green, blue, alpha] = paint;
+    const effectiveAlpha = alpha * Number(opacity);
+    return effectiveAlpha > 8 ? [red, green, blue, effectiveAlpha] : null;
   }
+
+  const svgPaint = (style: CSSStyleDeclaration) => ({
+    fill: color(style.fill, style.fillOpacity),
+    stroke: Number.parseFloat(style.strokeWidth) > 0 ? color(style.stroke, style.strokeOpacity) : null,
+  });
 
   const drawn = (element: Element) =>
     !element.closest("defs, marker") && element.checkVisibility({ opacityProperty: true, visibilityProperty: true });
@@ -80,8 +89,7 @@ export function diagramEvidence(root: HTMLElement): DiagramEvidence {
         const css = getComputedStyle(element);
         const rect = element.getBoundingClientRect();
         if (rect.width < 8 || rect.height < 8) return [];
-        const fill = color(css.fill);
-        const stroke = Number.parseFloat(css.strokeWidth) > 0 ? color(css.stroke) : null;
+        const { fill, stroke } = svgPaint(css);
         if (!fill && !stroke) return [];
         if (element instanceof SVGPathElement && !/[zZ]\s*$/u.test(element.getAttribute("d") ?? "")) return [];
         return [{ element, rect, parent: diagram, colors: [fill, stroke], label: "" }];
@@ -89,6 +97,8 @@ export function diagramEvidence(root: HTMLElement): DiagramEvidence {
       .sort((a, b) => a.rect.width * a.rect.height - b.rect.width * b.rect.height);
     for (const label of diagram.querySelectorAll("text")) {
       if (!drawn(label)) continue;
+      const { fill, stroke } = svgPaint(getComputedStyle(label));
+      if (!fill && !stroke) continue;
       const owner = shapes.find(({ rect }) => contains(rect, label.getBoundingClientRect(), -2));
       if (owner) owner.label = normalize(`${owner.label} ${label.textContent ?? ""}`);
     }
@@ -225,7 +235,8 @@ export function diagramEvidence(root: HTMLElement): DiagramEvidence {
   const arrowTip = (shape: SVGGeometryElement): Point | undefined => {
     const style = getComputedStyle(shape);
     if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return;
-    if (!color(style.fill) && (!color(style.stroke) || Number.parseFloat(style.strokeWidth) <= 0)) return;
+    const { fill, stroke } = svgPaint(style);
+    if (!fill && !stroke) return;
     const length = shape.getTotalLength();
     if (!length) return;
     const points = Array.from({ length: 33 }, (_, index) => shape.getPointAtLength((length * index) / 32));
@@ -290,7 +301,7 @@ export function diagramEvidence(root: HTMLElement): DiagramEvidence {
       const style = getComputedStyle(line);
       const matrix = line.getScreenCTM();
       const length = line.getTotalLength();
-      if (!matrix || !length || !color(style.stroke) || Number.parseFloat(style.strokeWidth) <= 0) continue;
+      if (!matrix || !length || !svgPaint(style).stroke) continue;
       const start = line.getPointAtLength(0).matrixTransform(matrix);
       const end = line.getPointAtLength(length).matrixTransform(matrix);
       const left = endpoint(start);
