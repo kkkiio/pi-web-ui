@@ -96,16 +96,18 @@ function BashDetails({ tool }: { tool: ToolCall }) {
           }}
         >
           <pre className="min-w-max px-3 py-2 font-mono text-xs leading-5">
-            {lines.map(({ key, spans }) => (
-              <Fragment key={key}>
-                {key > 0 && "\n"}
-                {spans.map(({ key: spanKey, content, color, bgColor }) => (
-                  <span key={spanKey} style={{ color, backgroundColor: bgColor }}>
-                    {content}
-                  </span>
-                ))}
-              </Fragment>
-            ))}
+            <code>
+              {lines.map(({ key, spans }) => (
+                <Fragment key={key}>
+                  {key > 0 && "\n"}
+                  {spans.map(({ key: spanKey, content, color, bgColor }) => (
+                    <span key={spanKey} style={{ color, backgroundColor: bgColor }}>
+                      {content}
+                    </span>
+                  ))}
+                </Fragment>
+              ))}
+            </code>
           </pre>
         </div>
       ) : (

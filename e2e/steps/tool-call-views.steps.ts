@@ -38,22 +38,13 @@ When("the command exits with an error", async () => {
   await writeFile(path.join(world.harness.workspaceDir, ".finish"), "");
 });
 
-Then("I can see the failure and quote the command output", async ({ page }) => {
+Then("I can see the failure and copy the command output", async ({ page }) => {
   await expect(page.getByRole("button", { name: /bash.*Exit 7/i })).toBeVisible();
   const output = page.getByText("Build failed", { exact: true });
   await expect(output).toBeVisible();
   await page.getByRole("button", { name: "Copy output", exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Build started\nBuild failed\n");
   await expect(page.getByText("The file review is complete.", { exact: true })).toBeVisible();
-  await output.evaluate((element) => {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  });
-  await expect(page.getByRole("button", { name: "Add to Chat" })).toBeVisible();
-  await page.evaluate(() => window.getSelection()?.removeAllRanges());
 });
 
 Then("I can preview the written and read file content", async ({ page }) => {
@@ -75,16 +66,20 @@ Then("I can see and quote the edit diff after reloading the conversation", async
   await page.getByRole("button", { name: /4 tool calls.*1 failed/ }).click();
   await edit.click();
   const change = page.getByText("export const item3 = 30;", { exact: true });
-  await expect(change).toBeVisible();
-  await change.evaluate((element) => {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  });
-  await expect(page.getByRole("button", { name: "Add to Chat" })).toBeVisible();
-  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await change.scrollIntoViewIfNeeded();
+  const addToChat = page.getByRole("button", { name: "Add to Chat" });
+  await expect(async () => {
+    await change.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+    await expect(addToChat).toBeVisible({ timeout: 500 });
+  }).toPass({ timeout: 5000 });
+  await addToChat.click();
+  await expect(page.getByRole("group", { name: "Quoted selections" })).toContainText("edit diff");
   await page.getByRole("button", { name: "Copy patch", exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("+export const item3 = 30;");
 });
