@@ -80,11 +80,15 @@ const LineSpan = ({ keyedLine, showLineNumbers }: { keyedLine: KeyedLine; showLi
   </span>
 );
 
+type CodeLanguage = BundledLanguage | "text";
+
 // Types
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
-  language: BundledLanguage;
+  language: CodeLanguage;
   showLineNumbers?: boolean;
+  startLine?: number;
+  viewportClassName?: string;
 };
 
 interface TokenizedCode {
@@ -112,7 +116,7 @@ const tokensCache = new Map<string, TokenizedCode>();
 const subscribers = new Map<string, Set<(result: TokenizedCode) => void>>();
 
 // Content-safe, not head/tail-safe: see `code-cache.ts`.
-const getTokensCacheKey = (code: string, language: BundledLanguage) => tokenCacheKey(code, language);
+const getTokensCacheKey = (code: string, language: CodeLanguage) => tokenCacheKey(code, language);
 
 const getHighlighter = (language: BundledLanguage): Promise<HighlighterGeneric<BundledLanguage, BundledTheme>> => {
   const cached = highlighterCache.get(language);
@@ -148,10 +152,11 @@ const createRawTokens = (code: string): TokenizedCode => ({
 // Synchronous highlight with callback for async results
 export const highlightCode = (
   code: string,
-  language: BundledLanguage,
+  language: CodeLanguage,
   // oxlint-disable-next-line eslint-plugin-promise(prefer-await-to-callbacks)
   callback?: (result: TokenizedCode) => void,
 ): TokenizedCode | null => {
+  if (language === "text") return null;
   const tokensCacheKey = getTokensCacheKey(code, language);
 
   // Return cached result if available
@@ -214,10 +219,12 @@ const CodeBlockBody = memo(
   ({
     tokenized,
     showLineNumbers,
+    startLine,
     className,
   }: {
     tokenized: TokenizedCode;
     showLineNumbers: boolean;
+    startLine: number;
     className?: string;
   }) => {
     const preStyle = useMemo(
@@ -235,7 +242,10 @@ const CodeBlockBody = memo(
         className={cn("dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)] m-0 p-4 text-sm", className)}
         style={preStyle}
       >
-        <code className={cn("font-mono text-sm", showLineNumbers && "[counter-increment:line_0] [counter-reset:line]")}>
+        <code
+          className={cn("font-mono text-sm", showLineNumbers && "[counter-increment:line_0]")}
+          style={showLineNumbers ? { counterReset: `line ${startLine - 1}` } : undefined}
+        >
           {keyedLines.map((keyedLine) => (
             <LineSpan key={keyedLine.key} keyedLine={keyedLine} showLineNumbers={showLineNumbers} />
           ))}
@@ -246,6 +256,7 @@ const CodeBlockBody = memo(
   (prevProps, nextProps) =>
     prevProps.tokenized === nextProps.tokenized &&
     prevProps.showLineNumbers === nextProps.showLineNumbers &&
+    prevProps.startLine === nextProps.startLine &&
     prevProps.className === nextProps.className,
 );
 
@@ -303,10 +314,14 @@ export const CodeBlockContent = ({
   code,
   language,
   showLineNumbers = false,
+  startLine = 1,
+  viewportClassName,
 }: {
   code: string;
-  language: BundledLanguage;
+  language: CodeLanguage;
   showLineNumbers?: boolean;
+  startLine?: number;
+  viewportClassName?: string;
 }) => {
   // Memoized raw tokens for immediate display
   const rawTokens = useMemo(() => createRawTokens(code), [code]);
@@ -341,8 +356,8 @@ export const CodeBlockContent = ({
   const tokenized = asyncTokens ?? syncTokens;
 
   return (
-    <div className="relative overflow-auto">
-      <CodeBlockBody showLineNumbers={showLineNumbers} tokenized={tokenized} />
+    <div className={cn("relative overflow-auto", viewportClassName)}>
+      <CodeBlockBody showLineNumbers={showLineNumbers} startLine={startLine} tokenized={tokenized} />
     </div>
   );
 };
@@ -351,6 +366,8 @@ export const CodeBlock = ({
   code,
   language,
   showLineNumbers = false,
+  startLine = 1,
+  viewportClassName,
   className,
   children,
   ...props
@@ -361,7 +378,13 @@ export const CodeBlock = ({
     <CodeBlockContext.Provider value={contextValue}>
       <CodeBlockContainer className={className} language={language} {...props}>
         {children}
-        <CodeBlockContent code={code} language={language} showLineNumbers={showLineNumbers} />
+        <CodeBlockContent
+          code={code}
+          language={language}
+          showLineNumbers={showLineNumbers}
+          startLine={startLine}
+          viewportClassName={viewportClassName}
+        />
       </CodeBlockContainer>
     </CodeBlockContext.Provider>
   );
@@ -371,12 +394,14 @@ export type CodeBlockCopyButtonProps = ComponentProps<typeof Button> & {
   onCopy?: () => void;
   onError?: (error: Error) => void;
   timeout?: number;
+  text?: string;
 };
 
 export const CodeBlockCopyButton = ({
   onCopy,
   onError,
   timeout = 2000,
+  text,
   children,
   className,
   ...props
@@ -384,6 +409,7 @@ export const CodeBlockCopyButton = ({
   const [isCopied, setIsCopied] = useState(false);
   const timeoutRef = useRef<number>(0);
   const { code } = useContext(CodeBlockContext);
+  const copyValue = text ?? code;
 
   const copyToClipboard = useCallback(async () => {
     if (typeof window === "undefined" || !navigator?.clipboard?.writeText) {
@@ -393,7 +419,7 @@ export const CodeBlockCopyButton = ({
 
     try {
       if (!isCopied) {
-        await navigator.clipboard.writeText(code);
+        await navigator.clipboard.writeText(copyValue);
         setIsCopied(true);
         onCopy?.();
         timeoutRef.current = window.setTimeout(() => setIsCopied(false), timeout);
@@ -401,7 +427,7 @@ export const CodeBlockCopyButton = ({
     } catch (error) {
       onError?.(error as Error);
     }
-  }, [code, onCopy, onError, timeout, isCopied]);
+  }, [copyValue, onCopy, onError, timeout, isCopied]);
 
   useEffect(
     () => () => {

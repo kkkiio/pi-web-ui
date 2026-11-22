@@ -195,7 +195,8 @@ export default function (pi: ExtensionAPI) {
   let latestCtx: ExtensionContext | null = null;
   let advancedFeaturesEnabled = false;
   let latestExecuteCtx: ExtensionCommandContext | null = null;
-  const liveToolEvents = new Map<string, { type: "event"; event: string; payload: Record<string, unknown> }>();
+  type LiveToolEvent = { type: "event"; event: string; payload: Record<string, unknown> };
+  const liveToolEvents = new Map<string, { start: LiveToolEvent; update?: LiveToolEvent }>();
   const questionTool = createQuestionTool(pi);
   const dilPrompt = createDilPrompt(pi);
   let questionListeners: (() => void)[] = [];
@@ -365,9 +366,15 @@ export default function (pi: ExtensionAPI) {
       latestCtx = ctx;
       const eventPayload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
       if (server && typeof eventPayload.toolCallId === "string") {
+        const liveEvent = { type: "event", event: eventType, payload: eventPayload } as const;
         if (eventType === "tool_execution_start") {
-          liveToolEvents.set(eventPayload.toolCallId, { type: "event", event: eventType, payload: eventPayload });
-        } else if (eventType === "tool_execution_end") liveToolEvents.delete(eventPayload.toolCallId);
+          liveToolEvents.set(eventPayload.toolCallId, { start: liveEvent });
+        } else if (eventType === "tool_execution_update") {
+          const call = liveToolEvents.get(eventPayload.toolCallId);
+          if (call) call.update = liveEvent;
+        } else if (eventType === "tool_execution_end") {
+          liveToolEvents.delete(eventPayload.toolCallId);
+        }
       }
 
       // Forward event to all connected browser clients
@@ -531,7 +538,10 @@ export default function (pi: ExtensionAPI) {
         sessionFile,
         isStreaming: !ctx.isIdle(),
         contextUsage,
-        liveEvents: [...liveToolEvents.values(), ...questionTool.replay()],
+        liveEvents: [
+          ...Array.from(liveToolEvents.values()).flatMap(({ start, update }) => (update ? [start, update] : [start])),
+          ...questionTool.replay(),
+        ],
       },
     };
   }

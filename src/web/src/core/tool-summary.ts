@@ -5,7 +5,12 @@ type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 const EDIT_TOOL_NAMES = new Set(["edit", "write", "apply_patch", "patch", "replace", "create"]);
 
 export function isToolExpandable(tool: ToolItem): boolean {
-  return tool.name !== "read" || tool.state === "output-error" || Boolean(tool.errorText || tool.outputImages?.length);
+  return (
+    tool.name !== "read" ||
+    tool.state === "output-error" ||
+    tool.state === "output-available" ||
+    Boolean(tool.errorText || tool.outputImages?.length)
+  );
 }
 
 export function formatToolSummary(tool: ToolItem): string {
@@ -38,11 +43,13 @@ export function formatToolInvocationSummary(name: string | undefined, input: unk
 function formatReadSummary(input: Record<string, unknown> | null): string {
   if (!input) return "";
   const path = firstString(input, ["path", "filePath", "filepath", "file"]);
-  const offset = input.offset ?? input.start ?? input.line;
-  const limit = input.limit ?? input.lines;
+  const offset = Number(input.offset ?? input.start ?? input.line ?? 1);
+  const limit = Number(input.limit ?? input.lines);
   const parts = [path ? compactPath(path) : ""];
-  if (offset !== undefined) parts.push(`offset ${String(offset)}`);
-  if (limit !== undefined) parts.push(`limit ${String(limit)}`);
+  if (Number.isSafeInteger(offset) && offset > 0) {
+    if (Number.isSafeInteger(limit) && limit > 0) parts.push(`lines ${offset}–${offset + limit - 1}`);
+    else if (offset > 1) parts.push(`from line ${offset}`);
+  }
   return parts.filter(Boolean).join(" · ");
 }
 

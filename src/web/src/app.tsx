@@ -413,6 +413,7 @@ export function App() {
                                 onToggleTool={toggleTool}
                                 reasoningRow={item.kind === "message"}
                                 processRow
+                                theme={resolvedTheme}
                               />
                             ))}
                           </ProcessGroup>
@@ -438,6 +439,7 @@ export function App() {
                           onCopy={copyText}
                           onQuote={addQuote}
                           onToggleTool={toggleTool}
+                          theme={resolvedTheme}
                         />
                       );
                     })

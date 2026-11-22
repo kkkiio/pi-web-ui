@@ -16,6 +16,7 @@ import imageResponses from "./responses/image-previews.ts";
 import processGroupResponses from "./responses/process-group.ts";
 import promptDraftResponses from "./responses/prompt-draft.ts";
 import reportExportResponses from "./responses/report-export.ts";
+import toolCallViewsResponses from "./responses/tool-call-views.ts";
 import toolFailureResponses from "./responses/tool-failure.ts";
 import transcriptQuoteResponses from "./responses/transcript-quote.ts";
 import workspaceArtifactResponses from "./responses/workspace-artifact.ts";
@@ -39,6 +40,7 @@ const responsesByName = {
   "duplicate-artifact": duplicateArtifactResponses,
   "external-artifact": externalArtifactResponses,
   "tool-failure": toolFailureResponses,
+  "tool-call-views": toolCallViewsResponses,
   "workspace-artifact": workspaceArtifactResponses,
 };
 
