@@ -36,8 +36,7 @@ See [docs/configuration.md](docs/configuration.md) for environment variables, `s
 - [x] Edit Message (inline rollback & resend; enabled by `/webui`)
 - [x] Add to Chat
 - [x] Git Diff Comment
-- [x] AskUserQuestion
-- [x] Generative UI
+- [x] Generative UI, including interactive clarification cards
 - [ ] BTW / Ask in Side Chat
 
 ### Git Diff
@@ -46,11 +45,11 @@ Review what the agent changed on disk without leaving the conversation.
 
 ![Git Diff panel showing the agent's dry-run edit next to the chat](docs/images/git-diff.png)
 
-### AskUserQuestion
+### Interactive clarification
 
-The agent stops to clarify intent before writing code, with a preview of each option.
+Pi can pause to ask how a change should work. Preview the options and submit a choice from the card, or answer in the chat input.
 
-![AskUserQuestion card asking how dry-run should report existing files](docs/images/ask-user-question.png)
+![DIL clarification card previewing how dry-run can report existing files](docs/images/dil-clarification.png)
 
 ## How it works
 

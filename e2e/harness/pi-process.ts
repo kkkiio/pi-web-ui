@@ -24,7 +24,6 @@ export type PiWebUiHarnessOptions = {
   enableEditing?: boolean;
   cancelNavigation?: boolean;
   autoStart?: boolean;
-  conflictTool?: "before" | "after" | "inactive";
   host?: string;
 };
 
@@ -63,14 +62,8 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
       "--no-context-files",
       "--extension",
       path.join(repoRoot, "e2e/fixtures/faux-provider-extension.ts"),
-      ...(options.conflictTool === "before" || options.conflictTool === "inactive"
-        ? ["--extension", path.join(repoRoot, "e2e/fixtures/conflicting-question-extension.ts")]
-        : []),
       "--extension",
       path.join(repoRoot, "extensions/mirror-server.ts"),
-      ...(options.conflictTool === "after"
-        ? ["--extension", path.join(repoRoot, "e2e/fixtures/conflicting-question-extension.ts")]
-        : []),
     ],
     {
       cwd: workspaceDir,
@@ -79,7 +72,6 @@ export async function startPiWebUi(fixtureName: string, options: PiWebUiHarnessO
         PI_CODING_AGENT_DIR: agentDir,
         PI_E2E: "1",
         PI_WEB_UI_E2E_CANCEL_NAVIGATION: options.cancelNavigation ? "1" : "0",
-        PI_WEB_UI_E2E_CONFLICT_INACTIVE: options.conflictTool === "inactive" ? "1" : "0",
         PI_OFFLINE: "1",
         PI_WEB_UI_HOST: options.host ?? "127.0.0.1",
         PI_WEB_UI_PORT: String(port),

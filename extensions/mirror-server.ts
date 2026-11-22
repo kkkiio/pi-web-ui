@@ -15,7 +15,6 @@ import * as http from "node:http";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { WebSocket, WebSocketServer } from "ws";
-import { createQuestionTool, QUESTION_CHANNEL } from "./ask-user-question";
 import { readGitChanges } from "./git-changes";
 import { createDilPrompt } from "./system-prompt";
 
@@ -197,9 +196,7 @@ export default function (pi: ExtensionAPI) {
   let latestExecuteCtx: ExtensionCommandContext | null = null;
   type LiveToolEvent = { type: "event"; event: string; payload: Record<string, unknown> };
   const liveToolEvents = new Map<string, { start: LiveToolEvent; update?: LiveToolEvent }>();
-  const questionTool = createQuestionTool(pi);
   const dilPrompt = createDilPrompt(pi);
-  let questionListeners: (() => void)[] = [];
   let serverStarting: Promise<void> | null = null;
   let cancelServerStart: ((error?: Error) => void) | null = null;
 
@@ -241,10 +238,7 @@ export default function (pi: ExtensionAPI) {
   // Helper: stop the server
   // ═══════════════════════════════════════
   function stopServer() {
-    questionTool.deactivate();
     dilPrompt.deactivate();
-    for (const unsubscribe of questionListeners) unsubscribe();
-    questionListeners = [];
     cancelServerStart?.();
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
@@ -310,13 +304,6 @@ export default function (pi: ExtensionAPI) {
       try {
         await startServer();
         if (latestCtx !== ctx) return;
-        if (questionListeners.length === 0) {
-          questionListeners = ["prompt", "blocked"].map((phase) => {
-            const event = `${QUESTION_CHANNEL}:${phase}`;
-            return pi.events.on(event, (payload: unknown) => broadcast({ type: "event", event, payload: { payload } }));
-          });
-        }
-        questionTool.activate();
         dilPrompt.activate();
       } catch (error) {
         stopServer();
@@ -538,10 +525,9 @@ export default function (pi: ExtensionAPI) {
         sessionFile,
         isStreaming: !ctx.isIdle(),
         contextUsage,
-        liveEvents: [
-          ...Array.from(liveToolEvents.values()).flatMap(({ start, update }) => (update ? [start, update] : [start])),
-          ...questionTool.replay(),
-        ],
+        liveEvents: Array.from(liveToolEvents.values()).flatMap(({ start, update }) =>
+          update ? [start, update] : [start],
+        ),
       },
     };
   }
@@ -568,10 +554,6 @@ export default function (pi: ExtensionAPI) {
 
     try {
       switch (request.method) {
-        case "answer_question": {
-          sendTo(ws, success(questionTool.answer(params)));
-          break;
-        }
         case "prompt": {
           if (!ctx) {
             sendTo(ws, error("No context available"));

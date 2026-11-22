@@ -311,7 +311,6 @@ function TrajectoryBody({
                   onQuote={() => {}}
                   onToggleTool={onToggleTool}
                   reasoningRow={item.kind === "message"}
-                  processRow
                   theme="light"
                 />
               ))}

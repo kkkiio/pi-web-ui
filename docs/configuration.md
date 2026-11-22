@@ -38,31 +38,23 @@ Inside the Pi TUI:
 
 | Command        | Description                                                                 |
 | -------------- | --------------------------------------------------------------------------- |
-| `/webui`       | Start the server, enable Web UI tools and editing, and open the browser     |
-| `/webui-stop`  | Cancel pending questions, stop the server, and restore affected tools       |
+| `/webui`       | Start the server, enable DIL and message editing, and open the browser       |
+| `/webui-stop`  | Stop the server and disable the Web UI DIL instructions                     |
 
 Run `/webui` again to restart. The former `/webui-start` command and auto-start
 configuration (`PI_WEB_UI_DISABLED` / `pi-web-ui.disabled`) are no longer used;
 activation is always explicit. Enable Web UI while the agent is idle.
 
-### AskUserQuestion
+### Interactive clarification
 
-Activation registers `webui_ask_user_question` and disables the known conflicting
-tool name `ask_user_question` if it is active. Pi Web UI owns the question flow;
-no RPIV integration or installation is required. The agent can ask 1–4 questions
-with 2–4 choices each, optional Markdown previews, multiple selection, and custom
-text answers. It waits until you submit, cancel, or abort the task.
+Pi can end a turn with an interactive card that asks a question and previews the
+options. Submit a choice from the card or reply in the chat input. Card
+submissions appear in the conversation as your messages. Once Pi is idle, you
+can submit again to revise your answer.
 
-Reloading the page or connecting another browser restores pending questions.
-The first valid answer wins. A disconnected browser keeps its local draft until
-reconnection; reloading the page starts a fresh draft. Closing all browser tabs
-does not stop the server or resolve pending questions.
-
-Stopping disables the Web UI tool and restores only the conflicting tools that
-activation disabled. It preserves unrelated tool changes and does not roll back
-conversation history or LLM context. New, switched, and forked sessions and
-`/reload` require `/webui` again. See
-[ADR 0013](adr/0013-explicit-webui-session-activation.md) for the activation policy.
+New, switched, and forked sessions and `/reload` require `/webui` again.
+See [ADR 0013](adr/0013-explicit-webui-session-activation.md) for the activation
+policy.
 
 ## Security & Remote Access
 

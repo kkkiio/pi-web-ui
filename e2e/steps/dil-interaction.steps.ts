@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
+import { saveReadmeImage } from "../harness/readme-image";
 import { world } from "./world";
 
 /**
@@ -11,7 +12,6 @@ import { world } from "./world";
  */
 const { Given, When, Then } = createBdd();
 
-// The card message, not the answer that follows it: `.last()` would be the newest answer.
 const card = (page: Page) =>
   page
     .getByRole("log")
@@ -59,4 +59,39 @@ Then("the card still shows the answer I chose", async ({ page }) => {
 Then("the composer is still empty after the card is submitted", async ({ page }) => {
   // The card never writes into the composer: it sends, it does not draft.
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue("");
+});
+
+Given("Pi is ready to clarify the export dry-run", () => {
+  world.fixture = "export-clarify";
+});
+
+When("I choose {string} in the dry-run card", async ({ page }, choice: string) => {
+  await card(page).getByRole("radio", { name: choice, exact: true }).check();
+});
+
+Then("the dry-run card previews {string}", async ({ page }, preview: string) => {
+  await expect(card(page).getByText(preview, { exact: true })).toBeVisible();
+});
+
+Then("I can answer in the chat input", async ({ page }) => {
+  await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toBeEditable();
+  await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeVisible();
+});
+
+When("I submit the dry-run choice", async ({ page }) => {
+  await card(page).getByRole("button", { name: "Submit choice" }).click();
+});
+
+Then("the dry-run answers survive a reload", async ({ page }) => {
+  const first = "Dry-run behavior for existing export files: Mark overwrites.";
+  const second = "Dry-run behavior for existing export files: Show new files only.";
+  await world.harness?.waitForSessionText(second);
+  await page.reload();
+  const userMessages = page.locator('[id^="user-message-"]');
+  await expect(userMessages.filter({ hasText: first })).toBeVisible();
+  await expect(userMessages.filter({ hasText: second })).toBeVisible();
+});
+
+Then("I capture the DIL clarification for the README", async ({ page }) => {
+  await saveReadmeImage(page, "dil-clarification");
 });

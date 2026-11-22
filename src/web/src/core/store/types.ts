@@ -1,5 +1,4 @@
 import type { StateCreator } from "zustand";
-import type { AskUserQuestion, QuestionAnswer, QuestionDraft } from "../ask-user-question";
 import type { PiClient } from "../pi-client";
 import type {
   ChatItem,
@@ -129,16 +128,7 @@ export type DialogSlice = {
   respondDialog: (response: Record<string, unknown>) => void;
 };
 
-export type QuestionSlice = {
-  questionnaires: Record<string, AskUserQuestion>;
-  questionDrafts: Record<string, Record<number, QuestionDraft>>;
-  updateQuestionDraft: (id: string, index: number, changes: Partial<QuestionDraft>) => void;
-  applyQuestionEvent: (event: string, payload: Record<string, unknown>) => void;
-  submitQuestion: (id: string, answers: QuestionAnswer[], cancel?: boolean) => Promise<void>;
-};
-
-export type PiWebUiStore = QuestionSlice &
-  ConnectionSlice &
+export type PiWebUiStore = ConnectionSlice &
   SessionSlice &
   SettingsSlice &
   WorkspaceSlice &
