@@ -46,7 +46,7 @@ export async function checkSubmission(
     !quiz.independent ||
     quiz.groups.some((options) => new Set(options.map(({ label, value }) => (value === "on" ? label : value))).size < 2)
   ) {
-    return "需要每题至少有两个可选答案，且各题可以独立作答。";
+    return "Each question must have at least two choices and accept answers independently.";
   }
 
   const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -89,7 +89,7 @@ export async function checkSubmission(
       const message = await page.evaluate((offset) => window.dilSubmittedPrompts[offset], previous);
       if (trial === -1) {
         if (baseline.some((choice) => !answerPatterns(choice).some((pattern) => pattern.test(message)))) {
-          return "提交内容缺少所选选项。";
+          return "The submission omitted a selected answer.";
         }
         submitted = message;
       } else if (
@@ -98,7 +98,7 @@ export async function checkSubmission(
           (pattern) => [...message.matchAll(pattern)].length > [...submitted.matchAll(pattern)].length,
         )
       ) {
-        return `更改第 ${trial + 1} 题后，提交内容未体现新选项。`;
+        return `The submission omitted the updated answer to question ${trial + 1}.`;
       }
     }
   } catch (error) {
@@ -107,7 +107,7 @@ export async function checkSubmission(
       (error.name !== "TimeoutError" && !error.message.includes("did not change its checked state"))
     )
       throw error;
-    return "浏览器未能完成选题并将提交内容送达。";
+    return "The browser could not finish selecting and submitting the answers.";
   }
   return null;
 }

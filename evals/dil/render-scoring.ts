@@ -62,7 +62,12 @@ export class DilEvalScorer {
         label: CHECK_LABELS.renderClean,
         pass: ready && !errorCount && errors.length === 0,
         detail:
-          errors[0] ?? (!ready ? "DIL 未能完成渲染。" : errorCount ? `运行时捕获到 ${errorCount} 个错误。` : undefined),
+          errors[0] ??
+          (!ready
+            ? "DIL rendering did not finish."
+            : errorCount
+              ? `Runtime errors caught (${errorCount}).`
+              : undefined),
       });
 
       if (ready) {
@@ -86,24 +91,26 @@ export class DilEvalScorer {
           switch (check.id) {
             case "labeledConcepts":
               pass = diagram.labels.length >= atLeast;
-              detail = `需要至少 ${atLeast} 个概念，找到 ${diagram.labels.length} 个。`;
+              detail = `Found ${diagram.labels.length} labeled concepts. The minimum is ${atLeast}.`;
               break;
             case "visibleConnections":
             case "flowDirection": {
               const count = check.id === "flowDirection" ? diagram.directedConnections : diagram.connections;
               pass = count >= atLeast;
-              detail = `需要至少 ${atLeast} 条，找到 ${count} 条。`;
+              detail = `Found ${count} connections. The minimum is ${atLeast}.`;
               break;
             }
             case "nestedBoundaries":
               pass = diagram.nesting.length > 0;
-              detail = pass ? `${diagram.nesting[0]} 包含 ${diagram.nesting[1]}。` : "未找到成对的带标签嵌套边界。";
+              detail = pass
+                ? `${diagram.nesting[0]} contains ${diagram.nesting[1]}.`
+                : "Found no nested pair of labeled boundaries.";
               break;
             case "colorDistinction":
               pass = diagram.colorPair.length > 0;
               detail = pass
-                ? `${diagram.colorPair.join("、")}使用了可区分的颜色。`
-                : "未找到同组元素之间可辨认的颜色差异。";
+                ? `${diagram.colorPair.join(" and ")} use distinct colors.`
+                : "Found no distinguishable colors among related elements.";
               break;
             case "singleChoiceQuestions": {
               const counts =
@@ -111,13 +118,13 @@ export class DilEvalScorer {
                   (choices) => new Set(choices.map(({ label, value }) => (value === "on" ? label : value))).size,
                 ) ?? [];
               pass = quiz?.independent === true && counts.length === check.count && counts.every((count) => count >= 2);
-              detail = `需要 ${check.count} 道独立单选题，各题的可选项数为 ${counts.join("、") || "无"}。`;
+              detail = `Expected ${check.count} independent questions. Choices per question (${counts.join(", ") || "none"}).`;
               break;
             }
             case "submitSelectedAnswers": {
               const failure = quiz && (await checkSubmission(page, root, quiz, check.count));
               pass = quiz !== null && failure === null;
-              detail = failure ?? "逐题更改选项后，宿主收到对应的新答案。";
+              detail = failure ?? "The host received the updated answer after each selection change.";
               break;
             }
           }
@@ -125,7 +132,7 @@ export class DilEvalScorer {
         }
       } else {
         for (const { id } of dilCase.checks) {
-          checks.push({ id, label: CHECK_LABELS[id], pass: null, detail: "DIL 渲染未完成。" });
+          checks.push({ id, label: CHECK_LABELS[id], pass: null, detail: "DIL rendering did not finish." });
         }
       }
     } finally {
@@ -133,7 +140,7 @@ export class DilEvalScorer {
     }
 
     if (diagramCount > 0) {
-      let reason = "本次评估未启用 SVG 截图评审。";
+      let reason = "SVG screenshot review was disabled for this run.";
       try {
         if (judge) checks.push(...(await judge(screenshots)));
       } catch (error) {

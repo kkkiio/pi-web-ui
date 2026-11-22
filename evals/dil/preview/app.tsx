@@ -541,8 +541,8 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
   const activeContext = useMemo(() => {
     if (!activeAnchor) return null;
     for (const entry of visibleEntries) {
-      for (const item of entry.summary.cases) {
-        const anchor = `case-${entry.reportIndex}-${item.id}`;
+      for (const [index, item] of entry.summary.cases.entries()) {
+        const anchor = `case-${entry.reportIndex}-${index}-${item.id}`;
         if (anchor === activeAnchor) {
           return { model: entry.model, caseId: item.id, reportIndex: entry.reportIndex };
         }
@@ -613,8 +613,8 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
                 <span className={`score ${summary.score === 100 ? "pass" : "fail"}`}>{summary.score}%</span>
               </a>
               <ul>
-                {summary.cases.map((item) => {
-                  const anchor = `case-${reportIndex}-${item.id}`;
+                {summary.cases.map((item, index) => {
+                  const anchor = `case-${reportIndex}-${index}-${item.id}`;
                   const isActive = activeAnchor === anchor;
                   return (
                     <li key={anchor}>
@@ -648,8 +648,8 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
             <h2 id={`model-${reportIndex}`}>
               {model} <span className={`score ${summary.score === 100 ? "pass" : "fail"}`}>{summary.score}%</span>
             </h2>
-            {summary.cases.map((result) => {
-              const anchor = `case-${reportIndex}-${result.id}`;
+            {summary.cases.map((result, index) => {
+              const anchor = `case-${reportIndex}-${index}-${result.id}`;
               return <CaseCard key={anchor} anchor={anchor} model={model} result={result} />;
             })}
           </section>

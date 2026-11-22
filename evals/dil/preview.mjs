@@ -11,7 +11,7 @@
  */
 import { execFile } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { DIL_PROMPT_EXAMPLES, DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
@@ -20,7 +20,6 @@ import { DilEvalScorer } from "./render-scoring.ts";
 import { summarize } from "./scoring.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, "..", "..");
 const OUT = join(HERE, "preview-out");
 
 async function fromRecordings() {
@@ -57,18 +56,15 @@ function attachTrajectories(reports) {
     for (const summary of summaries) {
       for (const caseResult of summary.cases ?? []) {
         const caseId = caseResult.id;
-        if (!caseId) continue;
-        let file =
-          caseResult.trajectoryFile && existsSync(caseResult.trajectoryFile) ? caseResult.trajectoryFile : null;
-        if (!file) {
-          const caseDir = join(HERE, "trajectories", slug, caseId);
-          if (!existsSync(caseDir)) continue;
-          const files = readdirSync(caseDir).filter((name) => name.endsWith(".jsonl")).sort();
-          if (files.length === 0) continue;
-          file = join(caseDir, files.at(-1));
-        }
+        if (!caseId || !caseResult.trajectoryFile) continue;
+        const session = basename(caseResult.trajectoryFile);
+        const file = existsSync(caseResult.trajectoryFile)
+          ? caseResult.trajectoryFile
+          : join(HERE, "trajectories", slug, caseId, session);
+        if (!existsSync(file)) continue;
+
         mkdirSync(dir, { recursive: true });
-        const name = `${slug}__${caseId}.jsonl`;
+        const name = `${slug}__${caseId}__${session}`;
         copyFileSync(file, join(dir, name));
         caseResult.trajectoryUrl = `trajectories/${name}`;
       }

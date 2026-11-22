@@ -12,7 +12,7 @@ Grade two independent checks across every supplied diagram:
 - svgTextReadability: Judge whether labels are easy to read at a glance. Look separately at the text inside each dark box. Dark gray letters on a black or nearly black background fail when the letters are faint, even if the words can be deciphered. Light text with good contrast on a dark background can pass. Also fail when crowding or lines make labels hard to read. Readable connector labels can pass when crossed by a line. Judge readability independently of text bounds.
 If a diagram has no applicable elements for a check, it passes that check. Use the original task as context for interpreting the diagrams.
 Return only JSON: {"svgTextWithinBoxes":{"pass":true,"reason":"short observation"},"svgTextReadability":{"pass":true,"reason":"short observation"}}.
-For each failure, name the affected element and identify its diagram by number if there is more than one. Write the reasons in Chinese.`;
+For each failure, name the affected element and identify its diagram by number if there is more than one. Write the reasons in English.`;
 
 /** Send the PNGs and rubric to the configured eval provider. */
 export async function requestSvgJudge(

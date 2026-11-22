@@ -187,7 +187,7 @@ export function diagramEvidence(root: HTMLElement): DiagramEvidence {
         }),
     );
     if (b) {
-      colorPair.push(a.label || "图形 1", b.label || "图形 2");
+      colorPair.push(a.label || "Shape 1", b.label || "shape 2");
       break;
     }
   }

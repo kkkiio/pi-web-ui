@@ -16,17 +16,17 @@ export interface DilCase {
 }
 
 export const CHECK_LABELS = {
-  parseClean: "解析无诊断",
-  renderClean: "渲染完成且无运行时错误",
-  labeledConcepts: "用带标签的边界区分概念",
-  visibleConnections: "用可见连线关联概念",
-  flowDirection: "用箭头标明流转方向",
-  nestedBoundaries: "用嵌套边界表达包含关系",
-  colorDistinction: "用颜色区分同组元素",
-  singleChoiceQuestions: "呈现独立可选的单选题",
-  submitSelectedAnswers: "实际提交所选答案",
-  svgTextWithinBoxes: "SVG 框内文字无明显越界",
-  svgTextReadability: "SVG 文字可读性",
+  parseClean: "Parses without diagnostics",
+  renderClean: "Renders without runtime errors",
+  labeledConcepts: "Uses labeled boundaries for concepts",
+  visibleConnections: "Uses visible connections between concepts",
+  flowDirection: "Shows flow direction",
+  nestedBoundaries: "Shows containment through nested boundaries",
+  colorDistinction: "Distinguishes related elements by color",
+  singleChoiceQuestions: "Presents independent single-choice questions",
+  submitSelectedAnswers: "Submits the selected answers",
+  svgTextWithinBoxes: "SVG text stays within its boxes",
+  svgTextReadability: "SVG text is readable",
 } as const;
 
 export type CheckId = keyof typeof CHECK_LABELS;
