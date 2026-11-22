@@ -20,7 +20,7 @@ export interface PrimitiveProps {
 /** A bordered / padded surface: the default grouping primitive. */
 export function Box({ className, style, children }: PrimitiveProps) {
   return (
-    <div className={cn("min-w-0", className)} style={style}>
+    <div data-dil-layout="box" className={cn("min-w-0", className)} style={style}>
       {children}
     </div>
   );
@@ -29,7 +29,7 @@ export function Box({ className, style, children }: PrimitiveProps) {
 /** Horizontal layout. */
 export function Row({ className, style, children }: PrimitiveProps) {
   return (
-    <div className={cn("flex flex-row min-w-0", className)} style={style}>
+    <div data-dil-layout="row" className={cn("flex flex-row min-w-0", className)} style={style}>
       {children}
     </div>
   );
@@ -38,7 +38,7 @@ export function Row({ className, style, children }: PrimitiveProps) {
 /** Vertical layout (the default block direction, made explicit). */
 export function Col({ className, style, children }: PrimitiveProps) {
   return (
-    <div className={cn("flex flex-col min-w-0", className)} style={style}>
+    <div data-dil-layout="col" className={cn("flex flex-col min-w-0", className)} style={style}>
       {children}
     </div>
   );
@@ -47,7 +47,7 @@ export function Col({ className, style, children }: PrimitiveProps) {
 /** CSS grid; `columns` arrives pre-resolved as `gridTemplateColumns`. */
 export function Grid({ className, style, children }: PrimitiveProps) {
   return (
-    <div className={cn("grid min-w-0", className)} style={style}>
+    <div data-dil-layout="grid" className={cn("grid min-w-0", className)} style={style}>
       {children}
     </div>
   );

@@ -56,6 +56,7 @@ type Stop =
 interface ParseContext {
   readonly src: string;
   i: number;
+  openingTagEnd: number;
   readonly diag: Diagnostics;
   readonly tagStack: string[];
   readonly markdown: ReadonlyMap<number, MarkdownSpan>;
@@ -107,7 +108,7 @@ export function normalizeSource(source: string): string {
 export function parse(source: string): DilParseResult {
   const src = normalizeSource(source);
   const diag = new Diagnostics(src);
-  const ctx: ParseContext = { src, i: 0, diag, tagStack: [], markdown: markdownSpans(src) };
+  const ctx: ParseContext = { src, i: 0, openingTagEnd: 0, diag, tagStack: [], markdown: markdownSpans(src) };
   const { nodes } = parseNodes(ctx, null, false);
   return { nodes, diagnostics: diag.items, diagnosticSummary: diag.summary() };
 }
@@ -133,6 +134,18 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
   while (ctx.i < src.length) {
     const c = src[ctx.i];
     const next = src[ctx.i + 1];
+    if (
+      c === "<" &&
+      next === "!" &&
+      src.startsWith("<!--", ctx.i) &&
+      ctx.tagStack.includes("svg") &&
+      !isEscaped(src, ctx.i)
+    ) {
+      flush(ctx.i);
+      const end = src.indexOf("-->", ctx.i + 4);
+      ctx.i = end < 0 ? src.length : end + 3;
+      continue;
+    }
     const markdown = ctx.markdown.get(ctx.i);
     if (markdown && (markdown.node.type !== "html" || !tagAt(src, ctx.i, next === "/"))) {
       const atom =
@@ -152,7 +165,7 @@ function parseNodes(ctx: ParseContext, closeTag: string | null, inBlock: boolean
     // A blockquote line is prose: a fence inside it (`> ~~~js`) has its prefix between the
     // line start and the marker, so DIL scanning must not read its braces as expressions.
     const lineStart = ctx.i === 0 || src[ctx.i - 1] === "\n";
-    const quoted = (lineStart || c === "<" || c === "{") && isQuoteLine(src, ctx.i);
+    const quoted = (lineStart || c === "<" || c === "{") && isQuoteLine(src, ctx.i, ctx.openingTagEnd);
 
     // 1. FencedBlock — only ever at a line start, so inline backticks stay prose.
     if (!quoted && lineStart) {
@@ -338,17 +351,11 @@ function documentLevelIndent(src: string, index: number): number {
   return indent;
 }
 
-/** True when `index` sits on a line that carries a Markdown blockquote marker. */
-function isQuoteLine(src: string, index: number): boolean {
+/** True when an unconsumed Markdown blockquote marker precedes `index` on its line. */
+function isQuoteLine(src: string, index: number, openingTagEnd: number): boolean {
   let i = src.lastIndexOf("\n", index - 1) + 1;
-  let markers = 0;
-  while (i < index) {
-    while (i < index && (src[i] === " " || src[i] === "\t")) i++;
-    if (src[i] !== ">") break;
-    markers++;
-    i++;
-  }
-  return markers > 0;
+  while (i < index && (src[i] === " " || src[i] === "\t")) i++;
+  return i < index && i >= openingTagEnd && src[i] === ">";
 }
 
 function isEscaped(src: string, index: number): boolean {
@@ -547,6 +554,7 @@ function readElement(ctx: ParseContext, name: string): { node: DilElementNode | 
   }
 
   ctx.i = open.end;
+  ctx.openingTagEnd = open.end;
   if (open.selfClosing) {
     return { node: element(name, open.attrs, [], pos, open.end, true), stop: { kind: "done" } };
   }

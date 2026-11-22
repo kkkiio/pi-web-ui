@@ -16,27 +16,31 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { DIL_PROMPT_EXAMPLES, DIL_SYSTEM_PROMPT } from "../../extensions/system-prompt.ts";
 import { DIL_CASES } from "./cases.ts";
-import { scoreCase } from "./scoring.ts";
+import { DilEvalScorer } from "./render-scoring.ts";
+import { summarize } from "./scoring.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
 const OUT = join(HERE, "preview-out");
 
-function fromRecordings() {
-  const cases = DIL_CASES.flatMap((dilCase) => {
-    const file = join(HERE, "recordings", `${dilCase.id}.md`);
-    if (!existsSync(file)) return [];
-    return [scoreCase(dilCase, readFileSync(file, "utf8"))];
-  });
-  const passed = cases.reduce((sum, item) => sum + item.passed, 0);
-  const total = cases.reduce((sum, item) => sum + item.total, 0);
+async function fromRecordings() {
+  const scorer = new DilEvalScorer("");
+  const cases = [];
+  try {
+    for (const dilCase of DIL_CASES) {
+      const file = join(HERE, "recordings", `${dilCase.id}.md`);
+      if (existsSync(file)) cases.push(await scorer.score(dilCase, readFileSync(file, "utf8"), undefined, null));
+    }
+  } finally {
+    await scorer.close();
+  }
 
   const manifestFile = join(HERE, "recordings", "manifest.json");
   const manifest = existsSync(manifestFile) ? JSON.parse(readFileSync(manifestFile, "utf8")) : {};
   const captured = manifest.capturedAt ? ` · captured ${manifest.capturedAt.slice(0, 10)}` : " · no manifest";
   return {
     model: `${manifest.model ?? "recordings"} (recordings${captured})`,
-    summary: { variant: "with-dil", cases, score: total === 0 ? 0 : Math.round((passed / total) * 100) },
+    summary: summarize("with-dil", cases),
   };
 }
 
@@ -83,7 +87,7 @@ function fromReports() {
   return existsSync(latest) ? [JSON.parse(readFileSync(latest, "utf8"))] : [];
 }
 
-function buildPreviewData(mode) {
+async function buildPreviewData(mode) {
   if (mode === "examples") {
     return {
       mode: "examples",
@@ -91,7 +95,7 @@ function buildPreviewData(mode) {
     };
   }
 
-  const reports = mode === "recordings" ? [fromRecordings()] : fromReports();
+  const reports = mode === "recordings" ? [await fromRecordings()] : fromReports();
   if (reports.length === 0) {
     throw new Error("no eval reports found; run npm run eval:dil first");
   }
@@ -125,7 +129,7 @@ const mode = process.argv.includes("--examples")
       ? process.env.DIL_PREVIEW_SOURCE
       : "report";
 
-const data = buildPreviewData(mode);
+const data = await buildPreviewData(mode);
 mkdirSync(OUT, { recursive: true });
 const dataFile = join(OUT, "data.json");
 writeFileSync(dataFile, JSON.stringify(data));

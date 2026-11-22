@@ -52,9 +52,16 @@ export function DilRenderer({
   const text = useThrottledText(source, isStreaming, throttleMs);
   const compiled = useMemo(() => compileDil(parseDocument(text, { isStreaming })), [text, isStreaming]);
   const rootRef = useRef<HTMLDivElement>(null);
-  const [snapshot, setSnapshot] = useState<readonly ResolvedNode[]>();
+  const [snapshot, setSnapshot] = useState<{ tree: readonly ResolvedNode[]; errors: number }>();
   const [sends, setSends] = useState<ReadonlySet<string>>(() => new Set());
-  const [runtime] = useState(() => new DilSandbox(setSnapshot, setSends, () => hostRef.current));
+  const [runtime] = useState(
+    () =>
+      new DilSandbox(
+        (tree, errors) => setSnapshot({ tree, errors }),
+        setSends,
+        () => hostRef.current,
+      ),
+  );
 
   useEffect(() => {
     const root = rootRef.current;
@@ -77,11 +84,16 @@ export function DilRenderer({
   const value = useMemo(() => ({ runtime, host, sends }), [runtime, host, sends]);
   return (
     <DilRuntimeContext.Provider value={value}>
-      <div ref={rootRef} className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}>
+      <div
+        ref={rootRef}
+        data-dil-ready={!compiled.program || snapshot !== undefined}
+        data-dil-errors={compiled.program && snapshot ? snapshot.errors : undefined}
+        className={cn("dil-root flex min-w-0 flex-col gap-2 text-sm leading-6", className)}
+      >
         {compiled.program && !snapshot ? (
           <MessageResponse>{compiled.fallback}</MessageResponse>
         ) : (
-          renderNodes(compiled.program && snapshot ? snapshot : compiled.tree, instance, null)
+          renderNodes(compiled.program && snapshot ? snapshot.tree : compiled.tree, instance, null)
         )}
       </div>
     </DilRuntimeContext.Provider>

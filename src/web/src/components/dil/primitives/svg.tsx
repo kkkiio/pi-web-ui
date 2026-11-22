@@ -26,5 +26,9 @@ export function SvgElement({ name, props, idPrefix, children }: SvgElementProps)
 
   // A diagram without a width would collapse to zero in a flex column; `viewBox` still
   // controls the aspect ratio, so `100%` is the safe default.
-  return createElement(name, { width: "100%", ...attributes, className: "block max-w-full text-current" }, children);
+  return createElement(
+    name,
+    { width: "100%", ...attributes, "data-dil-svg": "", className: "block max-w-full text-current" },
+    children,
+  );
 }

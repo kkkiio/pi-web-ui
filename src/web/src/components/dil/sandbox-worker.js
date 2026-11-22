@@ -34,6 +34,7 @@
 
   /** Assemble a runnable JS body and its data using the worker's native syntax checks. */
   function assembleProgram(program) {
+    let errors = 0;
     const code = program.script
       .map((part) => {
         if (typeof part === "string") return part;
@@ -50,11 +51,12 @@
               return part.code;
           }
         } catch {
+          errors++;
           return part.kind === "each" ? `(${part.fallback})` : part.fallback;
         }
       })
       .join("");
-    return { code, data: program.data };
+    return { code, data: program.data, errors };
   }
 
   /** Execute DIL revisions and serialize the nodes, state, and effects of explicit control events. */
@@ -90,12 +92,14 @@
       const handlers = new Map();
       const buttons = [];
       const budget = { nodes: LIMIT * 8, text: MAX_TEXT };
+      let errors = 0;
       let nodes = LIMIT;
       let iterations = LIMIT;
       const safe = (fn) => {
         try {
           return fn();
         } catch {
+          errors++;
           return undefined;
         }
       };
@@ -163,7 +167,7 @@
       const tree = nextFactory(runtime, data, DIL, GenUI, "")?.list;
       if (!isArray(tree)) throw new Error("DIL program did not return a tree");
       const saved = sanitize(Object.fromEntries(slots), budget);
-      return { tree, handlers, buttons, state: saved };
+      return { tree, handlers, buttons, state: saved, errors };
     }
 
     return {
@@ -183,7 +187,7 @@
           callbacks = next.handlers;
           factory = nextFactory;
           programData = artifact.data;
-          return { tree: next.tree, buttons: next.buttons, state: next.state, effects: [] };
+          return { tree: next.tree, buttons: next.buttons, state: next.state, effects: [], errors: artifact.errors + next.errors };
         } catch (error) {
           slots = before;
           throw error;
@@ -214,7 +218,7 @@
           effects = undefined;
           const next = render(factory, programData);
           callbacks = next.handlers;
-          return { tree: next.tree, buttons: next.buttons, state: next.state, effects: performed };
+          return { tree: next.tree, buttons: next.buttons, state: next.state, effects: performed, errors: next.errors };
         } catch {
           slots = before;
           return null;

@@ -81,10 +81,12 @@ function NumberedSource({
   anchor,
   sourceLines,
   diagnostics,
+  activeLine,
 }: {
   readonly anchor: string;
   readonly sourceLines: readonly string[];
   readonly diagnostics: readonly DilDiagnostic[];
+  readonly activeLine?: number | null;
 }) {
   const byLine = useMemo(() => {
     const map = new Map<number, DilDiagnostic[]>();
@@ -102,9 +104,14 @@ function NumberedSource({
         const lineNo = idx + 1;
         const lineDiags = byLine.get(lineNo);
         const hasErr = Boolean(lineDiags && lineDiags.length > 0);
+        const isActive = lineNo === activeLine;
         return (
           <Fragment key={lineNo}>
-            <div className={`src-line${hasErr ? " has-diag" : ""}`} id={`${anchor}-L${lineNo}`}>
+            <div
+              className={`src-line${hasErr ? " has-diag" : ""}${isActive ? " is-targeted" : ""}`}
+              id={`${anchor}-L${lineNo}`}
+              tabIndex={isActive ? -1 : undefined}
+            >
               <span className="ln">{lineNo}</span>
               <span className="code">{lineText || " "}</span>
             </div>
@@ -387,56 +394,126 @@ function CaseCard({
 }) {
   const parsed = useMemo(() => parseDocument(result.text), [result.text]);
   const sourceLines = useMemo(() => normalizeSource(result.text).split("\n"), [result.text]);
-  const hasDiagnostics = parsed.diagnostics.length > 0;
+  const [showSource, setShowSource] = useState(false);
+  const [activeLine, setActiveLine] = useState<number | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    function openLinkedLine() {
+      const prefix = `#${anchor}-L`;
+      const hash = window.location.hash;
+      if (!hash.startsWith(prefix)) return;
+      const line = Number(hash.slice(prefix.length));
+      if (!Number.isInteger(line) || line < 1 || line > sourceLines.length) return;
+      setShowSource(true);
+      setActiveLine(line);
+    }
+
+    openLinkedLine();
+    window.addEventListener("hashchange", openLinkedLine);
+    return () => window.removeEventListener("hashchange", openLinkedLine);
+  }, [anchor, sourceLines.length]);
+
+  useEffect(() => {
+    if (!showSource || activeLine === null) return;
+    const line = document.getElementById(`${anchor}-L${activeLine}`);
+    line?.scrollIntoView({ block: "center" });
+    line?.focus({ preventScroll: true });
+  }, [activeLine, anchor, showSource]);
 
   const traceBits: string[] = [];
   if (result.toolCallCount !== undefined) traceBits.push(`${result.toolCallCount} tools`);
   if (result.assistantTurns !== undefined) traceBits.push(`${result.assistantTurns} turns`);
 
   return (
-    <section className="case" id={anchor} data-case-anchor={anchor}>
-      <div className="case-model-row">
-        <span className="model-pill">{model}</span>
-      </div>
-      <header className="case-head">
-        <h3>
-          {result.id} <small>{result.category}</small>
-        </h3>
-        <div className="case-stats">
-          {traceBits.length > 0 ? <span className="trace">{traceBits.join(" · ")}</span> : null}
-          <span className={`score ${result.score === 100 ? "pass" : "fail"}`}>
-            {result.score}% · {result.passed}/{result.total}
-          </span>
+    <section
+      className="case report-case"
+      id={anchor}
+      data-case-anchor={anchor}
+      aria-labelledby={`${anchor}-title`}
+      ref={cardRef}
+    >
+      <header className="report-case-head">
+        <div className="report-case-title">
+          <h3 id={`${anchor}-title`}>{result.id}</h3>
+        </div>
+        <span className={`report-case-score score ${result.score === 100 ? "pass" : "fail"}`}>
+          {result.score}% · {result.passed}/{result.total}
+          {result.unscored ? ` · ${result.unscored} unscored` : ""}
+        </span>
+        <div className="report-case-meta">
+          <span>{model}</span>
+          <span>{result.category}</span>
+        </div>
+        <div className="case-view-switch" role="group" aria-label="Case view">
+          {(
+            [
+              ["Preview", false],
+              ["Raw Source", true],
+            ] as const
+          ).map(([label, isSource]) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={showSource === isSource}
+              aria-controls={`${anchor}-${isSource ? "source" : "preview"}`}
+              onClick={() => {
+                if (showSource === isSource) return;
+                if (window.location.hash.startsWith(`#${anchor}-L`)) {
+                  window.history.replaceState(null, "", `#${anchor}`);
+                }
+                if (cardRef.current && cardRef.current.getBoundingClientRect().top < 0) {
+                  cardRef.current.scrollIntoView();
+                }
+                setActiveLine(null);
+                setShowSource(isSource);
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </header>
-      <ul className="checks">
-        {result.checks.map((check) => (
-          <li key={check.label} className={check.pass ? "pass" : "fail"}>
-            {check.pass ? "✓" : "✗"} {check.label}
-          </li>
-        ))}
-      </ul>
-      <DiagnosticsPanel anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
-      {result.trajectoryUrl ? (
-        <TrajectorySection url={result.trajectoryUrl} />
-      ) : (
-        <div className="render">
-          <DilRenderer source={result.text} />
+      <div className="report-case-body">
+        {traceBits.length > 0 ? <div className="report-case-trace trace">{traceBits.join(" · ")}</div> : null}
+        <ul className="checks">
+          {result.checks.map((check) => (
+            <li
+              key={check.id ?? check.label}
+              className={check.pass === null ? undefined : check.pass ? "pass" : "fail"}
+              title={check.detail}
+            >
+              {check.pass === null ? "–" : check.pass ? "✓" : "✗"} {check.label}
+            </li>
+          ))}
+        </ul>
+        <DiagnosticsPanel anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        <div id={`${anchor}-preview`} hidden={showSource}>
+          {result.trajectoryUrl ? (
+            <TrajectorySection url={result.trajectoryUrl} />
+          ) : (
+            <div className="render">
+              <DilRenderer source={result.text} />
+            </div>
+          )}
         </div>
-      )}
-      <details className="raw" open={hasDiagnostics}>
-        <summary>
-          raw source ({sourceLines.length} lines
-          {hasDiagnostics ? ` · ${parsed.diagnostics.length} diagnostics` : ""})
-        </summary>
-        <div className="src-frame">
-          <div className="src-head">
-            <span>source</span>
-            <CopySourceButton text={result.text} />
-          </div>
-          <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        <div id={`${anchor}-source`} className="src-frame" hidden={!showSource}>
+          {showSource && (
+            <>
+              <div className="src-head">
+                <span>{sourceLines.length} lines</span>
+                <CopySourceButton text={result.text} />
+              </div>
+              <NumberedSource
+                anchor={anchor}
+                sourceLines={sourceLines}
+                diagnostics={parsed.diagnostics}
+                activeLine={activeLine}
+              />
+            </>
+          )}
         </div>
-      </details>
+      </div>
     </section>
   );
 }
@@ -481,7 +558,7 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
     function syncActiveFromScroll() {
       const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-case-anchor]"));
       if (elements.length === 0) return;
-      const threshold = 110;
+      const threshold = 16;
       let current = elements[0];
       for (const el of elements) {
         if (el.getBoundingClientRect().top <= threshold) current = el;
@@ -500,6 +577,7 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
       });
     }
 
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
     syncActiveFromScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
@@ -510,7 +588,13 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
 
   useEffect(() => {
     if (!activeAnchor) return;
-    tocLinkRefs.current.get(activeAnchor)?.scrollIntoView({ block: "nearest" });
+    const link = tocLinkRefs.current.get(activeAnchor);
+    const toc = link?.closest("nav");
+    if (!link || !toc || toc.scrollHeight <= toc.clientHeight) return;
+    const bounds = toc.getBoundingClientRect();
+    const item = link.getBoundingClientRect();
+    if (item.top < bounds.top) toc.scrollTop += item.top - bounds.top;
+    else if (item.bottom > bounds.bottom) toc.scrollTop += item.bottom - bounds.bottom;
   }, [activeAnchor]);
 
   return (
