@@ -76,9 +76,8 @@ Then("I can see and quote the edit diff after reloading the conversation", async
       selection?.removeAllRanges();
       selection?.addRange(range);
     });
-    await expect(addToChat).toBeVisible({ timeout: 500 });
-  }).toPass({ timeout: 5000 });
-  await addToChat.click();
+    await addToChat.click({ timeout: 750 });
+  }).toPass({ timeout: 8000 });
   await expect(page.getByRole("group", { name: "Quoted selections" })).toContainText("edit diff");
   await page.getByRole("button", { name: "Copy patch", exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("+export const item3 = 30;");
