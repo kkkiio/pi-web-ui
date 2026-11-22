@@ -65,13 +65,24 @@ function BashDetails({ tool, theme }: { tool: ToolCall; theme: "light" | "dark" 
       const spans = tokens.map((token) => {
         let { color } = token;
         const { bgColor } = token;
-        if (color === terminalTheme.fg && bgColor && /^#[0-9a-f]{6}$/i.test(bgColor)) {
-          const [red, green, blue] = [1, 3, 5].map((start) => {
-            const channel = Number.parseInt(bgColor.slice(start, start + 2), 16) / 255;
-            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        if (bgColor === terminalTheme.fg) {
+          color = terminalTheme.bg;
+        } else if (bgColor && /^#[0-9a-f]{6}$/i.test(bgColor)) {
+          const [background, foreground] = [bgColor, color].map((value) => {
+            if (!value || !/^#[0-9a-f]{6}$/i.test(value)) return null;
+            const [red, green, blue] = [1, 3, 5].map((start) => {
+              const channel = Number.parseInt(value.slice(start, start + 2), 16) / 255;
+              return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
           });
-          const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-          color = luminance > 0.179 ? "#000" : "#fff";
+          if (
+            background !== null &&
+            (foreground === null ||
+              (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05) < 4.5)
+          ) {
+            color = background > 0.179 ? "#000" : "#fff";
+          }
         }
         const span = { ...token, color, key: offset };
         offset += token.content.length;

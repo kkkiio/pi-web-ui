@@ -61,7 +61,7 @@ Then("I can see the failure and copy the command output", async ({ page }) => {
   await page.getByRole("button", { name: "Copy output", exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toBe("Build started\nBackground notice\nBuild failed\n");
+    .toBe("Build started\nBackground notice\nExplicit pair\nBuild failed\n");
   await expect(page.getByText("The file review is complete.", { exact: true })).toBeVisible();
 });
 
@@ -69,6 +69,7 @@ Then("the Bash card follows the selected color palette", async ({ page }) => {
   const terminal = page.getByRole("region", { name: "Bash command" });
   const greenOutput = terminal.getByText("Build started", { exact: true });
   const backgroundNotice = terminal.getByText("Background notice", { exact: true });
+  const explicitPair = terminal.getByText("Explicit pair", { exact: true });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "light", exact: true }).click();
   await page.getByText("Warm Paper", { exact: true }).click();
@@ -76,6 +77,8 @@ Then("the Bash card follows the selected color palette", async ({ page }) => {
   await expect(greenOutput).toHaveCSS("color", "rgb(23, 107, 58)");
   await expect(backgroundNotice).toHaveCSS("background-color", "rgb(48, 47, 44)");
   await expect(backgroundNotice).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(explicitPair).toHaveCSS("background-color", "rgb(83, 97, 109)");
+  await expect(explicitPair).toHaveCSS("color", "rgb(255, 255, 255)");
 
   await page.getByText("Solarized Light", { exact: true }).click();
   await expect(terminal).toHaveCSS("background-color", "rgb(248, 241, 223)");
@@ -85,6 +88,8 @@ Then("the Bash card follows the selected color palette", async ({ page }) => {
   await expect(greenOutput).toHaveCSS("color", "rgb(133, 216, 162)");
   await expect(backgroundNotice).toHaveCSS("background-color", "rgb(166, 183, 184)");
   await expect(backgroundNotice).toHaveCSS("color", "rgb(0, 0, 0)");
+  await expect(explicitPair).toHaveCSS("background-color", "rgb(196, 206, 206)");
+  await expect(explicitPair).toHaveCSS("color", "rgb(0, 0, 0)");
   await page.keyboard.press("Escape");
 });
 
