@@ -103,14 +103,9 @@ Per `docs/adr/0002-web-ui-extension-event-protocol.md`: Mirror Server forwards e
 
 ### Explicit Web UI activation
 
-Per `docs/adr/0013-explicit-webui-session-activation.md`: before `/webui`, do not
-start servers, register Web UI agent tools, or change existing tools, model
-instructions, or conversation context. After activation, Web UI owns its
-interactive features; use `webui_ask_user_question` and disable explicitly known
-conflict names (`ask_user_question`). Stop and session lifecycle changes clean
-up resources and restore affected tool activation without rolling back history
-or LLM context. New, switched, or forked sessions and `/reload` require explicit
-activation again. Recommend continuing activated sessions in Web UI.
+Before `/webui`, do not start servers, register Web UI agent tools, or change existing tools, model instructions, or conversation context.
+
+After activation, Web UI owns its interactive features.
 
 ### No Implementation Comments
 
@@ -184,4 +179,5 @@ When asked to release a new version, prepare a **draft** GitHub Release and stop
    ```
 4. Create a **draft** GitHub Release on that tag (`gh release create v<version> --draft --generate-notes`), share the draft URL with the maintainer, and stop without publishing. When the maintainer clicks **Publish**, [`.github/workflows/release.yml`](.github/workflows/release.yml) verifies `v<version>` matches `package.json`, runs checks + `npm run build:web`, and publishes `@kkkiio/pi-web-ui` to npm via OIDC Trusted Publishing.
 
-Note: `pi.dev/packages` discovers packages via the `pi-package` keyword in `package.json` and renders gallery previews from `pi.image` (and optional `pi.video`). Ensure `pi.image` remains reachable and any local `README.md` images stay included in `package.json` `files`.
+Note: `pi.dev/packages` discovers packages via the `pi-package` keyword in `package.json` and renders gallery previews from `pi.image` (and optional `pi.video`).
+Ensure `pi.image` remains reachable and any local `README.md` images stay included in `package.json` `files`.

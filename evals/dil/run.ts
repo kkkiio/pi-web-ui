@@ -13,8 +13,8 @@
  *     Pi, not DIL;
  *   - what transfers is the shape: a case list, a harness, deterministic checks, and an
  *     optional judge. Generation goes through `@earendil-works/pi-ai`, the same model
- *     runtime Pi itself uses, so `~/.pi/agent/auth.json`, `DEEPSEEK_API_KEY` and a local
- *     `.env` all work;
+ *     runtime Pi itself uses, so `DEEPSEEK_API_KEY` in the environment or a local
+ *     `.env` works; the local `~/.pi` login is never read;
  *   - scoring is our own `parseDocument`, so a case passes only if the DIL really parses.
  *
  * Nothing runs in CI here: live calls need a key, and the offline half (`--dry`) is

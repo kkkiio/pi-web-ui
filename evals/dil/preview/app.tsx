@@ -1,15 +1,16 @@
+import { CheckIcon, CopyIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Message, MessageContent } from "../../../src/web/components/ai-elements/message";
 import { DilRenderer } from "../../../src/web/src/components/dil/dil-renderer";
+import { ChatItemView } from "../../../src/web/src/components/pi-web-ui/chat-item-view";
+import { groupTranscript, ProcessGroup } from "../../../src/web/src/components/pi-web-ui/process-group";
+import { UserMessageContent } from "../../../src/web/src/components/pi-web-ui/user-message-content";
+import { syncToItems } from "../../../src/web/src/core/chat-conversion";
 import { parseDocument } from "../../../src/web/src/core/dil/index";
 import type { DilDiagnostic } from "../../../src/web/src/core/dil/types";
-import type {
-  CaseDefinition,
-  CaseResult,
-  ExamplesPreviewData,
-  PreviewData,
-  ReportsPreviewData,
-  Summary,
-} from "./types";
+import { copyText } from "../../../src/web/src/core/format";
+import type { ChatItem, PiMessage } from "../../../src/web/src/core/types";
+import type { CaseResult, ExamplesPreviewData, PreviewData, ReportsPreviewData, Summary } from "./types";
 
 function normalizeSource(source: string): string {
   const withoutBom = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
@@ -125,6 +126,26 @@ function NumberedSource({
   );
 }
 
+function CopySourceButton({ text }: { readonly text: string }) {
+  const [copied, setCopied] = useState(false);
+  const Icon = copied ? CheckIcon : CopyIcon;
+  return (
+    <button
+      type="button"
+      aria-label="Copy raw source"
+      className={copied ? "copy-src-btn copied" : "copy-src-btn"}
+      onClick={async () => {
+        if (copied) return;
+        await copyText(text);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      }}
+    >
+      <Icon size={14} />
+    </button>
+  );
+}
+
 function ExampleCard({ name, source }: { readonly name: string; readonly source: string }) {
   const anchor = `example-${name}`;
   const parsed = useMemo(() => parseDocument(source), [source]);
@@ -151,7 +172,13 @@ function ExampleCard({ name, source }: { readonly name: string; readonly source:
       </div>
       <details className="raw" open={hasDiagnostics}>
         <summary>raw source ({sourceLines.length} lines)</summary>
-        <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        <div className="src-frame">
+          <div className="src-head">
+            <span>source</span>
+            <CopySourceButton text={source} />
+          </div>
+          <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        </div>
       </details>
     </section>
   );
@@ -217,16 +244,146 @@ function ExamplesView({ data }: { readonly data: ExamplesPreviewData }) {
   );
 }
 
+type TrajectoryState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; items: ChatItem[] };
+
+function parseTrajectory(source: string): ChatItem[] {
+  const entries = source
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { type: string; id?: string; message?: PiMessage });
+  let counter = 0;
+  const items = syncToItems(
+    entries,
+    (prefix) => {
+      counter += 1;
+      return `${prefix}-${counter}`;
+    },
+    [],
+  );
+  // Static replay: no composer to add to, so drop the assistant message actions menu.
+  return items.map((item) =>
+    item.kind === "message" && item.role === "assistant" ? { ...item, copyable: false } : item,
+  );
+}
+
+function TrajectoryBody({
+  state,
+  onToggleTool,
+}: {
+  readonly state: TrajectoryState;
+  readonly onToggleTool: (id: string, open: boolean) => void;
+}) {
+  if (state.status === "idle") return null;
+  if (state.status === "loading") return <div className="trajectory-status">loading trajectory…</div>;
+  if (state.status === "error") {
+    return <div className="trajectory-status trajectory-error">failed to load trajectory: {state.message}</div>;
+  }
+
+  const sections = groupTranscript(state.items, true);
+  return (
+    <div className="trajectory-view">
+      {sections.map((section) => {
+        if (section.kind === "process") {
+          const first = section.rows[0];
+          return (
+            <ProcessGroup
+              key={`process:${first.kind}:${first.id}`}
+              rows={section.rows}
+              active={false}
+              toolExpansion={null}
+            >
+              {section.rows.map((item) => (
+                <ChatItemView
+                  key={`${item.kind}:${item.id}`}
+                  item={item}
+                  onCopy={copyText}
+                  onQuote={() => {}}
+                  onToggleTool={onToggleTool}
+                  reasoningRow={item.kind === "message"}
+                  processRow
+                />
+              ))}
+            </ProcessGroup>
+          );
+        }
+
+        const { item } = section;
+        if (item.kind === "message" && item.role === "user") {
+          return (
+            <Message key={`user:${item.id}`} from="user">
+              <MessageContent className="is-user:dark ml-auto min-w-0 max-w-full rounded-lg bg-secondary px-4 py-3 text-sm text-foreground">
+                <UserMessageContent>{item.text}</UserMessageContent>
+              </MessageContent>
+            </Message>
+          );
+        }
+        return (
+          <ChatItemView
+            key={`${item.kind}:${item.id}`}
+            item={item}
+            onCopy={copyText}
+            onQuote={() => {}}
+            onToggleTool={onToggleTool}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function TrajectorySection({ url }: { readonly url: string }) {
+  const [state, setState] = useState<TrajectoryState>({ status: "idle" });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading" });
+    fetch(`/${url}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+        return res.text();
+      })
+      .then((source) => {
+        if (!cancelled) setState({ status: "ready", items: parseTrajectory(source) });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setState({ status: "error", message: err instanceof Error ? err.message : String(err) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  function toggleTool(id: string, nextOpen: boolean) {
+    setState((prev) =>
+      prev.status === "ready"
+        ? {
+            status: "ready",
+            items: prev.items.map((item) =>
+              item.kind === "tool" && item.id === id ? { ...item, open: nextOpen } : item,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  return <TrajectoryBody state={state} onToggleTool={toggleTool} />;
+}
+
 function CaseCard({
   anchor,
   model,
   result,
-  definition,
 }: {
   readonly anchor: string;
   readonly model: string;
   readonly result: CaseResult;
-  readonly definition?: CaseDefinition;
 }) {
   const parsed = useMemo(() => parseDocument(result.text), [result.text]);
   const sourceLines = useMemo(() => normalizeSource(result.text).split("\n"), [result.text]);
@@ -252,12 +409,6 @@ function CaseCard({
           </span>
         </div>
       </header>
-      {definition ? (
-        <blockquote className="prompt-quote">
-          <p className="prompt-text">{definition.prompt}</p>
-          <p className="why">{definition.why}</p>
-        </blockquote>
-      ) : null}
       <ul className="checks">
         {result.checks.map((check) => (
           <li key={check.label} className={check.pass ? "pass" : "fail"}>
@@ -266,15 +417,25 @@ function CaseCard({
         ))}
       </ul>
       <DiagnosticsPanel anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
-      <div className="render">
-        <DilRenderer source={result.text} />
-      </div>
+      {result.trajectoryUrl ? (
+        <TrajectorySection url={result.trajectoryUrl} />
+      ) : (
+        <div className="render">
+          <DilRenderer source={result.text} />
+        </div>
+      )}
       <details className="raw" open={hasDiagnostics}>
         <summary>
           raw source ({sourceLines.length} lines
           {hasDiagnostics ? ` · ${parsed.diagnostics.length} diagnostics` : ""})
         </summary>
-        <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        <div className="src-frame">
+          <div className="src-head">
+            <span>source</span>
+            <CopySourceButton text={result.text} />
+          </div>
+          <NumberedSource anchor={anchor} sourceLines={sourceLines} diagnostics={parsed.diagnostics} />
+        </div>
       </details>
     </section>
   );
@@ -294,17 +455,10 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
     [data.reports],
   );
 
-  const [filter, setFilter] = useState<number | "all">("all");
   const [activeAnchor, setActiveAnchor] = useState<string | null>(null);
   const tocLinkRefs = useRef(new Map<string, HTMLAnchorElement>());
 
-  const visibleEntries = useMemo(
-    () =>
-      entries
-        .map((entry, idx) => ({ ...entry, reportIndex: idx }))
-        .filter((entry) => filter === "all" || entry.reportIndex === filter),
-    [entries, filter],
-  );
+  const visibleEntries = useMemo(() => entries.map((entry, idx) => ({ ...entry, reportIndex: idx })), [entries]);
 
   const activeContext = useMemo(() => {
     if (!activeAnchor) return null;
@@ -354,21 +508,6 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
     };
   }, []);
 
-  function handleSelectFilter(nextFilter: number | "all") {
-    setFilter(nextFilter);
-    requestAnimationFrame(() => {
-      const elements = Array.from(document.querySelectorAll<HTMLElement>("[data-case-anchor]"));
-      if (elements.length === 0) return;
-      const threshold = 110;
-      let current = elements[0];
-      for (const el of elements) {
-        if (el.getBoundingClientRect().top <= threshold) current = el;
-        else break;
-      }
-      setActiveAnchor(current.dataset.caseAnchor ?? null);
-    });
-  }
-
   useEffect(() => {
     if (!activeAnchor) return;
     tocLinkRefs.current.get(activeAnchor)?.scrollIntoView({ block: "nearest" });
@@ -414,46 +553,11 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
         })}
       </nav>
       <main>
-        {activeContext ? (
-          <div className="sticky-context">
-            <div className="ctx-trail">
-              <span className="model-pill">{activeContext.model}</span>
-              <span className="ctx-sep">/</span>
-              <span className="ctx-case">{activeContext.caseId}</span>
-            </div>
-          </div>
-        ) : null}
         <h1>DIL eval preview</h1>
         <details className="system">
           <summary>system prompt section &lt;dil&gt;</summary>
           <pre>{data.systemPrompt}</pre>
         </details>
-        <p className="meta">
-          {entries.length} model{entries.length === 1 ? "" : "s"}: {entries.map((entry) => entry.model).join(" · ")}
-          <br />
-          rendered with the product DIL renderer; Markdown answers use react-markdown as the fallback
-        </p>
-        {entries.length > 1 ? (
-          <div className="filter-bar" role="tablist" aria-label="Filter by model">
-            <button
-              type="button"
-              className={`filter-btn${filter === "all" ? " active" : ""}`}
-              onClick={() => handleSelectFilter("all")}
-            >
-              All ({entries.length})
-            </button>
-            {entries.map(({ model, summary }, idx) => (
-              <button
-                key={`${model}-${summary.variant}`}
-                type="button"
-                className={`filter-btn${filter === idx ? " active" : ""}`}
-                onClick={() => handleSelectFilter(idx)}
-              >
-                {model} <span className={`score ${summary.score === 100 ? "pass" : "fail"}`}>{summary.score}%</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
         {visibleEntries.map(({ model, summary, reportIndex }) => (
           <section key={reportIndex} className="model-section">
             <h2 id={`model-${reportIndex}`}>
@@ -461,15 +565,7 @@ function ReportsView({ data }: { readonly data: ReportsPreviewData }) {
             </h2>
             {summary.cases.map((result) => {
               const anchor = `case-${reportIndex}-${result.id}`;
-              return (
-                <CaseCard
-                  key={anchor}
-                  anchor={anchor}
-                  model={model}
-                  result={result}
-                  definition={data.definitions[result.id]}
-                />
-              );
+              return <CaseCard key={anchor} anchor={anchor} model={model} result={result} />;
             })}
           </section>
         ))}

@@ -8,7 +8,10 @@ export interface CaseResult {
   readonly diagnostics: string;
   readonly checks: readonly { readonly label: string; readonly pass: boolean }[];
   readonly toolCallCount?: number;
+  readonly toolNames?: readonly string[];
   readonly assistantTurns?: number;
+  /** Relative URL of the copied Pi session JSONL under preview-out/trajectories/. */
+  readonly trajectoryUrl?: string;
 }
 
 export interface Summary {

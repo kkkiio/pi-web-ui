@@ -10,7 +10,7 @@
  *   node evals/dil/preview.mjs --no-open       # serve without opening the browser
  */
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -40,6 +40,38 @@ function fromRecordings() {
   };
 }
 
+/**
+ * Copy each case's Pi session JSONL into preview-out/trajectories/ and attach a relative
+ * `trajectoryUrl` to the case, so the preview can fetch the full agent trajectory
+ * on demand without bloating data.json.
+ */
+function attachTrajectories(reports) {
+  const dir = join(OUT, "trajectories");
+  for (const report of reports) {
+    const slug = String(report.model ?? "model").replaceAll("/", "-").replaceAll(" ", "-");
+    const summaries = report.summaries ?? (report.summary ? [report.summary] : []);
+    for (const summary of summaries) {
+      for (const caseResult of summary.cases ?? []) {
+        const caseId = caseResult.id;
+        if (!caseId) continue;
+        let file =
+          caseResult.trajectoryFile && existsSync(caseResult.trajectoryFile) ? caseResult.trajectoryFile : null;
+        if (!file) {
+          const caseDir = join(HERE, "trajectories", slug, caseId);
+          if (!existsSync(caseDir)) continue;
+          const files = readdirSync(caseDir).filter((name) => name.endsWith(".jsonl")).sort();
+          if (files.length === 0) continue;
+          file = join(caseDir, files.at(-1));
+        }
+        mkdirSync(dir, { recursive: true });
+        const name = `${slug}__${caseId}.jsonl`;
+        copyFileSync(file, join(dir, name));
+        caseResult.trajectoryUrl = `trajectories/${name}`;
+      }
+    }
+  }
+}
+
 function fromReports() {
   const dir = join(HERE, "reports");
   const files = existsSync(dir) ? readdirSync(dir).filter((name) => name.endsWith(".json")) : [];
@@ -63,6 +95,7 @@ function buildPreviewData(mode) {
   if (reports.length === 0) {
     throw new Error("no eval reports found; run npm run eval:dil first");
   }
+  attachTrajectories(reports);
 
   const definitions = Object.fromEntries(
     DIL_CASES.map((item) => [item.id, { id: item.id, prompt: item.prompt, why: item.why }]),

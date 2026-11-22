@@ -462,6 +462,22 @@ h3 small {
   margin: 16px 0;
 }
 
+.trajectory-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trajectory-status {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+}
+
+.trajectory-status.trajectory-error {
+  color: #b91c1c;
+}
+
 details {
   margin-top: 14px;
   font-size: 12px;
@@ -493,6 +509,52 @@ details[open] > summary::before {
 
 details > summary:hover {
   color: var(--foreground);
+}
+
+.copy-src-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.copy-src-btn:hover {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.copy-src-btn.copied {
+  color: #15803d;
+}
+
+.src-frame {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.src-frame .src-view {
+  margin-top: 0;
+  padding: 10px 0 6px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.src-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 80%, var(--background));
+  color: var(--muted-foreground);
+  font-size: 11px;
 }
 
 .src-view {

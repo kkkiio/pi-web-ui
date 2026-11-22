@@ -91,6 +91,9 @@ const DIL_TAGS = new Set([
   "code-block",
   "Link",
   "svg",
+  "button",
+  "radio-group",
+  "radio",
 ]);
 
 /** DIL elements the model actually wrote (Markdown lowers share the same names). */
