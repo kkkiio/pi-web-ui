@@ -95,3 +95,22 @@ Then("the dry-run answers survive a reload", async ({ page }) => {
 Then("I capture the DIL clarification for the README", async ({ page }) => {
   await saveReadmeImage(page, "dil-clarification");
 });
+
+Given("Pi is ready to compare cache strategies", () => {
+  world.fixture = "cache-strategy";
+});
+
+Then("the cache preview shows {string}", async ({ page }, label: string) => {
+  await expect(card(page).getByText(label, { exact: true })).toBeInViewport();
+});
+
+Then("I capture the cache strategy for the README", async ({ page }) => {
+  await expect(card(page)).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('[id^="user-message-"]').last()).toBeInViewport({ ratio: 1 });
+  await expect(card(page).getByRole("button", { name: "Plan this approach", exact: true })).toBeEnabled();
+  await saveReadmeImage(page, "pi-web-ui-example");
+});
+
+When("I select {string} in the cache preview", async ({ page }, action: string) => {
+  await card(page).getByRole("button", { name: action, exact: true }).click();
+});

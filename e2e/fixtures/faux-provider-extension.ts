@@ -1,5 +1,6 @@
 import { fauxProvider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import cacheStrategyResponses from "./responses/cache-strategy.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
 import dilHeavyResponses from "./responses/dil-heavy.ts";
 import dilInteractionResponses from "./responses/dil-interaction.ts";
@@ -25,6 +26,7 @@ const responsesByName = {
   "prompt-draft": promptDraftResponses,
   "process-group": processGroupResponses,
   "report-export": reportExportResponses,
+  "cache-strategy": cacheStrategyResponses,
   "export-clarify": exportClarifyResponses,
   "transcript-quote": transcriptQuoteResponses,
   "edit-history": editHistoryResponses,

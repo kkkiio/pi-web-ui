@@ -2,7 +2,7 @@
 
 [![Coverage Status](https://coveralls.io/repos/github/kkkiio/pi-web-ui/badge.svg?branch=main)](https://coveralls.io/github/kkkiio/pi-web-ui?branch=main)
 
-![Pi Web UI showing a follow-up quoted from an export plan](docs/images/pi-web-ui-example.png)
+![Pi Web UI showing a DIL card with a cache strategy selector and a diagram of how the page is served and refreshed](docs/images/pi-web-ui-example.png)
 
 An **interactive agent UI** for the [Pi](https://pi.dev/) coding agent.
 
