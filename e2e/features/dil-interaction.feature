@@ -27,6 +27,10 @@ Feature: DIL interaction
     And I send "Add a dry-run flag to the export command so I can see which files it would write."
     Then the dry-run card previews "reports/summary.csv overwrite"
     And I can answer in the chat input
+    When I choose "Fail if a file exists" in the dry-run card
+    Then the dry-run card previews "error: reports/summary.csv already exists"
+    When I choose "Mark overwrites (Recommended)" in the dry-run card
+    Then the dry-run card previews "reports/summary.csv overwrite"
     When I submit the dry-run choice
     Then the card's answer reaches Pi as a user message "Dry-run behavior for existing export files: Mark overwrites."
     And the transcript shows "I'll mark overwrites in the dry-run output."

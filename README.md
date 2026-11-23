@@ -43,20 +43,20 @@ See [docs/configuration.md](docs/configuration.md) for environment variables, `s
 - [x] Edit Message (inline rollback & resend; enabled by `/webui`)
 - [x] Add to Chat
 - [x] Git Diff Comment
-- [x] Generative UI, including interactive clarification cards
+- [x] Generative UI (DIL)
 - [ ] BTW / Ask in Side Chat
+
+### Generative UI
+
+Pi uses Dynamic Interface Language (DIL) to show diagrams, side-by-side comparisons, and interactive previews in chat.
+
+![Pi Web UI comparing a rolling deploy with a blue-green deploy side by side](docs/images/dil-deploy-comparison.png)
 
 ### Git Diff
 
 Review what the agent changed on disk without leaving the conversation.
 
 ![Git Diff panel showing the agent's dry-run edit next to the chat](docs/images/git-diff.png)
-
-### Interactive clarification
-
-Pi can pause to ask how a change should work. Preview the options and submit a choice from the card, or answer in the chat input.
-
-![DIL clarification card previewing how dry-run can report existing files](docs/images/dil-clarification.png)
 
 ## How it works
 

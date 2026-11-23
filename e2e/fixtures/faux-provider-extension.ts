@@ -2,6 +2,7 @@ import { fauxProvider } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import cacheStrategyResponses from "./responses/cache-strategy.ts";
 import chatLifecycleResponses from "./responses/chat-lifecycle.ts";
+import deployComparisonResponses from "./responses/deploy-comparison.ts";
 import dilHeavyResponses from "./responses/dil-heavy.ts";
 import dilInteractionResponses from "./responses/dil-interaction.ts";
 import dilListResponses from "./responses/dil-list.ts";
@@ -27,6 +28,7 @@ const responsesByName = {
   "process-group": processGroupResponses,
   "report-export": reportExportResponses,
   "cache-strategy": cacheStrategyResponses,
+  "deploy-comparison": deployComparisonResponses,
   "export-clarify": exportClarifyResponses,
   "transcript-quote": transcriptQuoteResponses,
   "edit-history": editHistoryResponses,

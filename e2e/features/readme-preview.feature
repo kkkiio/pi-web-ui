@@ -30,14 +30,9 @@ Feature: README images
     When I open Changes to review the edit
     Then Git Diff shows the dry-run change
 
-  Scenario: Pi previews a dry-run choice while clarifying the request
-    Given Pi is ready to clarify the export dry-run
+  Scenario: Compare deployment strategies side by side
+    Given Pi is ready to compare deployment strategies
     When I open Pi Web UI
-    And the session is renamed to "Plan export dry-run"
-    And I send "Add a dry-run flag to the export command so I can see which files it would write."
-    And I choose "Fail if a file exists" in the dry-run card
-    Then the dry-run card previews "error: reports/summary.csv already exists"
-    When I choose "Mark overwrites (Recommended)" in the dry-run card
-    Then the dry-run card previews "reports/summary.csv overwrite"
-    And the header shows the session name "Plan export dry-run"
-    And I capture the DIL clarification for the README
+    And I send "What’s the difference between a rolling deploy and a blue-green deploy?"
+    Then I see the deployment strategies side by side
+    And I capture the deployment comparison for the README

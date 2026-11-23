@@ -92,10 +92,6 @@ Then("the dry-run answers survive a reload", async ({ page }) => {
   await expect(userMessages.filter({ hasText: second })).toBeVisible();
 });
 
-Then("I capture the DIL clarification for the README", async ({ page }) => {
-  await saveReadmeImage(page, "dil-clarification");
-});
-
 Given("Pi is ready to compare cache strategies", () => {
   world.fixture = "cache-strategy";
 });
