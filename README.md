@@ -25,7 +25,14 @@ pi install npm:@kkkiio/pi-web-ui
 1. Start Pi in terminal
 2. Enter `/webui` to start the server and open the browser.
 
-Use `/webui-stop` to stop the server.
+Or add an alias to your shell:
+
+```bash
+# type `piw` to start Pi Web UI
+alias piw='pi /webui'
+```
+
+Use `/webui-stop` to stop the server while Pi is running. The server will also stop when Pi exits.
 
 See [docs/configuration.md](docs/configuration.md) for environment variables, `settings.json`, and remote access setup.
 
