@@ -221,22 +221,6 @@ Then("the transcript shows the verified dry-run result", async ({ page }) => {
   );
   await expect(page.getByRole("button", { name: "Open Changes" })).toContainText(/main.*\+\d+/);
   await expect(result).toBeInViewport();
-  // Shiki highlights code blocks asynchronously after render; a screenshot taken too
-  // early captures plain text in the README image.
-  await expect
-    .poll(
-      () =>
-        page
-          .locator("pre code span", { hasText: "reports/summary.csv" })
-          .last()
-          .evaluate((node) => {
-            const code = node.closest("code");
-            return Boolean(code) && getComputedStyle(node).color !== getComputedStyle(code as Element).color;
-          }),
-      { timeout: 10_000 },
-    )
-    .toBe(true);
-  await saveReadmeImage(page, "pi-web-ui-example");
 });
 
 When("I open Changes to review the edit", async ({ page }) => {

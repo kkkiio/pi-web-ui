@@ -11,6 +11,8 @@ export type FixtureName =
   | "edit-history"
   | "dil-markdown"
   | "dil-render"
+  | "cache-strategy"
+  | "deploy-comparison"
   | "export-clarify"
   | "dil-interaction";
 

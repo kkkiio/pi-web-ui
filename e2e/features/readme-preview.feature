@@ -9,10 +9,20 @@ Feature: README images
   # pixels depend on the platform: the app ships no webfont, so the platform UI font and its
   # text rasterizer decide them, and a macOS render can never match the committed files.
 
-  Scenario: Refine the export plan by quoting the assistant, then review the diff
-    Why: the README hero and the Git Diff image show this flow, so regenerating them from
-         the real product path is how the published screenshots stay honest.
+  Scenario: Explore cache expiry strategies before planning a change
+    Given Pi is ready to compare cache strategies
+    When I open Pi Web UI
+    And the session is renamed to "Choose a cache strategy"
+    And I send "When a product page’s cache expires, should visitors wait for fresh data or get the cached page while it refreshes? Show both flows and let me choose one."
+    Then the cache preview shows "Fresh page after refresh"
+    When I choose "Serve stale and refresh" in the card
+    Then the cache preview shows "Cached page immediately"
+    And the cache preview shows "Background refresh"
+    And I capture the cache strategy for the README
+    When I select "Plan this approach" in the cache preview
+    Then the card's answer reaches Pi as a user message "Plan this approach: Serve stale and refresh."
 
+  Scenario: Refine the export plan by quoting the assistant, then review the diff
     Given Pi is ready to discuss report exports
     When I ask Pi for an export preview
     And I quote the proposed behavior and clarify the output paths
@@ -20,14 +30,9 @@ Feature: README images
     When I open Changes to review the edit
     Then Git Diff shows the dry-run change
 
-  Scenario: Pi previews a dry-run choice while clarifying the request
-    Given Pi is ready to clarify the export dry-run
+  Scenario: Compare deployment strategies side by side
+    Given Pi is ready to compare deployment strategies
     When I open Pi Web UI
-    And the session is renamed to "Plan export dry-run"
-    And I send "Add a dry-run flag to the export command so I can see which files it would write."
-    And I choose "Fail if a file exists" in the dry-run card
-    Then the dry-run card previews "error: reports/summary.csv already exists"
-    When I choose "Mark overwrites (Recommended)" in the dry-run card
-    Then the dry-run card previews "reports/summary.csv overwrite"
-    And the header shows the session name "Plan export dry-run"
-    And I capture the DIL clarification for the README
+    And I send "What’s the difference between a rolling deploy and a blue-green deploy?"
+    Then I see the deployment strategies side by side
+    And I capture the deployment comparison for the README
