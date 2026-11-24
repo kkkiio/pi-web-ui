@@ -61,6 +61,40 @@ Then("the composer is still empty after the card is submitted", async ({ page })
   await expect(page.getByRole("textbox", { name: "Message Pi", exact: true })).toHaveValue("");
 });
 
+Then("Pi saves my card draft", async () => {
+  if (!world.harness) throw new Error("Pi Web UI is not running");
+  await world.harness.waitForSessionText('"details":"USB MIDI 列表为空"');
+});
+
+Then("a second browser sees my card draft", async ({ browser }) => {
+  if (!world.harness) throw new Error("Pi Web UI is not running");
+  const other = await browser.newPage();
+  try {
+    await other.goto(world.harness.pageUrl);
+    await expect(card(other).getByRole("radio", { name: "浏览器支持 MIDI，但找不到钢琴设备" })).toBeChecked();
+    await expect(card(other).getByRole("textbox")).toHaveValue("USB MIDI 列表为空");
+  } finally {
+    await other.close();
+  }
+});
+
+When("I reload the Pi session and reopen Web UI", async ({ page }) => {
+  if (!world.harness) throw new Error("Pi Web UI is not running");
+  await world.harness.command("/reload-test-session");
+  await world.harness.enableEditing();
+  await page.goto(world.harness.pageUrl);
+});
+
+When("I rewind Pi to the original assistant message", async () => {
+  if (!world.harness) throw new Error("Pi Web UI is not running");
+  await world.harness.command("/rewind-test-first-assistant");
+});
+
+Then("the card shows its initial choices", async ({ page }) => {
+  await expect(card(page).getByRole("radio", { name: "成功了，能看到 Note On / Note Off" })).toBeChecked();
+  await expect(card(page).getByRole("textbox")).toHaveValue("");
+});
+
 Given("Pi is ready to clarify the export dry-run", () => {
   world.fixture = "export-clarify";
 });

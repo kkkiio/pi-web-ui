@@ -1,3 +1,4 @@
+import type { DilViewState } from "../../../../../extensions/dil-view-state.ts";
 import type { DilProgram } from "./compiler.ts";
 import type { DilHandler, ResolvedNode } from "./render-tree.ts";
 import { readTree, readViewState } from "./render-tree.ts";
@@ -36,7 +37,7 @@ export class DilSandbox {
   private attempted = 0;
   private desired: Revision | undefined;
   private committed: Revision | undefined;
-  private state: Record<string, unknown> = {};
+  private state: Record<string, unknown>;
   private events: EventRequest[] = [];
   private pending: { id: number; request: Request; event?: EventRequest } | undefined;
   private watchdog: ReturnType<typeof setTimeout> | undefined;
@@ -49,7 +50,11 @@ export class DilSandbox {
     private readonly onTree: (tree: readonly ResolvedNode[], errors: number) => void,
     private readonly onIntents: (sends: ReadonlySet<string>) => void,
     private readonly getHost: () => DilHost | null,
-  ) {}
+    viewState?: DilViewState,
+    private readonly onViewStateChange?: (viewState: DilViewState) => void,
+  ) {
+    this.state = readViewState(viewState?.root ?? {});
+  }
 
   update(program: DilProgram | undefined): void {
     if (program === this.desired?.program) return;
@@ -190,10 +195,15 @@ export class DilSandbox {
     const revision = request.kind === "load" ? request : this.committed;
     if (request.kind === "load") this.attempted = request.revision;
     let prompt: string | undefined;
+    let viewState: DilViewState | undefined;
     try {
       if (data.result && revision) {
         const tree = readTree(data.result.tree, revision.program.data);
-        this.state = readViewState(data.result.state);
+        const nextState = readViewState(data.result.state);
+        if (event && this.onViewStateChange && JSON.stringify(this.state) !== JSON.stringify(nextState)) {
+          viewState = { root: nextState };
+        }
+        this.state = nextState;
         this.committed = revision;
         this.loaded = revision.revision;
         this.onTree(tree, data.result.errors);
@@ -218,6 +228,7 @@ export class DilSandbox {
       this.recover(request);
       return;
     }
+    if (viewState) this.onViewStateChange?.(viewState);
     if (event && prompt) {
       const host = this.getHost();
       if (!host || host.busy) {

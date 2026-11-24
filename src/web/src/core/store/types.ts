@@ -39,6 +39,7 @@ export type SessionSlice = {
   chatStatus: ChatSubmitStatus;
   tree: SessionTreeNode[];
   leafId: string | null;
+  viewStateScope: string | undefined;
   selectedTreeEntryId: string | null;
   loadingTreeEntryId: string | null;
   conversationSyncing: boolean;

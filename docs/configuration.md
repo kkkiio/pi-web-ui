@@ -52,6 +52,10 @@ options. Submit a choice from the card or reply in the chat input. Card
 submissions appear in the conversation as your messages. Once Pi is idle, you
 can submit again to revise your answer.
 
+Interactive card choices and drafts are saved with the Pi session. Reopening
+the browser or connecting another browser restores the active branch's card
+state. Rewinding the conversation also rewinds the card state.
+
 New, switched, and forked sessions and `/reload` require `/webui` again.
 See [ADR 0013](adr/0013-explicit-webui-session-activation.md) for the activation
 policy.

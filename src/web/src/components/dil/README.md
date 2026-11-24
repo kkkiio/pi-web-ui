@@ -128,6 +128,15 @@ A `mermaid` fence renders a diagram and keeps its source visible if rendering fa
 {#if revealed}<text>Here is the answer.</text>{/if}
 ```
 
-State survives updates to the message in the current page. Reload the page to return to
-the declared initial values. A card can call `GenUI.issueNewTurn(text)` from a control
-event to send the next user message when Pi is available.
+Pi Web UI saves card state in the session. Reopening the page restores the card
+from the active conversation branch. Returning to a point before an interaction
+restores the state saved at that point, or the card's declared initial values
+when it has no saved state.
+
+A card can call `GenUI.issueNewTurn(text)` from a control event to send the next
+user message when Pi is available.
+
+Hosts using the renderer can pass an initial `viewState` shaped as
+`{ root: { choice: "B" } }` and receive changed snapshots via
+`onViewStateChange`. The root keys are the explicit `DIL.useState` keys or
+the variable names when a key is omitted.

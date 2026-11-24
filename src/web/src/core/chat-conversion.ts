@@ -1,8 +1,14 @@
+import {
+  DIL_VIEW_STATE_ENTRY,
+  type DilViewState,
+  type DilViewStateEntry,
+  parseDilViewState,
+} from "../../../../extensions/dil-view-state.ts";
 import { MAX_IMAGE_DIM, VALID_IMAGE_MIME_TYPES } from "./constants";
 import type { ChatItem, PiMessage, PromptImage, SessionEntry, SessionTreeNode, Usage, UsageTotals } from "./types";
 
 export function syncToItems(
-  entries: Array<{ type: string; id?: string; message?: PiMessage }>,
+  entries: SessionEntry[],
   nextId: (prefix: string) => string,
   previousItems: ChatItem[],
 ): ChatItem[] {
@@ -19,6 +25,14 @@ export function syncToItems(
     }
   }
   const tools = new Map<string, ChatItem & { kind: "tool" }>();
+  const viewStates = new Map<string, DilViewState>();
+  for (const entry of entries) {
+    if (entry.type !== "custom" || entry.customType !== DIL_VIEW_STATE_ENTRY) continue;
+    const data = entry.data as Partial<DilViewStateEntry> | undefined;
+    if (typeof data?.messageEntryId !== "string") continue;
+    const state = parseDilViewState(data.viewState);
+    if (state) viewStates.set(data.messageEntryId, state);
+  }
 
   for (const entry of entries) {
     if (entry.type !== "message" || !entry.message) continue;
@@ -56,6 +70,7 @@ export function syncToItems(
           timestamp: message.timestamp,
           cost: message.usage?.cost?.total,
           entryId: entry.id,
+          viewState: entry.id ? viewStates.get(entry.id) : undefined,
         });
       }
 
