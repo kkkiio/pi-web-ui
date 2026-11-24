@@ -1232,6 +1232,7 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   pi.on("session_shutdown", async (_event, ctx) => {
     latestCtx = ctx;
+    flushViewStates();
     stopServer();
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;
