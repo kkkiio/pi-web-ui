@@ -227,12 +227,19 @@ test("both compiled artifacts produce the same card on the reference runtime", (
   }
 });
 
-test("a fresh Pi Web UI page uses the declared quiz values", () => {
+test("derived: the quiz first renders with its captured state", () => {
   const sample = samples().find((candidate) => candidate.name === "quiz-radio-reveal");
-  assert.ok(sample);
+  assert.ok(sample?.data.view_state?.root);
   const restored = createReferenceProgram(sample.code, sample.data, { seedViewState: true });
-  assert.deepEqual(restored.state(), { choice: "B", revealed: true });
+  const ours = createOurProgram(sample.source, { root: sample.data.view_state.root });
 
-  const fresh = createOurProgram(sample.source);
-  assert.deepEqual(fresh.state(), { choice: "B", revealed: false });
+  assert.deepEqual(ours.state(), restored.state());
+  assert.equal(
+    firstDifference(
+      signatures(canonicalizeReference(restored.render())),
+      signatures(canonicalizeResolved(ours.render())),
+    ),
+    null,
+  );
+  assert.deepEqual(ours.effects(), []);
 });

@@ -1,5 +1,6 @@
 import type { ChatStatus } from "ai";
 import type { ComponentType } from "react";
+import type { DilViewState } from "../../../../extensions/dil-view-state.ts";
 
 export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type LightPalette = "warm-paper" | "solarized-light";
@@ -34,6 +35,7 @@ export type ChatItem =
       /** Session entry tree node ID, used for inline editing via navigate_tree. */
       entryId?: string;
       relatedEntryIds?: string[];
+      viewState?: DilViewState;
     }
   | {
       kind: "tool";
@@ -181,6 +183,7 @@ export type StateSyncPayload = {
   thinkingLevel?: string;
   sessionName?: string;
   sessionFile?: string;
+  viewStateScope?: string;
   isStreaming?: boolean;
   contextUsage?: ContextUsage | null;
 };

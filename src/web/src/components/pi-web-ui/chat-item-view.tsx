@@ -1,6 +1,6 @@
 import { CopyIcon, EllipsisIcon, QuoteIcon } from "lucide-react";
 import { nanoid } from "nanoid";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { usePiWebUiStore } from "../../core/store";
 import { formatToolSummary, isToolExpandable } from "../../core/tool-summary";
 import type { ChatItem } from "../../core/types";
-import { type DilHost, DilHostContext, DilRenderer } from "../dil";
+import { type DilHost, DilHostContext, DilRenderer, type DilViewState } from "../dil";
 
 import { ToolCallDetails } from "./tool-call-details";
 import type { TranscriptQuote } from "./transcript-quote";
@@ -66,6 +66,27 @@ export function ChatItemView({
     }),
     [sendPrompt, chatStatus, connection, loadingTreeEntryId],
   );
+  const viewStateScope = usePiWebUiStore((state) => state.viewStateScope);
+  const entryId = item.kind === "message" && item.role === "assistant" && !item.streaming ? item.entryId : undefined;
+  const pendingViewState = useRef<{ scope: string; state: DilViewState } | null>(null);
+  useEffect(() => {
+    const pending = pendingViewState.current;
+    if (!pending) return;
+    if (pending.scope !== viewStateScope) {
+      pendingViewState.current = null;
+    } else if (entryId && connection === "connected" && loadingTreeEntryId === null) {
+      pendingViewState.current = null;
+      void usePiWebUiStore
+        .getState()
+        .send("save_dil_view_state", {
+          scope: pending.scope,
+          entryId,
+          viewState: pending.state,
+        })
+        .catch(() => {});
+    }
+  }, [connection, entryId, loadingTreeEntryId, viewStateScope]);
+
   if (item.kind === "system") {
     return (
       <div
@@ -158,7 +179,23 @@ export function ChatItemView({
       <MessageContent className={cn("w-full", item.streaming && 'after:ml-1 after:animate-pulse after:content-["▋"]')}>
         <div data-quote-source="Assistant">
           <DilHostContext.Provider value={dilHost}>
-            <DilRenderer isStreaming={Boolean(item.streaming)} source={item.text} />
+            <DilRenderer
+              isStreaming={Boolean(item.streaming)}
+              key={viewStateScope}
+              onViewStateChange={(viewState) => {
+                const store = usePiWebUiStore.getState();
+                if (!viewStateScope || viewStateScope !== store.viewStateScope || store.loadingTreeEntryId !== null)
+                  return;
+                if (entryId && store.connection === "connected") {
+                  pendingViewState.current = null;
+                  void store.send("save_dil_view_state", { scope: viewStateScope, entryId, viewState }).catch(() => {});
+                } else {
+                  pendingViewState.current = { scope: viewStateScope, state: viewState };
+                }
+              }}
+              source={item.text}
+              viewState={item.viewState}
+            />
           </DilHostContext.Provider>
         </div>
       </MessageContent>

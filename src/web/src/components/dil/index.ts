@@ -6,6 +6,7 @@
  * catalog without reaching into internals.
  */
 
+export type { DilViewState } from "../../../../../extensions/dil-view-state.ts";
 export type { DilRendererProps } from "./dil-renderer";
 export { DilRenderer, useThrottledText } from "./dil-renderer";
 export * from "./primitives/content";

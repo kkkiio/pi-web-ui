@@ -10,11 +10,18 @@
  * - Sends full state snapshot on client connect (messages, model, etc.)
  */
 
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { WebSocket, WebSocketServer } from "ws";
+import {
+  DIL_VIEW_STATE_ENTRY,
+  type DilViewState,
+  type DilViewStateEntry,
+  parseDilViewState,
+} from "./dil-view-state.ts";
 import { readGitChanges } from "./git-changes";
 import { createDilPrompt } from "./system-prompt";
 
@@ -193,6 +200,10 @@ export default function (pi: ExtensionAPI) {
   // Store latest context reference for use in command handlers
   let latestCtx: ExtensionContext | null = null;
   let advancedFeaturesEnabled = false;
+  let viewStateScope = randomUUID();
+  let viewStateTimer: NodeJS.Timeout | undefined;
+  const pendingViewStates = new Map<string, { leafId: string; viewState: DilViewState }>();
+  let navigatingTree = false;
   let latestExecuteCtx: ExtensionCommandContext | null = null;
   type LiveToolEvent = { type: "event"; event: string; payload: Record<string, unknown> };
   const liveToolEvents = new Map<string, { start: LiveToolEvent; update?: LiveToolEvent }>();
@@ -234,10 +245,42 @@ export default function (pi: ExtensionAPI) {
     latestCtx?.ui.setStatus("webui", `${mirrorStatusBase}${clientText}`);
   }
 
+  function flushViewStates() {
+    clearTimeout(viewStateTimer);
+    viewStateTimer = undefined;
+    if (pendingViewStates.size === 0) return;
+    const changes = [...pendingViewStates];
+    pendingViewStates.clear();
+    const ctx = latestCtx;
+    if (!ctx || !advancedFeaturesEnabled) return;
+    const entries = ctx.sessionManager.getBranch();
+    const activeEntries = new Set(entries.map((entry) => entry.id));
+    const latest = new Map(
+      entries.flatMap((entry) => {
+        if (entry.type !== "custom" || entry.customType !== DIL_VIEW_STATE_ENTRY) return [];
+        const data = entry.data as Partial<DilViewStateEntry> | undefined;
+        return data?.messageEntryId ? [[data.messageEntryId, data.viewState] as const] : [];
+      }),
+    );
+    for (const [messageEntryId, { leafId, viewState }] of changes) {
+      if (!activeEntries.has(leafId) || JSON.stringify(latest.get(messageEntryId)) === JSON.stringify(viewState))
+        continue;
+      try {
+        pi.appendEntry<DilViewStateEntry>(DIL_VIEW_STATE_ENTRY, { messageEntryId, viewState });
+      } catch {
+        latestCtx?.ui.notify("Could not save DIL card state.", "warning");
+      }
+    }
+  }
+
   // ═══════════════════════════════════════
   // Helper: stop the server
   // ═══════════════════════════════════════
   function stopServer() {
+    viewStateScope = randomUUID();
+    clearTimeout(viewStateTimer);
+    viewStateTimer = undefined;
+    pendingViewStates.clear();
     dilPrompt.deactivate();
     cancelServerStart?.();
     advancedFeaturesEnabled = false;
@@ -279,6 +322,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("pi-web-ui is not running", "warning");
         return;
       }
+      flushViewStates();
       stopServer();
       ctx.ui.setStatus("webui", "");
       ctx.ui.notify("pi-web-ui server stopped", "info");
@@ -375,6 +419,10 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_tree", async (event: unknown, ctx: ExtensionContext) => {
     latestCtx = ctx;
+    viewStateScope = randomUUID();
+    clearTimeout(viewStateTimer);
+    viewStateTimer = undefined;
+    pendingViewStates.clear();
     const payload = typeof event === "object" && event !== null ? (event as Record<string, unknown>) : {};
     broadcast({ type: "event", event: "session_tree", payload });
   });
@@ -498,6 +546,7 @@ export default function (pi: ExtensionAPI) {
   // Build state snapshot for new connections
   // ═══════════════════════════════════════
   async function buildStateSnapshot(ctx: ExtensionContext) {
+    if (!navigatingTree) flushViewStates();
     // Get session entries for message history
     const entries = ctx.sessionManager.getBranch();
     const tree = ctx.sessionManager.getTree() as SessionTreeNode[];
@@ -523,6 +572,7 @@ export default function (pi: ExtensionAPI) {
         thinkingLevel,
         sessionName,
         sessionFile,
+        viewStateScope,
         isStreaming: !ctx.isIdle(),
         contextUsage,
         liveEvents: Array.from(liveToolEvents.values()).flatMap(({ start, update }) =>
@@ -554,6 +604,31 @@ export default function (pi: ExtensionAPI) {
 
     try {
       switch (request.method) {
+        case "save_dil_view_state": {
+          if (!ctx || !advancedFeaturesEnabled || navigatingTree || params.scope !== viewStateScope) {
+            sendTo(ws, error("The DIL card is from a different session branch."));
+            break;
+          }
+          const entry = typeof params.entryId === "string" ? ctx.sessionManager.getEntry(params.entryId) : undefined;
+          const viewState = parseDilViewState(params.viewState);
+          const leafId = ctx.sessionManager.getLeafId();
+          if (
+            entry?.type !== "message" ||
+            entry.message.role !== "assistant" ||
+            !viewState ||
+            !leafId ||
+            !ctx.sessionManager.getBranch().some((candidate) => candidate.id === entry.id)
+          ) {
+            sendTo(ws, error("Invalid DIL card state."));
+            break;
+          }
+          pendingViewStates.set(entry.id, { leafId, viewState });
+          clearTimeout(viewStateTimer);
+          viewStateTimer = setTimeout(flushViewStates, 200);
+          sendTo(ws, success());
+          break;
+        }
+
         case "prompt": {
           if (!ctx) {
             sendTo(ws, error("No context available"));
@@ -563,6 +638,7 @@ export default function (pi: ExtensionAPI) {
             sendTo(ws, error("Agent is busy. Wait for Pi to finish before sending."));
             break;
           }
+          flushViewStates();
           const message = typeof params.message === "string" ? params.message : "";
           const images = Array.isArray(params.images) ? (params.images as BrowserImage[]) : [];
           if (images.length) {
@@ -860,7 +936,7 @@ export default function (pi: ExtensionAPI) {
             sendTo(ws, error("Run /webui first to enable editing"));
             break;
           }
-          if (!latestCtx?.isIdle()) {
+          if (navigatingTree || !latestCtx?.isIdle()) {
             sendTo(ws, error("Agent is busy"));
             break;
           }
@@ -874,12 +950,14 @@ export default function (pi: ExtensionAPI) {
             sendTo(ws, error("No model selected"));
             break;
           }
-          const result = await latestExecuteCtx.navigateTree(entryId);
-          if (result.cancelled) {
-            sendTo(ws, success({ cancelled: true }));
-            break;
+          flushViewStates();
+          navigatingTree = true;
+          try {
+            const result = await latestExecuteCtx.navigateTree(entryId);
+            sendTo(ws, success({ cancelled: result.cancelled }));
+          } finally {
+            navigatingTree = false;
           }
-          sendTo(ws, success({ cancelled: false }));
           break;
         }
 
@@ -1154,6 +1232,7 @@ export default function (pi: ExtensionAPI) {
   // ═══════════════════════════════════════
   pi.on("session_shutdown", async (_event, ctx) => {
     latestCtx = ctx;
+    flushViewStates();
     stopServer();
     advancedFeaturesEnabled = false;
     latestExecuteCtx = null;

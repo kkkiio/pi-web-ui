@@ -85,6 +85,16 @@ export default function (pi: ExtensionAPI) {
       await ctx.reload();
     },
   });
+  pi.registerCommand("rewind-test-first-assistant", {
+    handler: async (_args, ctx) => {
+      const entry = ctx.sessionManager
+        .getBranch()
+        .find((candidate) => candidate.type === "message" && candidate.message.role === "assistant");
+      if (!entry) throw new Error("No assistant message to rewind to");
+      const result = await ctx.navigateTree(entry.id);
+      if (result.cancelled) throw new Error("Pi cancelled the rewind");
+    },
+  });
   pi.registerCommand("wait-test-idle", {
     handler: async (_args, ctx) => {
       await ctx.waitForIdle();

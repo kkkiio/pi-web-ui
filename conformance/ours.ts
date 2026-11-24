@@ -1,3 +1,4 @@
+import type { DilViewState } from "../extensions/dil-view-state.ts";
 import { compileDil } from "../src/web/src/components/dil/compiler.ts";
 import { type DilHandler, type ResolvedNode, readTree } from "../src/web/src/components/dil/render-tree.ts";
 import { createProgram } from "../src/web/src/components/dil/sandbox-worker.js";
@@ -14,9 +15,9 @@ export interface OurProgram {
   click(tag: string): boolean;
 }
 
-export function createOurProgram(source: string): OurProgram {
+export function createOurProgram(source: string, viewState?: DilViewState): OurProgram {
   const performed: ReferenceEffect[] = [];
-  const runtime = createProgram();
+  const runtime = createProgram(viewState?.root);
   const compiled = compileDil(parseDocument(source, { isStreaming: false }));
   const program = compiled.program;
   let result = program ? runtime.load(program) : undefined;

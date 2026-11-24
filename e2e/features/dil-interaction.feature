@@ -21,6 +21,25 @@ Feature: DIL interaction
     And the card still shows the answer I chose
 
   @p0
+  Scenario: A saved card draft follows the active conversation branch
+    Given Pi replies with a DIL interaction card
+    When I open Pi Web UI
+    And I send "How do I test MIDI in Chrome?"
+    Then the DIL interaction card is rendered
+    When I choose "浏览器支持 MIDI，但找不到钢琴设备" in the card
+    And I type "USB MIDI 列表为空" into the card
+    Then Pi saves my card draft
+    When I reload Pi Web UI
+    Then the card still shows the answer I chose
+    And a second browser sees my card draft
+    When I reload the Pi session and reopen Web UI
+    Then the card still shows the answer I chose
+    When I rewind Pi to the original assistant message
+    Then the card shows its initial choices
+    When I reload Pi Web UI
+    Then the card shows its initial choices
+
+  @p0
   Scenario: A dry-run card accepts an updated answer
     Given Pi is ready to clarify the export dry-run
     When I open Pi Web UI

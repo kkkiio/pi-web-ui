@@ -1,6 +1,7 @@
 import { Fragment, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
+import type { DilViewState } from "../../../../../extensions/dil-view-state.ts";
 import { isInlineTag, parseDocument } from "../../core/dil/index";
 import { compileDil } from "./compiler";
 import {
@@ -35,6 +36,10 @@ export interface DilRendererProps {
   /** Throttle window in ms while streaming. Default 60 (see README). */
   readonly throttleMs?: number;
   readonly className?: string;
+  /** Seed the card's state before its first render. */
+  readonly viewState?: DilViewState;
+  /** Receive a snapshot when a user interaction changes the card's state. */
+  readonly onViewStateChange?: (viewState: DilViewState) => void;
 }
 
 const DEFAULT_THROTTLE_MS = 60;
@@ -44,11 +49,15 @@ export function DilRenderer({
   isStreaming = false,
   throttleMs = DEFAULT_THROTTLE_MS,
   className,
+  viewState,
+  onViewStateChange,
 }: DilRendererProps) {
   const instance = useId();
   const host = useContext(DilHostContext);
   const hostRef = useRef(host);
   hostRef.current = host;
+  const viewStateChangeRef = useRef(onViewStateChange);
+  viewStateChangeRef.current = onViewStateChange;
   const text = useThrottledText(source, isStreaming, throttleMs);
   const compiled = useMemo(() => compileDil(parseDocument(text, { isStreaming })), [text, isStreaming]);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -60,6 +69,8 @@ export function DilRenderer({
         (tree, errors) => setSnapshot({ tree, errors }),
         setSends,
         () => hostRef.current,
+        viewState,
+        (state) => viewStateChangeRef.current?.(state),
       ),
   );
 
