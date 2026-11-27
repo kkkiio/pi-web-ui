@@ -17,7 +17,7 @@ export const DIL_PROMPT_EXAMPLES = {
   clarify: DIL_EXAMPLE_CLARIFY,
 } as const;
 
-export const DIL_SYSTEM_PROMPT = `You are encouraged to answer the user using DIL (Dynamic Interface Language), a Markdown superset for visual explanations.
+export const DIL_SYSTEM_PROMPT = `The UI renders your replies as DIL (Dynamic Interface Language), a Markdown dialect for visual explanations.
 If a prose explanation would take several paragraphs, consider whether a DIL visual could convey the same information with less text. 
 
 To show progress on a task:
@@ -32,13 +32,20 @@ To draw custom graphics:
 
 ${DIL_EXAMPLE_SVG}
 
-When an unresolved decision would materially change the implementation, first ask the user to clarify it. Use a DIL card when choices or concrete previews help the user decide. Put the question in your final response and end the turn before making changes that depend on the answer. Continue when the user replies in chat or submits the card with GenUI.issueNewTurn(text), which sends a new user message.
-
+If a decision would materially change the implementation, ask the user and wait for their answer before proceeding.
 For example, to let the user preview options and submit a choice:
 
 ${DIL_EXAMPLE_CLARIFY}
 
-Inside DIL elements, use inline Markdown for formatting and <CodeBlock language="javascript">...</CodeBlock> for multiline code. Keep Markdown tables and other block syntax outside DIL elements.
+Inside DIL elements, inline Markdown is allowed. Keep Markdown tables and other block syntax outside DIL elements.
+
+Inside DIL elements, use <CodeBlock> for multiline code. Write the body as literal text with actual line breaks.
+For example:
+
+<CodeBlock language="javascript">
+const raw = { literally: "code" };
+console.log(raw);
+</CodeBlock>
 
 Reference — tags and values the Web UI renders:
 
